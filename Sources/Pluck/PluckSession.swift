@@ -2,26 +2,21 @@ import AppKit
 import Foundation
 import PluckCore
 
-/// Owns one active Pluck gesture: context, overlay, and commit/cancel.
+/// Owns one Pluck gesture: tracker, overlay, cursor, and what happens on release.
 @MainActor
 final class PluckSession: ObservableObject {
     let engine = ChordEngine()
     let overlay = OverlayController()
     let clipboardHistory = ClipboardHistory.shared
 
-    @Published private(set) var isActive = false
-    @Published private(set) var context: GrabContext?
-    @Published private(set) var capturedRole: CompassRole?
-    @Published private(set) var pin: CGPoint = .zero
-    @Published private(set) var pointer: CGPoint = .zero
-    @Published private(set) var emergeProgress: CGFloat = 0
-    @Published private(set) var bloomProgress: CGFloat = 0
+    private(set) var isActive = false
+    private var context: GrabContext?
+    private var tracker = GestureTracker(pin: .zero)
+    private var beganAt: CFTimeInterval = 0
+    private var bloomed = false
 
-    private var animTimer: Timer?
-    private var openedAt: CFTimeInterval = 0
-    private var cursorHidden = false
-    private var finishing = false
-    private var animStart: Date?
+    /// Lobes bloom a beat after the drop appears; experts flick before this and the direction still counts.
+    private static let bloomDelay: CFTimeInterval = 0.07
 
     private var reducedMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -41,175 +36,106 @@ final class PluckSession: ObservableObject {
     func stopListening() {
         if isActive { cancel() }
         engine.stop()
-        showCursor()
+        overlay.hide()
+        CursorGuard.shared.show()
+        CursorGuard.forceVisible()
         clipboardHistory.stop()
     }
 
+    // MARK: Gesture
+
     func begin(at location: CGPoint) {
-        guard !isActive, !finishing else { return }
+        guard !isActive else { return }
         isActive = true
-        openedAt = CACurrentMediaTime()
-        pin = location
-        pointer = location
-        capturedRole = nil
-        emergeProgress = 0
-        bloomProgress = 0
+        beganAt = CACurrentMediaTime()
+        bloomed = false
 
-        // Hide system cursor FIRST so the blob is the only pointer you see.
-        hideCursor()
+        // Show the drop first. Everything else (context lookup) happens after the first frame is out.
+        let items: [CompassItem] = FeelLab.enabled ? FeelLab.context.items : []
+        context = FeelLab.enabled ? FeelLab.context : nil
+        tracker = GestureTracker(pin: location, available: items.map(\.role))
 
-        let ctx = FeelLab.enabled ? FeelLab.context : ContextResolver.resolve(at: location)
-        context = ctx
-        overlay.show(pin: location, context: ctx, reducedMotion: reducedMotion)
-        pushOverlay()
+        CursorGuard.shared.hide()
+        overlay.show(pin: location, items: items, reducedMotion: reducedMotion) { [weak self] _ in
+            self?.frame()
+        }
 
-        if reducedMotion {
-            emergeProgress = 1
-            bloomProgress = 1
-            pushOverlay()
-        } else {
-            startEmergence()
+        if !FeelLab.enabled {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isActive else { return }
+                let ctx = ContextResolver.resolve(at: location)
+                self.context = ctx
+                self.tracker.available = ctx.items.map(\.role)
+                self.overlay.setItems(ctx.items)
+            }
+        }
+    }
+
+    /// Runs once per display frame while a gesture is live: fresh pointer sample, then ground-truth checks.
+    private func frame() {
+        guard isActive else { return }
+        if !engine.buttonsStillHeld() {
+            // A mouse-up was missed. Trust the hardware, not our bookkeeping.
+            complete(at: ChordEngine.mouseLocation())
+            return
+        }
+        pointerMoved(to: ChordEngine.mouseLocation())
+        if !bloomed, CACurrentMediaTime() - beganAt >= Self.bloomDelay {
+            bloomed = true
+            overlay.setBloom(true)
         }
     }
 
     func pointerMoved(to location: CGPoint) {
-        guard isActive, !finishing else { return }
-        pointer = location
-        let available = context?.items.map(\.role) ?? CompassRole.allCases
-        capturedRole = GestureMath.capture(pin: pin, pointer: pointer, available: available, current: capturedRole)
-        pushOverlay()
+        guard isActive else { return }
+        tracker.update(pointer: location)
+        overlay.setPointer(location)
+        overlay.setCaptured(tracker.captured)
     }
 
     func complete(at location: CGPoint) {
-        guard isActive, !finishing else { return }
-        pointer = location
-
-        let available = context?.items.map(\.role) ?? []
-        let role = GestureMath.roleAtRelease(pin: pin, pointer: pointer, available: available)
+        guard isActive else { return }
+        tracker.update(pointer: location)
+        let role = tracker.releaseRole
+        let direction = tracker.direction
         let ctx = context
-        let resultTitle = FeelLab.title(for: role)
+        finish(role: role, direction: direction)
 
-        finishVisual(commitRole: role) {
-            if FeelLab.enabled {
-                NotificationCenter.default.post(name: .pluckFeelResult, object: resultTitle)
-                return
-            }
-            if let role, let item = ctx?.items.first(where: { $0.role == role }) {
-                ActionRunner.run(item: item, context: ctx)
-            }
+        if FeelLab.enabled {
+            NotificationCenter.default.post(name: .pluckFeelResult, object: FeelLab.title(for: role))
+            return
+        }
+        if let role, let item = ctx?.items.first(where: { $0.role == role }) {
+            ActionRunner.run(item: item, context: ctx)
         }
     }
 
     func cancel() {
-        guard isActive, !finishing else {
+        guard isActive else {
             forceReset()
             return
         }
-        finishVisual(commitRole: nil) {
-            if FeelLab.enabled {
-                NotificationCenter.default.post(name: .pluckFeelResult, object: "Canceled")
-            }
+        finish(role: nil, direction: nil)
+        if FeelLab.enabled {
+            NotificationCenter.default.post(name: .pluckFeelResult, object: "Canceled")
         }
     }
 
+    /// Hard reset: no animation, cursor guaranteed visible.
     func forceReset() {
-        finishing = false
         isActive = false
-        animTimer?.invalidate()
-        animTimer = nil
         overlay.hide()
-        showCursor()
         context = nil
-        capturedRole = nil
+        CursorGuard.shared.show()
+        CursorGuard.forceVisible()
         engine.gestureDidEnd()
     }
 
-    private func finishVisual(commitRole: CompassRole?, after: (() -> Void)?) {
-        guard !finishing else { return }
-        finishing = true
-        animTimer?.invalidate()
-        animTimer = nil
+    private func finish(role: CompassRole?, direction: CGPoint?) {
         isActive = false
         engine.gestureDidEnd()
-
-        // Do NOT warp the cursor — leave it exactly where the user released.
-        overlay.commit(role: commitRole, pin: pin) { [weak self] in
-            guard let self else { return }
-            self.showCursor()
-            self.overlay.hide()
-            self.context = nil
-            self.capturedRole = nil
-            self.finishing = false
-            after?()
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, self.finishing else { return }
-            let pending = after
-            self.forceReset()
-            pending?()
-        }
+        // The cursor comes back the instant you let go; the liquid finishes its animation on its own.
+        CursorGuard.shared.show()
+        overlay.release(commit: role != nil ? direction : nil, role: role)
     }
-
-    private func pushOverlay() {
-        overlay.update(
-            pin: pin,
-            pointer: pointer,
-            captured: capturedRole,
-            emerge: emergeProgress,
-            bloom: bloomProgress,
-            context: context
-        )
-    }
-
-    /// Blob rises out from under the cursor, then direction labels fade in.
-    private func startEmergence() {
-        animTimer?.invalidate()
-        animStart = Date()
-        let emergeDur: TimeInterval = 0.18
-        let bloomDelay: TimeInterval = 0.08
-        let bloomDur: TimeInterval = 0.28
-
-        animTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] t in
-            guard let self else { t.invalidate(); return }
-            Task { @MainActor in
-                guard self.isActive, let start = self.animStart else { t.invalidate(); return }
-                let elapsed = Date().timeIntervalSince(start)
-
-                // Ease-out emerge.
-                let e = min(1, elapsed / emergeDur)
-                self.emergeProgress = CGFloat(1 - pow(1 - e, 3))
-
-                // Lobes after a beat.
-                if elapsed > bloomDelay {
-                    let b = min(1, (elapsed - bloomDelay) / bloomDur)
-                    self.bloomProgress = CGFloat(1 - pow(1 - b, 3))
-                }
-
-                self.pushOverlay()
-                if self.emergeProgress >= 1, self.bloomProgress >= 1 {
-                    t.invalidate()
-                }
-            }
-        }
-    }
-
-    private func hideCursor() {
-        // Hide repeatedly — AppKit can re-show the cursor when windows key.
-        for _ in 0..<4 { NSCursor.hide() }
-        CGDisplayHideCursor(CGMainDisplayID())
-        cursorHidden = true
-    }
-
-    private func showCursor() {
-        if cursorHidden {
-            NSCursor.unhide()
-            cursorHidden = false
-        }
-        for _ in 0..<4 { NSCursor.unhide() }
-        CGDisplayShowCursor(CGMainDisplayID())
-        CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
-        cursorHidden = false
-    }
-
 }

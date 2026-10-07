@@ -3,13 +3,12 @@ import CoreGraphics
 import Foundation
 import PluckCore
 
-/// SAFE chord detection — listen only.
+/// SAFE chord detection: listen only.
 ///
-/// - Uses `NSEvent` global/local monitors only (Accessibility).
-/// - Never installs a `CGEventTap` (those can swallow mouse/keyboard and lock the machine).
-/// - Never synthesizes mouse/keyboard events.
-/// - Never drives System Settings with keystrokes.
-/// - Hard time limit on every gesture; Escape cancels; panic hotkey force-quits Pluck.
+/// - `NSEvent` global/local monitors only. Never a `CGEventTap` (those can swallow input and lock the machine).
+/// - Never synthesizes mouse or keyboard events.
+/// - Every gesture has hard limits: Escape cancels, a failsafe timer ends it, the hardware button state is
+///   re-checked every frame (a missed mouse-up can't strand a gesture), and ⌃⌥⌘P force-quits.
 @MainActor
 final class ChordEngine {
     weak var session: PluckSession?
@@ -21,14 +20,12 @@ final class ChordEngine {
     private var held: Set<MouseButton> = []
     private var gestureActive = false
     private var failsafeTimer: Timer?
-    private var lastMoveAt: CFTimeInterval = 0
 
-    /// Absolute cap — after this, gesture ends and cursor is restored. No exceptions.
-    private static let failsafeSeconds: TimeInterval = 20
-    private static let moveHz: CFTimeInterval = 1.0 / 90.0
+    /// Absolute cap per gesture. After this the gesture ends and the cursor is restored, no exceptions.
+    private static let failsafeSeconds: TimeInterval = 12
 
     var isRunning: Bool { globalMonitor != nil }
-    /// Always false — event taps are disabled for safety.
+    /// Always false: event taps are disabled for safety.
     var usingEventTap: Bool { false }
 
     func start() {
@@ -37,11 +34,10 @@ final class ChordEngine {
             NSLog("Pluck: Accessibility required (listen-only)")
             return
         }
-
         held = physicalHeld()
         installNSEvent()
         installPanicHotkey()
-        NSLog("Pluck: SAFE listen-only NSEvent driver (no event tap)")
+        NSLog("Pluck: listen-only NSEvent driver (no event tap)")
     }
 
     func stop() {
@@ -49,7 +45,6 @@ final class ChordEngine {
         removeNSEvent()
         removePanicHotkey()
         held.removeAll()
-        forceCursorVisible()
     }
 
     func gestureDidEnd() {
@@ -60,12 +55,18 @@ final class ChordEngine {
     func resetHard() {
         endGestureLocally()
         held.removeAll()
-        forceCursorVisible()
         session?.forceReset()
         held = physicalHeld()
     }
 
-    // MARK: - Monitors (never modify/swallow events)
+    /// Ground truth from the HID system: are both buttons still physically down?
+    /// Always true when no gesture is running.
+    func buttonsStillHeld() -> Bool {
+        guard gestureActive else { return true }
+        return isDown(.left) && isDown(.right)
+    }
+
+    // MARK: Monitors (never modify or swallow events)
 
     private func installNSEvent() {
         let mask: NSEvent.EventTypeMask = [
@@ -75,11 +76,11 @@ final class ChordEngine {
             .mouseMoved, .keyDown,
         ]
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] e in
-            DispatchQueue.main.async { self?.onNSEvent(e) }
+            self?.deliver(e)
         }
-        // Local monitor MUST return the event unchanged — never nil (nil swallows).
+        // The local monitor MUST return the event unchanged. Returning nil would swallow it.
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] e in
-            DispatchQueue.main.async { self?.onNSEvent(e) }
+            self?.deliver(e)
             return e
         }
     }
@@ -91,15 +92,24 @@ final class ChordEngine {
         localMonitor = nil
     }
 
-    /// Ctrl+Option+Cmd+P — force-quit Pluck even if a gesture is wedged.
-    /// Installed as a separate listen-only monitor so it cannot be gated on gesture state.
+    /// Monitors fire on the main thread; handle inline so there's no extra queue hop between the event and the frame.
+    private nonisolated func deliver(_ event: NSEvent) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { onNSEvent(event) }
+        } else {
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.onNSEvent(event) } }
+        }
+    }
+
+    /// Ctrl+Option+Cmd+P force-quits Pluck even if a gesture is wedged.
     private func installPanicHotkey() {
         panicMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let wantsPanic = event.modifierFlags.contains([.control, .option, .command])
                 && event.charactersIgnoringModifiers?.lowercased() == "p"
             guard wantsPanic else { return }
             DispatchQueue.main.async {
-                NSLog("Pluck: PANIC hotkey — force quit")
+                NSLog("Pluck: PANIC hotkey: force quit")
+                CursorGuard.forceVisible()
                 self?.resetHard()
                 NSApp.terminate(nil)
             }
@@ -112,65 +122,53 @@ final class ChordEngine {
     }
 
     private func onNSEvent(_ event: NSEvent) {
-        let loc = Self.mouseLocation()
-
         switch event.type {
-        case .leftMouseDown:
-            handleDown(.left, at: loc)
-        case .rightMouseDown:
-            handleDown(.right, at: loc)
-        case .leftMouseUp:
-            handleUp(.left, at: loc)
-        case .rightMouseUp:
-            handleUp(.right, at: loc)
-        case .leftMouseDragged, .rightMouseDragged, .mouseMoved:
-            handleMove(at: loc)
+        case .leftMouseDown: handleDown(.left)
+        case .rightMouseDown: handleDown(.right)
+        case .leftMouseUp: handleUp(.left)
+        case .rightMouseUp: handleUp(.right)
+        case .leftMouseDragged, .rightMouseDragged, .mouseMoved: handleMove()
         case .keyDown:
-            if event.keyCode == 53 { // Escape
-                cancelActive()
-            }
-        default:
-            break
+            if event.keyCode == 53 { cancelActive() } // Escape
+        default: break
         }
     }
 
-    // MARK: - State machine
+    // MARK: State machine
 
-    private func handleDown(_ button: MouseButton, at location: CGPoint) {
+    private func handleDown(_ button: MouseButton) {
         if frontmostExcluded() {
             held.insert(button)
             return
         }
-
         let other = button.other
         if !gestureActive, held.contains(other) || isDown(other) {
             held = [.left, .right]
             gestureActive = true
             armFailsafe()
-            // Do NOT synthesize mouse-ups. That can desync apps and feel like a lockout.
-            session?.begin(at: location)
+            // Never synthesize mouse-ups: that can desync apps and feels like a lockout.
+            session?.begin(at: Self.mouseLocation())
             return
         }
-
         held.insert(button)
     }
 
-    private func handleUp(_ button: MouseButton, at location: CGPoint) {
+    private func handleUp(_ button: MouseButton) {
         held.remove(button)
         guard gestureActive else { return }
-
-        // End as soon as either button is released (safer than waiting for both).
-        // Waiting for both empty caused stuck "active" if one up was missed.
+        // End as soon as either button is released.
         endGestureLocally()
-        session?.complete(at: location)
+        session?.complete(at: Self.mouseLocation())
     }
 
-    private func handleMove(at location: CGPoint) {
-        guard gestureActive else { return }
-        let now = CACurrentMediaTime()
-        guard now - lastMoveAt >= Self.moveHz else { return }
-        lastMoveAt = now
-        session?.pointerMoved(to: location)
+    private func handleMove() {
+        if gestureActive {
+            session?.pointerMoved(to: Self.mouseLocation())
+        } else if CursorGuard.shared.isHidden, session?.isActive != true {
+            // Cursor hidden with no gesture running: never leave it that way.
+            CursorGuard.shared.show()
+            CursorGuard.forceVisible()
+        }
     }
 
     private func cancelActive() {
@@ -184,7 +182,7 @@ final class ChordEngine {
         gestureActive = false
     }
 
-    // MARK: - Helpers
+    // MARK: Helpers
 
     private func physicalHeld() -> Set<MouseButton> {
         var s = Set<MouseButton>()
@@ -204,14 +202,16 @@ final class ChordEngine {
 
     private func armFailsafe() {
         clearFailsafe()
-        failsafeTimer = Timer.scheduledTimer(withTimeInterval: Self.failsafeSeconds, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: Self.failsafeSeconds, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                NSLog("Pluck: gesture failsafe (%.1fs) — releasing", Self.failsafeSeconds)
+                NSLog("Pluck: gesture failsafe (%.0fs): releasing", Self.failsafeSeconds)
                 self.cancelActive()
-                self.forceCursorVisible()
+                CursorGuard.forceVisible()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        failsafeTimer = timer
     }
 
     private func clearFailsafe() {
@@ -219,14 +219,7 @@ final class ChordEngine {
         failsafeTimer = nil
     }
 
-    private func forceCursorVisible() {
-        for _ in 0..<12 { NSCursor.unhide() }
-        CGDisplayShowCursor(CGMainDisplayID())
-        CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
-    }
-
     static func mouseLocation() -> CGPoint {
-        let p = NSEvent.mouseLocation
-        return CGPoint(x: p.x, y: p.y)
+        NSEvent.mouseLocation
     }
 }

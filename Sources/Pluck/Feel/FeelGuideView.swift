@@ -27,10 +27,9 @@ struct FeelGuideView: View {
                     .foregroundStyle(.secondary)
 
                 massSection
-                distributionSection
+                stretchSection
                 physicsSection
                 lookSection
-                gooSection
 
                 HStack {
                     Button("Reset all knobs") { config.resetToDefaults() }
@@ -83,17 +82,19 @@ struct FeelGuideView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             step(1, "Hold left, then right (or reverse)")
-            step(2, "Blob eats the cursor — move to stretch")
-            step(3, "Aim N/E/S/W · release to select")
+            step(2, "The drop takes over the cursor. Move to stretch it")
+            step(3, "Aim at Keep (up), Go (right), Give (down), Ask (left). Release to select")
         }
     }
 
     private var safetyBox: some View {
         GroupBox("Safety") {
             VStack(alignment: .leading, spacing: 4) {
-                Text("• Escape cancels · auto-ends after 20s")
+                Text("• Escape cancels · auto-ends after 12s")
                 Text("• Panic quit: ⌃⌥⌘P")
                 Text("• Menu: Reset Pointer / Quit Pluck")
+                Text("• Overlay never takes clicks; a watchdog restores the cursor")
+                Text("• Overlay never takes clicks; cursor watchdog restores it")
             }
             .font(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,16 +127,9 @@ struct FeelGuideView: View {
     private var massSection: some View {
         GroupBox("Mass") {
             VStack(spacing: 10) {
-                knob("Total mass (rest radius)", value: $config.restRadius, range: 24...100, format: "%.0f pt")
+                knob("Total mass (rest radius)", value: $config.restRadius, range: 18...80, format: "%.0f pt")
                 knob("Stretch pull (mass from neck)", value: $config.stretchPull, range: 0...1.4, format: "%.2f")
-                knob("Neck floor (min radius)", value: $config.neckFloor, range: 2...18, format: "%.0f pt")
-            }
-        }
-    }
-
-    private var distributionSection: some View {
-        GroupBox("Distribution") {
-            VStack(spacing: 10) {
+                knob("Neck floor (min radius)", value: $config.neckFloor, range: 1...14, format: "%.0f pt")
                 knob("Pin mass bias", value: $config.pinMass, range: 0.1...1.5, format: "%.2f")
                 knob("Cursor mass bias", value: $config.headMass, range: 0.1...1.5, format: "%.2f")
                 knob("Pin minimum (× rest)", value: $config.pinMinFraction, range: 0.25...1.1, format: "%.2f")
@@ -144,40 +138,43 @@ struct FeelGuideView: View {
         }
     }
 
+    private var stretchSection: some View {
+        GroupBox("Stretch & compass") {
+            VStack(spacing: 10) {
+                knob("Extra pull gain", value: $config.gainBoost, range: 0...1.6, format: "%.2f×")
+                knob("Max drawn length", value: $config.maxLength, range: 160...600, format: "%.0f pt")
+                knob("Lobe distance", value: $config.lobeDistance, range: 50...140, format: "%.0f pt")
+                knob("Lobe size (× rest)", value: $config.lobeSize, range: 0.15...0.6, format: "%.2f")
+            }
+        }
+    }
+
     private var physicsSection: some View {
         GroupBox("Physics") {
             VStack(spacing: 10) {
-                knob("Responsiveness (snap)", value: $config.responsiveness, range: 0...1, format: "%.2f")
-                knob("Damping (inertia)", value: $config.damping, range: 0.75...0.99, format: "%.2f")
+                knob("Head snap (frequency)", value: $config.headFrequency, range: 20...140, format: "%.0f rad/s")
+                knob("Head damping (<0.8 overshoots)", value: $config.headDamping, range: 0.3...1.4, format: "%.2f")
+                knob("Neck follow (frequency)", value: $config.neckFrequency, range: 10...90, format: "%.0f rad/s")
+                knob("Neck damping (low = whippy)", value: $config.neckDamping, range: 0.2...1.2, format: "%.2f")
                 knob("Slosh amount", value: $config.sloshAmount, range: 0...1.5, format: "%.2f")
-                knob("Whip response", value: $config.whipResponse, range: 0...1.5, format: "%.2f")
-                knob("Spine particles", value: $config.particleCount, range: 6...28, format: "%.0f", step: 1)
+                knob("Neck particles", value: $config.particleCount, range: 6...28, format: "%.0f", step: 1)
             }
         }
     }
 
     private var lookSection: some View {
-        GroupBox("Optics (obsidian glass)") {
+        GroupBox("Optics (dark glass)") {
             VStack(spacing: 10) {
+                knob("Merge softness", value: $config.blend, range: 4...40, format: "%.0f pt")
+                knob("Bevel depth", value: $config.bevel, range: 4...30, format: "%.0f pt")
                 knob("Shininess / clearcoat", value: $config.shininess, range: 0...1.5, format: "%.2f")
-                knob("Fresnel rim", value: $config.fresnel, range: 0...1.5, format: "%.2f")
+                knob("Fresnel reflection", value: $config.fresnel, range: 0...1.5, format: "%.2f")
                 knob("Transmission (light through)", value: $config.transmission, range: 0...1.2, format: "%.2f")
-                knob("Absorption (Beer depth)", value: $config.absorption, range: 0...1.5, format: "%.2f")
+                knob("Absorption (depth)", value: $config.absorption, range: 0...1.5, format: "%.2f")
                 knob("Glass opacity", value: $config.glassOpacity, range: 0.4...1, format: "%.2f")
+                knob("Iridescent rim", value: $config.rimStrength, range: 0...1.5, format: "%.2f")
                 knob("Contact shadow", value: $config.shadowStrength, range: 0...1, format: "%.2f")
-                knob("Base lightness", value: $config.lightness, range: 0.02...0.25, format: "%.2f")
-                knob("Cool tint (monitor glow)", value: $config.coolTint, range: 0...1, format: "%.2f")
-            }
-        }
-    }
-
-    private var gooSection: some View {
-        GroupBox("Metaball field") {
-            VStack(spacing: 10) {
-                Text("Iso threshold controls how soft the liquid merge is (SDF field).")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                knob("Field merge / threshold", value: $config.gooThreshold, range: 0.2...0.85, format: "%.2f")
+                knob("Cool tint", value: $config.coolTint, range: 0...1, format: "%.2f")
             }
         }
     }

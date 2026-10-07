@@ -17,10 +17,10 @@ enum FeelLab {
         kind: .clipboard,
         nucleusTitle: "",
         items: [
-            CompassItem(role: .north, title: "North", subtitle: "Keep", actionID: "feel.north"),
-            CompassItem(role: .east, title: "East", subtitle: "Go", actionID: "feel.east"),
-            CompassItem(role: .south, title: "South", subtitle: "Give", actionID: "feel.south"),
-            CompassItem(role: .west, title: "West", subtitle: "Ask", actionID: "feel.west"),
+            CompassItem(role: .north, title: "Keep", subtitle: "North", actionID: "feel.north"),
+            CompassItem(role: .east, title: "Go", subtitle: "East", actionID: "feel.east"),
+            CompassItem(role: .south, title: "Give", subtitle: "South", actionID: "feel.south"),
+            CompassItem(role: .west, title: "Ask", subtitle: "West", actionID: "feel.west"),
         ]
     )
 

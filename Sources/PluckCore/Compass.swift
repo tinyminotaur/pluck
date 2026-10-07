@@ -8,16 +8,18 @@ public enum CompassRole: String, CaseIterable, Codable, Hashable, Sendable {
     case south = "give"
     case west = "ask"
 
+    /// Angle in AppKit screen space (origin bottom-left, **y up**), radians.
+    /// North is up on the display.
     public var angle: CGFloat {
         switch self {
-        case .north: return -.pi / 2
+        case .north: return .pi / 2
         case .east: return 0
-        case .south: return .pi / 2
+        case .south: return -.pi / 2
         case .west: return .pi
         }
     }
 
-    /// Unit vector in screen coords (y down).
+    /// Unit vector in AppKit screen space (y up).
     public var unit: CGPoint {
         CGPoint(x: cos(angle), y: sin(angle))
     }
