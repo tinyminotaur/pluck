@@ -324,7 +324,9 @@ final class MetaballView: NSView {
             edgeSoft: Float(0.08 + (1 - cfg.gooThreshold) * 0.1),
             baseColor: SIMD3(Float(max(r, 0.04)), Float(max(g, 0.045)), Float(max(b, 0.06))),
             absorb: absorb,
-            glow: glow
+            glow: glow,
+            facet: Float(cfg.facetAmount),
+            facetSize: Float(cfg.facetSize)
         )
 
         guard let image = metal.render(

@@ -75,6 +75,10 @@ final class ObsidianBlobMetal {
         var baseColor: SIMD3<Float>
         var absorb: SIMD3<Float>
         var glow: SIMD3<Float>
+        /// 0 = smooth liquid, 1 = fully chipped obsidian.
+        var facet: Float = 0
+        /// Facet cell size across the blob, in points.
+        var facetSize: Float = 22
     }
 
     /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
@@ -121,7 +125,9 @@ final class ObsidianBlobMetal {
             glow: SIMD4(look.glow.x, look.glow.y, look.glow.z, 0),
             circleCount: UInt32(min(32, circles.count)),
             spineCount: UInt32(min(32, max(0, spineCount))),
-            fillet: Float(max(1, fillet * scale))
+            fillet: Float(max(1, fillet * scale)),
+            facet: min(1, max(0, look.facet)),
+            facetSize: max(6, look.facetSize * Float(scale))
         )
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
 
@@ -219,6 +225,8 @@ final class ObsidianBlobMetal {
         var circleCount: UInt32
         var spineCount: UInt32
         var fillet: Float
+        var facet: Float
+        var facetSize: Float
         var _pad: UInt32 = 0
     }
 
@@ -241,6 +249,8 @@ final class ObsidianBlobMetal {
         uint circleCount;
         uint spineCount;
         float fillet;
+        float facet;
+        float facetSize;
         uint _pad;
     };
 
@@ -300,6 +310,31 @@ final class ObsidianBlobMetal {
         return sqrt(max(0.0, 1.0 - v * v));
     }
 
+    float2 hash22(float2 p) {
+        p = float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)));
+        return fract(sin(p) * 43758.5453);
+    }
+
+    // Voronoi cells: x = distance to nearest seed, y = gap to second nearest (≈0 on a
+    // cell edge), zw = per-cell random pair.
+    float4 facetCells(float2 m) {
+        float2 g = floor(m);
+        float2 f = fract(m);
+        float d1 = 8.0, d2 = 8.0;
+        float2 id = float2(0.0);
+        for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+                float2 o = float2(float(i), float(j));
+                float2 r = o + hash22(g + o) * 0.8 + 0.1 - f;
+                float d = dot(r, r);
+                if (d < d1) { d2 = d1; d1 = d; id = g + o; }
+                else if (d < d2) { d2 = d; }
+            }
+        }
+        d1 = sqrt(d1); d2 = sqrt(d2);
+        return float4(d1, d2 - d1, hash22(id + 17.0));
+    }
+
     fragment float4 obsidian_fragment(VertexOut in [[stage_in]],
                                       constant Uniforms &u [[buffer(0)]],
                                       constant float4 *circles [[buffer(1)]]) {
@@ -309,6 +344,22 @@ final class ObsidianBlobMetal {
         float k = max(u.fillet, 1.0);
 
         float2 f0 = blobField(p, circles, n, sp, k);
+
+        // Obsidian facets live in the blob's own material space (along the pin→head axis and
+        // across it), so they stretch, shear and re-catch the light as the liquid moves.
+        float4 cell = float4(0.0, 1.0, 0.5, 0.5);
+        if (u.facet > 0.001 && n >= sp + 2u) {
+            float2 a = circles[n - 2].xy;
+            float2 ab = circles[n - 1].xy - a;
+            float len = length(ab);
+            float2 dir = len > 1.0 ? ab / len : float2(1.0, 0.0);
+            float2 rel = p - a;
+            float cellAlong = max(len * 0.25, u.facetSize);
+            float2 m = float2(dot(rel, dir) / cellAlong, dot(rel, float2(-dir.y, dir.x)) / u.facetSize);
+            cell = facetCells(m);
+            // Chipped, slightly angular silhouette.
+            f0.x += u.facet * u.facetSize * 0.09 * (cell.z - 0.5) * 2.0;
+        }
         // Anti-aliased silhouette straight from the distance field (~1.5 px feather).
         float alpha = saturate(0.5 - f0.x / 1.5);
 
@@ -322,6 +373,10 @@ final class ObsidianBlobMetal {
         float hx = pillow(blobField(p + float2(e, 0.0), circles, n, sp, k)) - h;
         float hy = pillow(blobField(p + float2(0.0, e), circles, n, sp, k)) - h;
         float3 N = normalize(float3(-hx * 4.8, -hy * 4.8, 1.0));
+        // Flat conchoidal planes: each cell tilts the surface its own way.
+        float2 tilt = (cell.zw - 0.5) * 2.0;
+        float3 Nf = normalize(float3(N.xy * 0.45 + tilt * 0.55, N.z));
+        N = normalize(mix(N, Nf, saturate(u.facet)));
         float3 V = float3(0.0, 0.0, 1.0);
         float3 L = normalize(float3(u.lightDir.x, u.lightDir.y, 0.85));
 
@@ -344,6 +399,12 @@ final class ObsidianBlobMetal {
         float gloss = mix(12.0, 48.0, saturate(u.shininess));
         float spec = pow(saturate(dot(N, H)), gloss) * (0.45 + u.shininess);
         body += spec * float3(1.0) * 1.1;
+
+        // Faint bright seams where planes meet, plus a per-facet glint that wakes up as the
+        // light swings with the motion.
+        float seam = 1.0 - smoothstep(0.0, 0.07, cell.y);
+        body += seam * u.facet * 0.12 * float3(0.75, 0.85, 1.0) * (0.4 + 0.6 * thick);
+        body *= 1.0 + u.facet * 0.12 * (cell.w - 0.5) * sin(u.time * 2.0 + cell.z * 6.2831);
 
         float a = saturate(alpha * u.opacity);
         return float4(body * a, a);

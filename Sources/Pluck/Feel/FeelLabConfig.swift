@@ -37,6 +37,8 @@ final class FeelLabConfig: ObservableObject {
     @Published var shadowStrength: Double { didSet { save("shadowStrength", shadowStrength) } }
     @Published var lightness: Double { didSet { save("lightness", lightness) } }
     @Published var coolTint: Double { didSet { save("coolTint", coolTint) } }
+    @Published var facetAmount: Double { didSet { save("facetAmount", facetAmount) } }
+    @Published var facetSize: Double { didSet { save("facetSize", facetSize) } }
 
     // MARK: Field (metaball iso)
     @Published var gooBlur: Double { didSet { save("gooBlur", gooBlur) } }
@@ -67,6 +69,8 @@ final class FeelLabConfig: ObservableObject {
         shadowStrength = Self.load("shadowStrength", 0.55)
         lightness = Self.load("lightness", 0.06)
         coolTint = Self.load("coolTint", 0.45)
+        facetAmount = Self.load("facetAmount", 0.55)
+        facetSize = Self.load("facetSize", 22)
 
         gooBlur = Self.load("gooBlur", 16)
         gooThreshold = Self.load("gooThreshold", 0.5)
@@ -95,6 +99,8 @@ final class FeelLabConfig: ObservableObject {
         shadowStrength = 0.55
         lightness = 0.06
         coolTint = 0.45
+        facetAmount = 0.55
+        facetSize = 22
         gooBlur = 16
         gooThreshold = 0.5
         useGooFilter = true
