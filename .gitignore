@@ -1,0 +1,8 @@
+.build/
+build/
+signing/
+*.xcodeproj
+xcuserdata/
+.DS_Store
+*.p12
+*.key
