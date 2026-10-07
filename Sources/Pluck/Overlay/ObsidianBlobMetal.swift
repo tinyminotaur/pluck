@@ -77,7 +77,17 @@ final class ObsidianBlobMetal {
         var glow: SIMD3<Float>
     }
 
-    func render(size: CGSize, scale: CGFloat, circles: [Circle], look: Look) -> CGImage? {
+    /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
+    /// by round-cone segments, not drawn as separate discs). Any remaining circles (pin / head
+    /// lobes) are smooth-unioned onto it. `fillet` is the blend width in points.
+    func render(
+        size: CGSize,
+        scale: CGFloat,
+        circles: [Circle],
+        spineCount: Int,
+        fillet: CGFloat,
+        look: Look
+    ) -> CGImage? {
         let w = max(2, Int(ceil(size.width * scale)))
         let h = max(2, Int(ceil(size.height * scale)))
         guard w < 4096, h < 4096 else { return nil }
@@ -109,7 +119,9 @@ final class ObsidianBlobMetal {
             baseColor: SIMD4(look.baseColor.x, look.baseColor.y, look.baseColor.z, 0),
             absorb: SIMD4(look.absorb.x, look.absorb.y, look.absorb.z, 0),
             glow: SIMD4(look.glow.x, look.glow.y, look.glow.z, 0),
-            circleCount: UInt32(min(32, circles.count))
+            circleCount: UInt32(min(32, circles.count)),
+            spineCount: UInt32(min(32, max(0, spineCount))),
+            fillet: Float(max(1, fillet * scale))
         )
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
 
@@ -205,9 +217,9 @@ final class ObsidianBlobMetal {
         var absorb: SIMD4<Float>
         var glow: SIMD4<Float>
         var circleCount: UInt32
-        var _padA: UInt32 = 0
-        var _padB: UInt32 = 0
-        var _padC: UInt32 = 0
+        var spineCount: UInt32
+        var fillet: Float
+        var _pad: UInt32 = 0
     }
 
     private static let shaderSource = """
@@ -227,9 +239,9 @@ final class ObsidianBlobMetal {
         float4 absorb;
         float4 glow;
         uint circleCount;
-        uint _padA;
-        uint _padB;
-        uint _padC;
+        uint spineCount;
+        float fillet;
+        uint _pad;
     };
 
     struct VertexOut {
@@ -249,24 +261,43 @@ final class ObsidianBlobMetal {
         return o;
     }
 
-    float smax(float a, float b, float k) {
-        float h = saturate(0.5 + 0.5 * (b - a) / k);
-        return mix(a, b, h) + k * h * (1.0 - h);
+    // Polynomial smooth-min of two signed distances.
+    float smin(float a, float b, float k) {
+        float h = max(k - abs(a - b), 0.0) / k;
+        return min(a, b) - h * h * k * 0.25;
     }
 
-    float sphereHeight(float2 p, float2 c, float rad) {
-        float d = distance(p, c);
-        if (d >= rad) return 0.0;
-        float x = d / rad;
-        return sqrt(max(0.0, 1.0 - x * x));
-    }
-
-    float heightField(float2 p, constant float4 *circles, uint count, float k) {
-        float h = 0.0;
-        for (uint i = 0; i < count; i++) {
-            h = smax(h, sphereHeight(p, circles[i].xy, max(circles[i].z, 1.0)), k);
+    // Signed distance (negative inside) and the local tube radius at that point.
+    float2 blobField(float2 p, constant float4 *c, uint n, uint spine, float k) {
+        float d = 1e5;
+        float r = 1.0;
+        // Tether: tapered round-cone segments between consecutive spine samples (hard union,
+        // so the thin neck stays thin and continuous instead of beading into discs).
+        for (uint i = 0; i + 1 < spine; i++) {
+            float2 a = c[i].xy;
+            float2 ab = c[i + 1].xy - a;
+            float t = saturate(dot(p - a, ab) / max(dot(ab, ab), 1e-4));
+            float rr = mix(c[i].z, c[i + 1].z, t);
+            float di = length(p - (a + ab * t)) - rr;
+            if (di < d) { d = di; r = rr; }
         }
-        return h;
+        // Pin / head lobes: smooth-unioned so they pool into the tether like liquid.
+        for (uint i = spine; i < n; i++) {
+            float rr = max(c[i].z, 1.0);
+            float di = length(p - c[i].xy) - rr;
+            float w = saturate(0.5 + 0.5 * (d - di) / k);
+            r = mix(r, rr, w);
+            d = smin(d, di, k);
+        }
+        return float2(d, max(r, 1.0));
+    }
+
+    // Pillow profile: rises steeply at the silhouette and flattens toward the core,
+    // scaled by the local tube radius so a thin neck reads as a round thread.
+    float pillow(float2 f) {
+        float u = saturate(-f.x / (f.y * 0.95));
+        float v = 1.0 - u;
+        return sqrt(max(0.0, 1.0 - v * v));
     }
 
     fragment float4 obsidian_fragment(VertexOut in [[stage_in]],
@@ -274,21 +305,23 @@ final class ObsidianBlobMetal {
                                       constant float4 *circles [[buffer(1)]]) {
         float2 p = float2(in.uv.x * u.resolution.x, in.uv.y * u.resolution.y);
         uint n = min(u.circleCount, 32u);
-        float h = heightField(p, circles, n, 0.22);
-        float edge = max(0.02, u.edgeSoft);
-        float alpha = smoothstep(0.0, edge, h);
+        uint sp = min(u.spineCount, n);
+        float k = max(u.fillet, 1.0);
+
+        float2 f0 = blobField(p, circles, n, sp, k);
+        // Anti-aliased silhouette straight from the distance field (~1.5 px feather).
+        float alpha = saturate(0.5 - f0.x / 1.5);
 
         // Plate isolation: empty space is EXACT clear — no contact shadow fill.
         if (alpha < 0.02) {
             return float4(0.0, 0.0, 0.0, 0.0);
         }
 
+        float h = pillow(f0);
         float e = 1.5;
-        float hx = heightField(p + float2(e, 0.0), circles, n, 0.22)
-                 - heightField(p - float2(e, 0.0), circles, n, 0.22);
-        float hy = heightField(p + float2(0.0, e), circles, n, 0.22)
-                 - heightField(p - float2(0.0, e), circles, n, 0.22);
-        float3 N = normalize(float3(-hx * 2.4, -hy * 2.4, 1.0));
+        float hx = pillow(blobField(p + float2(e, 0.0), circles, n, sp, k)) - h;
+        float hy = pillow(blobField(p + float2(0.0, e), circles, n, sp, k)) - h;
+        float3 N = normalize(float3(-hx * 4.8, -hy * 4.8, 1.0));
         float3 V = float3(0.0, 0.0, 1.0);
         float3 L = normalize(float3(u.lightDir.x, u.lightDir.y, 0.85));
 

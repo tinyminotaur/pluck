@@ -327,7 +327,14 @@ final class MetaballView: NSView {
             glow: glow
         )
 
-        guard let image = metal.render(size: bbox.size, scale: scale, circles: circles, look: look) else {
+        guard let image = metal.render(
+            size: bbox.size,
+            scale: scale,
+            circles: circles,
+            spineCount: spine.count,
+            fillet: params.restRadius * 0.22,
+            look: look
+        ) else {
             return false
         }
         // Only composite the blob image; empty texels were scrubbed to alpha 0.
