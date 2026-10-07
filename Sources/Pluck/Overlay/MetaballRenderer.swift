@@ -148,7 +148,11 @@ final class MetaballView: NSView {
             x: (head.x - prevHead.x) / max(dt, 1.0 / 240.0),
             y: (head.y - prevHead.y) / max(dt, 1.0 / 240.0)
         )
-        headVel = CGPoint(x: headVel.x * 0.55 + rawVel.x * 0.45, y: headVel.y * 0.55 + rawVel.y * 0.45)
+        let velAlpha = GestureMath.smoothingAlpha(retain: 0.55, dt: dt)
+        headVel = CGPoint(
+            x: headVel.x + (rawVel.x - headVel.x) * velAlpha,
+            y: headVel.y + (rawVel.y - headVel.y) * velAlpha
+        )
         prevHead = head
 
         let speed = hypot(headVel.x, headVel.y)
@@ -178,7 +182,9 @@ final class MetaballView: NSView {
         spine[0] = anchor
         spine[n - 1] = head
 
-        let damping = cfg.dampingConstant
+        let damping = GestureMath.damping(cfg.dampingConstant, dt: dt)
+        // Accelerations are tuned at 60 fps; dt² * 60 keeps the same feel at any refresh rate.
+        let step = dt * dt * 60
         let spring = cfg.springConstant
         let whip = CGFloat(cfg.whipResponse)
         let sloshAmp = CGFloat(cfg.sloshAmount)
@@ -191,11 +197,12 @@ final class MetaballView: NSView {
             let t = CGFloat(i) / CGFloat(n - 1)
             let mid = sin(.pi * t)
             let target = lerp(anchor, head, t)
-            vel.x += (target.x - cur.x) * spring * (0.4 + 0.6 * (1 - mid)) * dt
-            vel.y += (target.y - cur.y) * spring * (0.4 + 0.6 * (1 - mid)) * dt
+            let k = spring * (0.4 + 0.6 * (1 - mid)) * step
+            vel.x += (target.x - cur.x) * k
+            vel.y += (target.y - cur.y) * k
             let impulse = latSpeed * mid * 0.05 * whip
-            vel.x += nx * impulse * dt * 60
-            vel.y += ny * impulse * dt * 60
+            vel.x += nx * impulse * step * 60
+            vel.y += ny * impulse * step * 60
             prevSpine[i] = cur
             spine[i] = CGPoint(x: cur.x + vel.x, y: cur.y + vel.y)
         }
@@ -211,8 +218,8 @@ final class MetaballView: NSView {
                 + sin(time * 8.5 + t * 5.5) * min(1, hypot(headVel.x, headVel.y) / 700) * 2.8 * mid * sloshAmp
             let prev = slosh[i]
             let prv = prevSlosh[i]
-            var v = (prev - prv) * 0.9
-            v += (drive - prev) * 16 * dt
+            var v = (prev - prv) * GestureMath.damping(0.9, dt: dt)
+            v += (drive - prev) * 16 * step
             prevSlosh[i] = prev
             slosh[i] = prev + v
             baseRadii[i] = max(params.minRadius, baseRadii[i] + slosh[i])

@@ -27,8 +27,12 @@ public enum GestureMath {
     public static let stretchGain: CGFloat = 1.75
     /// Soft magnet snap radius around a lobe (points, after gain).
     public static let magnetRadius: CGFloat = 72
-    /// Hysteresis: once captured, stay until this much closer to another role.
-    public static let hysteresis: CGFloat = 22
+    /// Dead zone once a role is captured: smaller than `deadZone` so hovering on the
+    /// edge doesn't flicker between armed and canceled.
+    public static let deadZoneExit: CGFloat = 16
+    /// Angular hysteresis (radians, per side). Role boundaries sit midway between
+    /// neighbours; a captured role is held until the pointer is this far past that line.
+    public static let hysteresisAngle: CGFloat = 0.14
     /// Distance of lobe centers from pin when bloomed.
     public static let lobeDistance: CGFloat = 84
     public static let pinRadius: CGFloat = 22
@@ -66,35 +70,30 @@ public enum GestureMath {
         return d
     }
 
-    /// Magnetic capture with hysteresis. `current` stays until another role is clearly closer.
+    /// Capture with hysteresis on both the dead zone and the role boundaries.
+    /// `current` stays captured until the pointer is clearly closer (in angle) to
+    /// another role, or drops inside `deadZoneExit`.
     public static func capture(
         pin: CGPoint,
         pointer: CGPoint,
         available: [CompassRole],
         current: CompassRole?
     ) -> CompassRole? {
+        let held = current.flatMap { available.contains($0) ? $0 : nil }
         let dist = distance(pin, pointer)
-        if dist < deadZone { return nil }
+        if dist < (held == nil ? deadZone : deadZoneExit) { return nil }
 
-        let head = stretchedHead(pin: pin, pointer: pointer)
-        let ang = angle(from: pin, to: head)
+        let ang = angle(from: pin, to: pointer)
         guard let nearest = nearestRole(angle: ang, available: available) else { return nil }
 
-        let nearestLobe = lobeCenter(pin: pin, role: nearest)
-        let nearestDist = distance(head, nearestLobe)
-
-        if let current, available.contains(current) {
-            let currentLobe = lobeCenter(pin: pin, role: current)
-            let currentDist = distance(head, currentLobe)
-            if currentDist - nearestDist < hysteresis {
-                return current
+        if let held, held != nearest {
+            let heldDelta = abs(shortestAngleDelta(held.angle, ang))
+            let nearestDelta = abs(shortestAngleDelta(nearest.angle, ang))
+            if heldDelta - nearestDelta < 2 * hysteresisAngle {
+                return held
             }
         }
-
-        if nearestDist <= magnetRadius || dist >= deadZone {
-            return nearest
-        }
-        return current
+        return nearest
     }
 
     public static func lobeCenter(pin: CGPoint, role: CompassRole) -> CGPoint {
@@ -102,9 +101,24 @@ public enum GestureMath {
         return CGPoint(x: pin.x + u.x * lobeDistance, y: pin.y + u.y * lobeDistance)
     }
 
-    /// Role at release: angle-based, independent of the drawn blob.
-    public static func roleAtRelease(pin: CGPoint, pointer: CGPoint, available: [CompassRole]) -> CompassRole? {
-        if distance(pin, pointer) < deadZone { return nil }
-        return nearestRole(angle: angle(from: pin, to: pointer), available: available)
+    /// Role at release. Pass the currently captured role so release matches what the
+    /// user saw highlighted (hysteresis included).
+    public static func roleAtRelease(
+        pin: CGPoint,
+        pointer: CGPoint,
+        available: [CompassRole],
+        current: CompassRole? = nil
+    ) -> CompassRole? {
+        capture(pin: pin, pointer: pointer, available: available, current: current)
+    }
+
+    /// Frame-rate independent per-step damping: `perFrame` is the retention at 60 fps.
+    public static func damping(_ perFrame: CGFloat, dt: CGFloat) -> CGFloat {
+        pow(perFrame, dt * 60)
+    }
+
+    /// Frame-rate independent exponential smoothing weight for `perFrame` retention at 60 fps.
+    public static func smoothingAlpha(retain perFrame: CGFloat, dt: CGFloat) -> CGFloat {
+        1 - pow(perFrame, dt * 60)
     }
 }

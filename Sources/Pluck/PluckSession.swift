@@ -85,7 +85,9 @@ final class PluckSession: ObservableObject {
         pointer = location
 
         let available = context?.items.map(\.role) ?? []
-        let role = GestureMath.roleAtRelease(pin: pin, pointer: pointer, available: available)
+        let role = GestureMath.roleAtRelease(
+            pin: pin, pointer: pointer, available: available, current: capturedRole
+        )
         let ctx = context
         let resultTitle = FeelLab.title(for: role)
 

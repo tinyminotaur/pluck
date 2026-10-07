@@ -61,6 +61,45 @@ final class GestureMathTests: XCTestCase {
         XCTAssertTrue(role == .north || role == .south)
     }
 
+    func testDeadZoneHysteresisKeepsRoleNearPin() {
+        // Between deadZoneExit and deadZone: armed only if already captured.
+        let near = CGPoint(x: 100 + (GestureMath.deadZone + GestureMath.deadZoneExit) / 2, y: 100)
+        XCTAssertNil(GestureMath.capture(pin: pin, pointer: near, available: all, current: nil))
+        XCTAssertEqual(GestureMath.capture(pin: pin, pointer: near, available: all, current: .east), .east)
+        let inside = CGPoint(x: 100 + GestureMath.deadZoneExit - 1, y: 100)
+        XCTAssertNil(GestureMath.capture(pin: pin, pointer: inside, available: all, current: .east))
+    }
+
+    func testAngularHysteresisHoldsPastBoundary() {
+        // 50° below east is nearer south (45° boundary) but within the hysteresis band.
+        let a: CGFloat = 50 * .pi / 180
+        let p = CGPoint(x: 100 + 150 * cos(a), y: 100 + 150 * sin(a))
+        XCTAssertEqual(GestureMath.capture(pin: pin, pointer: p, available: all, current: .east), .east)
+        XCTAssertEqual(GestureMath.capture(pin: pin, pointer: p, available: all, current: nil), .south)
+        // Well past the band, it switches.
+        let b: CGFloat = 70 * .pi / 180
+        let q = CGPoint(x: 100 + 150 * cos(b), y: 100 + 150 * sin(b))
+        XCTAssertEqual(GestureMath.capture(pin: pin, pointer: q, available: all, current: .east), .south)
+    }
+
+    func testReleaseMatchesCapturedRole() {
+        let a: CGFloat = 50 * .pi / 180
+        let p = CGPoint(x: 100 + 150 * cos(a), y: 100 + 150 * sin(a))
+        XCTAssertEqual(
+            GestureMath.roleAtRelease(pin: pin, pointer: p, available: all, current: .east),
+            .east
+        )
+    }
+
+    func testDampingIsFrameRateIndependent() {
+        let perFrame: CGFloat = 0.93
+        let at60 = pow(GestureMath.damping(perFrame, dt: 1.0 / 60), 60)
+        let at120 = pow(GestureMath.damping(perFrame, dt: 1.0 / 120), 120)
+        XCTAssertEqual(at60, at120, accuracy: 1e-6)
+        XCTAssertEqual(GestureMath.damping(perFrame, dt: 1.0 / 60), perFrame, accuracy: 1e-6)
+        XCTAssertEqual(GestureMath.smoothingAlpha(retain: 0.55, dt: 1.0 / 60), 0.45, accuracy: 1e-6)
+    }
+
     func testExcludeListDefaults() {
         XCTAssertTrue(ExcludeList.defaultExcludes.contains("com.valvesoftware.steam"))
     }
