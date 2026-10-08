@@ -27,10 +27,14 @@ re-graspable, and deeply satisfying — while still being a real gesture launche
 
 Physics is a fixed 240 Hz step (≤4 substeps per frame) so the feel is identical on 60/120 Hz displays.
 
+| Direction labels (pills with SF Symbol glyphs), armed pop, slice arc, cancel ring, commit confirmation flash | `MetaballView.drawCompass`, `updateCompassUI`, `LabelLayout` | — |
+| Stir: circling the pin builds slosh + glint energy that outlasts the motion | `stir` in `MetaballView` | Slosh amount |
+| Menu-bar quick toggles: Meeting Mode, Trackpad Haptics | `AppDelegate` | — |
+| macOS CI: build, tests, Metal compile, real-Metal preview render uploaded as an artifact | `.github/workflows/ci.yml`, `Pluck --render-preview` | — |
+
 ## Ideas not built yet (ordered by delight per effort)
 
 - **Flick-to-fling:** release at speed and the head overshoots far past the pin before recoiling (momentum is already kept at 50%; expose it as a knob and add a faint speed-streak in the shader).
-- **Orbit / whirl:** circling the pointer builds slosh energy that keeps sloshing after you stop; a "stir" meter that makes facets glint faster.
 - **Quiet "tink" sound** (opt-in, off by default): a soft glassy tick on facet glints / direction latch, volume tied to stretch speed. Respect system mute and Focus.
 - **Pin-pull "pop":** pull past a maximum stretch and the tether snaps into 2–3 droplets that merge back (pinch-off; Rayleigh–Plateau limit ≈ length/diameter π).
 - **Meeting mode:** smaller (`restRadius` ~36), dimmer tint, no label bloom, auto-cancel after a few seconds idle — less conspicuous on a shared screen. Excluded automatically while screen sharing (SCStream/`sharingType`).
@@ -49,3 +53,10 @@ held toy never strands the cursor.
 - **Fling momentum** knob: how much release speed carries the head past the pin.
 - **Meeting mode** toggle: 65 % size, 80 % opacity.
 - `RecoilSpring` (PluckCore) holds the snap-back math with unit tests.
+
+## Open question: trackpads
+
+The trigger is a two-mouse-button chord, which a MacBook trackpad cannot produce. Candidate
+trackpad triggers (pending a decision): modifier + click-and-hold (listen-only, but the click
+also reaches the app underneath), force-click drag, or an active event tap to swallow the
+click (reintroduces the lock-up risk the listen-only design avoids).
