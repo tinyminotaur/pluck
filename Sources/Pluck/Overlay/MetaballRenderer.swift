@@ -62,6 +62,17 @@ final class MetaballView: NSView {
     private var frameStartHead: CGPoint = .zero
     private var frameStartTarget: CGPoint = .zero
     private var magVel: CGPoint = .zero
+    // Organic mass: lopsided lump clusters at the pin and head, seeded per gesture, that jiggle with
+    // inertia and gravity. Plus slow swelling along the tether. Nothing is ever a perfect disc.
+    private var pinLumps: [BlobLumpSpec] = []
+    private var headLumps: [BlobLumpSpec] = []
+    private var pinJig: [CGPoint] = []
+    private var pinJigVel: [CGPoint] = []
+    private var headJig: [CGPoint] = []
+    private var headJigVel: [CGPoint] = []
+    private var swellPhase: [CGFloat] = []
+    private var prevVelForAcc: CGPoint = .zero
+    private var headAcc: CGPoint = .zero
 
     private var recoiling = false
     private var recoilSettled = false
@@ -112,6 +123,7 @@ final class MetaballView: NSView {
         pointerTarget = head
         frameStartTarget = head
         magVel = .zero
+        seedOrganicShape()
         accumulator = 0
         recoiling = false
         recoilDone = nil
@@ -233,6 +245,7 @@ final class MetaballView: NSView {
             for k in 1...steps {
                 let t = CGFloat(k) / CGFloat(steps)
                 stepPhysics(dt: h, head: lerp(start, end, t))
+                stepJiggle(h)
             }
             frameStartHead = end
             frameStartTarget = pointerTarget
@@ -246,9 +259,48 @@ final class MetaballView: NSView {
             let t = CGFloat(k) / CGFloat(steps)
             stepMagnet(target: lerp(startTarget, endTarget, t), h: h)
             stepPhysics(dt: h, head: head)
+            stepJiggle(h)
         }
         frameStartTarget = endTarget
         frameStartHead = head
+    }
+
+    /// New random shape for each gesture, and a random start in the time-driven noise so no two
+    /// gestures look alike.
+    private func seedOrganicShape() {
+        let seed = UInt64.random(in: 0...UInt64.max)
+        pinLumps = BlobLumps.specs(seed: seed, count: 4)
+        headLumps = BlobLumps.specs(seed: seed ^ 0xA5A5_5A5A_1234_4321, count: 2)
+        pinJig = Array(repeating: .zero, count: pinLumps.count)
+        pinJigVel = pinJig
+        headJig = Array(repeating: .zero, count: headLumps.count)
+        headJigVel = headJig
+        swellPhase = (0..<32).map { _ in CGFloat.random(in: 0..<(2 * .pi)) }
+        headAcc = .zero
+        prevVelForAcc = .zero
+        time = CGFloat.random(in: 0..<200)
+    }
+
+    /// Each lump is a little spring-mass: it lurches against head acceleration (inertia) and sinks under
+    /// gravity, then wobbles back at its own pace. Different lumps wobble differently, so the mass
+    /// moves like jelly instead of rotating rigidly.
+    private func stepJiggle(_ h: CGFloat) {
+        let g = CGFloat(cfg.gravity)
+        let drive = CGPoint(
+            x: max(-9, min(9, -headAcc.x * 0.0035)),
+            y: max(-9, min(9, -headAcc.y * 0.0035)) - 2.5 * g
+        )
+        func advance(_ specs: [BlobLumpSpec], _ off: inout [CGPoint], _ vel: inout [CGPoint]) {
+            for i in specs.indices {
+                var x = CGPoint(x: off[i].x - drive.x * specs[i].size, y: off[i].y - drive.y * specs[i].size)
+                var v = vel[i]
+                RecoilSpring.step(x: &x, v: &v, omega: specs[i].omega, zeta: specs[i].zeta, h: h)
+                vel[i] = v
+                off[i] = CGPoint(x: x.x + drive.x * specs[i].size, y: x.y + drive.y * specs[i].size)
+            }
+        }
+        advance(pinLumps, &pinJig, &pinJigVel)
+        advance(headLumps, &headJig, &headJigVel)
     }
 
     /// The head is a heavy liquid mass attracted to the cursor like iron to a magnet: pulled by a spring
@@ -349,6 +401,16 @@ final class MetaballView: NSView {
             y: headVel.y + (rawVel.y - headVel.y) * velAlpha
         )
         prevHead = head
+
+        // Smoothed head acceleration: the lumps lurch against it like jelly.
+        let dtA = max(dt, 1.0 / 240.0)
+        let rawAcc = CGPoint(x: (headVel.x - prevVelForAcc.x) / dtA, y: (headVel.y - prevVelForAcc.y) / dtA)
+        let accAlpha = GestureMath.smoothingAlpha(retain: 0.7, dt: dt)
+        headAcc = CGPoint(
+            x: max(-20000, min(20000, headAcc.x + (rawAcc.x - headAcc.x) * accAlpha)),
+            y: max(-20000, min(20000, headAcc.y + (rawAcc.y - headAcc.y) * accAlpha))
+        )
+        prevVelForAcc = headVel
 
         // Soft-limit the speed that drives whip and slosh so one coalesced mouse event
         // (or a 5000 px/s flick) can't blow the chain up.
@@ -457,7 +519,10 @@ final class MetaballView: NSView {
             slosh[i] = prev + v
             // Mass pools toward the lowest part of the tether (a drip forming under gravity).
             let pool = max(-3.5, min(3.5, (yMean - spine[i].y) * 0.05)) * gravityK * (0.4 + 0.6 * mid)
-            baseRadii[i] = max(params.minRadius, baseRadii[i] + slosh[i] + pool)
+            // Slow, out-of-step swelling so the thickness is never even along the tether.
+            let ph = i < swellPhase.count ? swellPhase[i] : 0
+            let swell = 1 + 0.10 * sin(time * 0.55 + ph) + 0.06 * sin(time * 1.05 + ph * 1.9)
+            baseRadii[i] = max(params.minRadius, (baseRadii[i] + slosh[i] + pool) * swell)
         }
 
         radii = BlobMass.rescaleToTotalArea(radii: baseRadii, length: max(chord, 1), params: params)
@@ -628,6 +693,17 @@ final class MetaballView: NSView {
         let pinR = max(radii.first ?? 20, params.restRadius * params.pinMinFraction * 0.75 * emerge)
         let headR = max(radii.last ?? 14, params.restRadius * params.headMinFraction * 0.85 * emerge)
             * (1 + 0.22 * latchPulse)
+        // Lopsided lump clusters (before pin/head so the last two circles stay pin and head).
+        if circles.count + pinLumps.count + headLumps.count + 2 <= 32 {
+            for (i, s) in pinLumps.enumerated() {
+                let l = BlobLumps.place(s, center: anchor, baseRadius: pinR, time: time, jiggle: pinJig[i])
+                circles.append(.init(center: local(l.center), radius: Float(l.radius)))
+            }
+            for (i, s) in headLumps.enumerated() {
+                let l = BlobLumps.place(s, center: head, baseRadius: headR, time: time, jiggle: headJig[i])
+                circles.append(.init(center: local(l.center), radius: Float(l.radius)))
+            }
+        }
         circles.append(.init(center: local(anchor), radius: Float(pinR)))
         circles.append(.init(center: local(head), radius: Float(headR)))
 
@@ -660,7 +736,7 @@ final class MetaballView: NSView {
             baseColor: SIMD3(Float(max(r, 0.04)), Float(max(g, 0.045)), Float(max(b, 0.06))),
             absorb: absorb,
             glow: glow,
-            facet: Float(min(1, facetEff)),
+            facet: cfg.facetsEnabled ? Float(min(1, facetEff)) : 0,
             facetSize: Float(cfg.facetSize),
             ember: Float(cfg.ember * (cfg.meetingMode ? 0.5 : 1))
         )

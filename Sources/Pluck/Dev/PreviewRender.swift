@@ -49,6 +49,17 @@ enum PreviewRender {
                         radius: Float(radii[i])
                     ))
                 }
+                // Organic lump clusters (same generator as the live view), then pin and head last.
+                let pinR0 = max(radii[0], params.restRadius * params.pinMinFraction * 0.75)
+                let headR0 = max(radii[n - 1], params.restRadius * params.headMinFraction * 0.85)
+                for sp in BlobLumps.specs(seed: UInt64(7 + c), count: 4) {
+                    let l = BlobLumps.place(sp, center: s.pin, baseRadius: pinR0, time: 1.3)
+                    circles.append(.init(center: SIMD2(Float(l.center.x), Float(l.center.y)), radius: Float(l.radius)))
+                }
+                for sp in BlobLumps.specs(seed: UInt64(99 + c), count: 2) {
+                    let l = BlobLumps.place(sp, center: s.head, baseRadius: headR0, time: 1.3)
+                    circles.append(.init(center: SIMD2(Float(l.center.x), Float(l.center.y)), radius: Float(l.radius)))
+                }
                 circles.append(.init(center: SIMD2(Float(s.pin.x), Float(s.pin.y)),
                                      radius: Float(max(radii[0], params.restRadius * params.pinMinFraction * 0.75))))
                 circles.append(.init(center: SIMD2(Float(s.head.x), Float(s.head.y)),
@@ -56,7 +67,9 @@ enum PreviewRender {
 
                 let stretchT = min(1, max(0, (len - 40) / 200))
                 let eased = stretchT * stretchT * (3 - 2 * stretchT)
-                let facet = Float(min(1, 0.55 * (0.3 + 0.7 * (0.3 + 0.9 * eased))))
+                // Facets are off while the liquid is being tuned (FeelLabConfig.facetsEnabled).
+                let facet: Float = 0
+                _ = eased
 
                 let look = ObsidianBlobMetal.Look(
                     lightDir: light, time: 1.3, shininess: 0.95, fresnel: 0.85, transmission: 0.7,

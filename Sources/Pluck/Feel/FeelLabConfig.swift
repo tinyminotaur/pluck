@@ -63,6 +63,8 @@ final class FeelLabConfig: ObservableObject {
     @Published var coolTint: Double { didSet { save("coolTint", coolTint) } }
     /// Strength of the slow pulsing amber glow.
     @Published var ember: Double { didSet { save("ember", ember) } }
+    /// Master switch for the chipped-obsidian facets. Off while the liquid itself is being tuned.
+    @Published var facetsEnabled: Bool { didSet { saveBool("facetsEnabled", facetsEnabled) } }
     @Published var facetAmount: Double { didSet { save("facetAmount", facetAmount) } }
     @Published var facetSize: Double { didSet { save("facetSize", facetSize) } }
 
@@ -134,6 +136,7 @@ final class FeelLabConfig: ObservableObject {
         lightness = Self.load("lightness", 0.06)
         coolTint = Self.load("coolTint", 0.45)
         ember = Self.load("ember", 0.55)
+        facetsEnabled = Self.loadBool("facetsEnabled", false)
         facetAmount = Self.load("facetAmount", 0.55)
         facetSize = Self.load("facetSize", 22)
         recoilBounce = Self.load("recoilBounce", 0.6)
@@ -182,6 +185,7 @@ final class FeelLabConfig: ObservableObject {
         lightness = 0.06
         coolTint = 0.45
         ember = 0.55
+        facetsEnabled = false
         facetAmount = 0.55
         facetSize = 22
         recoilBounce = 0.6

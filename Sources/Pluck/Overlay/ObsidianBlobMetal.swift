@@ -378,7 +378,7 @@ final class ObsidianBlobMetal {
         float2 wPin = (n >= 2u) ? circles[n - 2].xy : float2(0.0);
         // Amplitude scales with the blob (k is the fillet width, ~0.22 × rest radius) and is capped by the
         // local thickness, so a thin neck ripples a little instead of tearing.
-        float wAmp = 0.62 * k;
+        float wAmp = 0.9 * k;
         float wScale = max(wAmp * 6.5, 24.0);
         float2 f00 = blobField(p, circles, n, sp, k);
         float wAmpL = min(wAmp, 0.5 * f00.y);
@@ -409,9 +409,19 @@ final class ObsidianBlobMetal {
 
         float h = pillow(f0);
         float e = 1.5;
-        float hx = pillow(blobField(waterWarp(p + float2(e, 0.0), wPin, wAmpL, wScale, u.time), circles, n, sp, k)) - h;
-        float hy = pillow(blobField(waterWarp(p + float2(0.0, e), wPin, wAmpL, wScale, u.time), circles, n, sp, k)) - h;
-        float3 N = normalize(float3(-hx * 4.8, -hy * 4.8, 1.0));
+        float2 fxp = blobField(waterWarp(p + float2(e, 0.0), wPin, wAmpL, wScale, u.time), circles, n, sp, k);
+        float2 fyp = blobField(waterWarp(p + float2(0.0, e), wPin, wAmpL, wScale, u.time), circles, n, sp, k);
+        float hx = pillow(fxp) - h;
+        float hy = pillow(fyp) - h;
+        // Rim bevel from the pillow profile, plus a spherical dome from the distance gradient so the
+        // whole mass curves like a droplet and highlights slide across it (not only at the silhouette).
+        float2 gd = float2(fxp.x - f0.x, fyp.x - f0.x);
+        float gl = length(gd);
+        float2 gdir = gl > 1e-4 ? gd / gl : float2(0.0);
+        // Zero at the medial axis (where the gradient flips, which would leave star-shaped cusps) and on thin
+        // necks (where the local radius steps between segments and would leave comb ridges).
+        float dome = pow(1.0 - saturate(-f0.x / (f0.y * 0.95)), 1.3) * smoothstep(1.0 * k, 2.6 * k, f0.y);
+        float3 N = normalize(float3(-hx * 4.8 + gdir.x * dome * 0.62, -hy * 4.8 + gdir.y * dome * 0.62, 1.0));
         // Flat conchoidal planes: each cell tilts the surface its own way.
         float2 tilt = (cell.zw - 0.5) * 2.0;
         float ripple = sin(cell.x * 38.0 + cell.z * 6.2831) * 0.035;
@@ -436,9 +446,15 @@ final class ObsidianBlobMetal {
         body += fres * float3(1.0, 0.72, 0.42) * 0.36;
 
         float3 H = normalize(L + V);
-        float gloss = mix(12.0, 48.0, saturate(u.shininess));
+        float gloss = mix(24.0, 130.0, saturate(u.shininess));
         float spec = pow(saturate(dot(N, H)), gloss) * (0.45 + u.shininess);
         body += spec * float3(1.0, 0.94, 0.86) * 1.1 * (1.0 - 0.45 * saturate(u.facet));
+        // Wet-glass sheen: a broad soft reflection of a window above-left, plus a faint cool-warm
+        // bounce on the far side. This is what makes smooth black read as liquid, not paint.
+        float sheen = pow(saturate(dot(N, normalize(float3(-0.35, 0.6, 0.72)))), 7.0);
+        body += sheen * (0.10 + 0.22 * u.shininess) * float3(1.0, 0.93, 0.84);
+        float bounce = pow(saturate(dot(N, normalize(float3(0.5, -0.6, 0.62)))), 5.0);
+        body += bounce * 0.06 * float3(1.0, 0.55, 0.2);
 
         // Faint bright seams where planes meet, plus a per-facet glint that wakes up as the
         // light swings with the motion.
@@ -454,7 +470,7 @@ final class ObsidianBlobMetal {
         float pulse = 0.65 * (0.5 + 0.5 * sin(u.time * 2.1)) + 0.35 * (0.5 + 0.5 * sin(u.time * 3.4 + 1.3));
         float emberAmt = u.ember * (0.35 + 0.65 * pulse);
         float3 emberCol = float3(1.0, 0.42, 0.07);
-        body += emberCol * emberAmt * (0.10 * pow(1.0 - thick, 1.3) + 0.05 * thick * thick);
+        body += emberCol * emberAmt * (0.30 * pow(1.0 - thick, 1.7) + 0.06 * thick * thick * thick);
         float crackle = 0.5 + 0.5 * sin(u.time * 1.7 + cell.z * 6.2831);
         body += emberCol * emberAmt * seam * saturate(u.facet) * (0.35 + 0.65 * crackle) * 0.9;
 
@@ -462,7 +478,8 @@ final class ObsidianBlobMetal {
         float ign = fract(52.9829189 * fract(dot(in.position.xy, float2(0.06711056, 0.00583715))));
         body += (ign - 0.5) * (1.4 / 255.0);
 
-        float a = saturate(alpha * u.opacity);
+        // Opaque black core; only the thin edges are see-through glass.
+        float a = saturate(alpha * mix(u.opacity * 0.78, 1.0, smoothstep(0.0, 0.5, thick)));
         return float4(body * a, a);
     }
     """
