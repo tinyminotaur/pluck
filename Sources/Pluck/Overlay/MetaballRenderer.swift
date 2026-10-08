@@ -55,7 +55,8 @@ final class MetaballView: NSView {
     private var time: CGFloat = 0
 
     private static let fixedStep: CGFloat = 1.0 / 240.0
-    private static let maxSubsteps = 4
+    /// Up to ~67 ms of physics per frame, so a slow frame never runs the liquid in slow motion.
+    private static let maxSubsteps = 16
     /// Soft ceiling (px/s) on the pointer speed fed into whip / slosh / lighting.
     private static let maxDriveSpeed: CGFloat = 3500
     private var accumulator: CGFloat = 0
@@ -106,7 +107,7 @@ final class MetaballView: NSView {
 
     deinit { stopPhysics() }
 
-    func startPhysics() {
+    func startPhysics(driveManually: Bool = false) {
         // LOCK pin to wherever the gesture began.
         lockedPin = pin
         pinLocked = true
@@ -140,6 +141,7 @@ final class MetaballView: NSView {
         guard !physicsRunning else { return }
         physicsRunning = true
         lastTick = CACurrentMediaTime()
+        if driveManually { return }   // headless report: the caller steps the simulation
 
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
@@ -189,6 +191,23 @@ final class MetaballView: NSView {
         updateCompassUI(dt: CGFloat(dt))
         needsDisplay = true
     }
+
+    /// Headless stepping for `Pluck --sim-report`: one display frame of the real simulation.
+    func debugAdvance(dt: CGFloat) {
+        time += dt
+        tickFixed(frameDt: dt)
+        updateCompassUI(dt: dt)
+    }
+
+    /// Times one real optical draw (Metal render + CPU readback + composite) in milliseconds, for `--sim-report`.
+    func debugRenderMillis(into ctx: CGContext) -> Double {
+        let t0 = CACurrentMediaTime()
+        _ = drawOptical(ctx)
+        return (CACurrentMediaTime() - t0) * 1000
+    }
+
+    /// Read-only view of the simulation for `--sim-report`.
+    var debugState: (head: CGPoint, spine: [CGPoint], radii: [CGFloat]) { (head, spine, radii) }
 
     /// Label visibility gate + per-label "pop" springs. Labels stay out of the way of fast
     /// flicks (experts mark ahead without ever seeing them) and fade in once you linger.
@@ -484,7 +503,13 @@ final class MetaballView: NSView {
             var vel = CGPoint(x: (cur.x - prv.x) * damping, y: (cur.y - prv.y) * damping)
             let t = CGFloat(i) / CGFloat(n - 1)
             let mid = sin(.pi * t)
-            let target = lerp(anchor, head, t)
+            // Natural meander: a slow lateral S-curve that never stops, so the strand is a flowing thread, not a
+            // ruled line. Zero at both ends, scaled to the length.
+            let ph0 = swellPhase.count > 30 ? swellPhase[30] : 0
+            let ph1 = swellPhase.count > 31 ? swellPhase[31] : 0
+            let swayAmp = min(9, 0.02 * chord + 1.5)
+            let sway = (0.6 * sin(time * 0.9 + t * 4.1 + ph0) + 0.4 * sin(time * 1.7 + t * 7.3 + ph1)) * swayAmp * mid
+            let target = CGPoint(x: lerp(anchor, head, t).x + nx * sway, y: lerp(anchor, head, t).y + ny * sway)
             let k = spring * (0.4 + 0.6 * (1 - mid)) * step
             vel.x += (target.x - cur.x) * k
             vel.y += (target.y - cur.y) * k
@@ -686,15 +711,24 @@ final class MetaballView: NSView {
 
         var circles: [ObsidianBlobMetal.Circle] = []
         circles.reserveCapacity(spine.count + 2)
-        for i in spine.indices {
-            circles.append(.init(center: local(spine[i]), radius: Float(radii[i])))
+        // Smooth, natural strand: a spline through the physics particles with a softened taper, instead of
+        // straight tapered segments joined at angles.
+        let sub = spine.count <= 20 ? 3 : 2
+        let strand = StrandSmoothing.resample(
+            points: spine,
+            radii: StrandSmoothing.smoothRadii(radii, passes: 2),
+            subdivisions: sub
+        )
+        for i in strand.points.indices {
+            circles.append(.init(center: local(strand.points[i]), radius: Float(strand.radii[i])))
         }
+        let strandCount = strand.points.count
         let params = mass
         let pinR = max(radii.first ?? 20, params.restRadius * params.pinMinFraction * 0.75 * emerge)
         let headR = max(radii.last ?? 14, params.restRadius * params.headMinFraction * 0.85 * emerge)
             * (1 + 0.22 * latchPulse)
         // Lopsided lump clusters (before pin/head so the last two circles stay pin and head).
-        if circles.count + pinLumps.count + headLumps.count + 2 <= 32 {
+        if circles.count + pinLumps.count + headLumps.count + 2 <= ObsidianBlobMetal.maxCircles {
             for (i, s) in pinLumps.enumerated() {
                 let l = BlobLumps.place(s, center: anchor, baseRadius: pinR, time: time, jiggle: pinJig[i])
                 circles.append(.init(center: local(l.center), radius: Float(l.radius)))
@@ -745,7 +779,7 @@ final class MetaballView: NSView {
             size: bbox.size,
             scale: scale,
             circles: circles,
-            spineCount: spine.count,
+            spineCount: strandCount,
             fillet: params.restRadius * 0.22,
             look: look
         ) else {

@@ -49,6 +49,16 @@ enum PreviewRender {
                         radius: Float(radii[i])
                     ))
                 }
+                // Same smoothing as the live view: spline through the particles, softened taper.
+                let smooth = StrandSmoothing.resample(
+                    points: circles.map { CGPoint(x: CGFloat($0.center.x), y: CGFloat($0.center.y)) },
+                    radii: StrandSmoothing.smoothRadii(circles.map { CGFloat($0.radius) }, passes: 2),
+                    subdivisions: 3
+                )
+                circles = zip(smooth.points, smooth.radii).map {
+                    ObsidianBlobMetal.Circle(center: SIMD2(Float($0.x), Float($0.y)), radius: Float($1))
+                }
+                let strandCount = circles.count
                 // Organic lump clusters (same generator as the live view), then pin and head last.
                 let pinR0 = max(radii[0], params.restRadius * params.pinMinFraction * 0.75)
                 let headR0 = max(radii[n - 1], params.restRadius * params.headMinFraction * 0.85)
@@ -80,7 +90,7 @@ enum PreviewRender {
                     facet: facet, facetSize: 22, ember: 0.55
                 )
                 guard let image = metal.render(
-                    size: tile, scale: scale, circles: circles, spineCount: n,
+                    size: tile, scale: scale, circles: circles, spineCount: strandCount,
                     fillet: params.restRadius * 0.22, look: look
                 ) else {
                     FileHandle.standardError.write(Data("PreviewRender: render failed\n".utf8))

@@ -62,8 +62,20 @@ final class OverlayController {
     ) {
         guard let view = blobView else { return }
         // Head tracks pointer 1:1. Pin was locked in startPhysics — do not move it.
-        view.pointerTarget = toView(pointer)
-        if reducedMotion { view.head = view.pointerTarget }   // no physics: the head is the pointer
+        // The drawn head is the pointer run through the stretch-gain curve: 1:1 near the pin, exaggerated
+        // further out, soft-capped. Capture/commit still use the raw pointer.
+        let cfg = FeelLabConfig.shared
+        let virtual = GestureMath.virtualHead(
+            pin: pin, pointer: pointer,
+            gainBoost: CGFloat(cfg.stretchBoost), maxLength: CGFloat(cfg.maxStretch)
+        )
+        var target = toView(virtual)
+        if let v = blobView {   // never push the head off-screen
+            target.x = min(max(target.x, 8), v.bounds.width - 8)
+            target.y = min(max(target.y, 8), v.bounds.height - 8)
+        }
+        view.pointerTarget = target
+        if reducedMotion { view.head = view.pointerTarget }   // no physics: the head is the (gained) pointer
         view.emerge = emerge
         view.bloom = bloom
         view.captured = captured

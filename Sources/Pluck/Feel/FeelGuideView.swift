@@ -194,6 +194,8 @@ struct FeelGuideView: View {
                 knob("Release bounce (snap-back wobble)", value: $config.recoilBounce, range: 0...1, format: "%.2f")
                 knob("Crystallize with stretch", value: $config.crystallize, range: 0...1, format: "%.2f")
                 knob("Idle breathing", value: $config.idleLife, range: 0...1.5, format: "%.2f")
+                knob("Stretch gain (short pull → long stretch)", value: $config.stretchBoost, range: 0...3, format: "%.2f")
+                knob("Max stretch length", value: $config.maxStretch, range: 300...1400, format: "%.0f pt")
                 knob("Gravity (sag + pooling)", value: $config.gravity, range: 0...1.5, format: "%.2f")
                 knob("Magnet pull (head follow)", value: $config.magnetPull, range: 25...120, format: "%.0f rad/s")
                 knob("Magnet weight (damping)", value: $config.magnetWeight, range: 0.3...1.1, format: "%.2f")

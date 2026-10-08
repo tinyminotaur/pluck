@@ -58,6 +58,9 @@ final class ObsidianBlobMetal {
 
     deinit { pixelBuffer?.deallocate() }
 
+    /// Circles the shader will read (the smoothed strand has ~3 segments per physics particle).
+    static let maxCircles = 96
+
     struct Circle {
         /// Bbox-local AppKit coords (y-up, origin bottom-left). LOCKED.
         var center: SIMD2<Float>
@@ -125,8 +128,8 @@ final class ObsidianBlobMetal {
             baseColor: SIMD4(look.baseColor.x, look.baseColor.y, look.baseColor.z, 0),
             absorb: SIMD4(look.absorb.x, look.absorb.y, look.absorb.z, 0),
             glow: SIMD4(look.glow.x, look.glow.y, look.glow.z, 0),
-            circleCount: UInt32(min(32, circles.count)),
-            spineCount: UInt32(min(32, max(0, spineCount))),
+            circleCount: UInt32(min(Self.maxCircles, circles.count)),
+            spineCount: UInt32(min(Self.maxCircles, max(0, spineCount))),
             fillet: Float(max(1, fillet * scale)),
             facet: min(1, max(0, look.facet)),
             facetSize: max(6, look.facetSize * Float(scale)),
@@ -135,13 +138,13 @@ final class ObsidianBlobMetal {
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
 
         let s = Float(scale)
-        var packed = (0..<32).map { i -> SIMD4<Float> in
+        var packed = (0..<Self.maxCircles).map { i -> SIMD4<Float> in
             guard i < circles.count else { return .zero }
             let c = circles[i]
             // LOCKED: scale AppKit-local centers into pixel space. No Y inversion.
             return SIMD4(c.center.x * s, c.center.y * s, max(0.5, c.radius * s), 0)
         }
-        enc.setFragmentBytes(&packed, length: MemoryLayout<SIMD4<Float>>.stride * 32, index: 1)
+        enc.setFragmentBytes(&packed, length: MemoryLayout<SIMD4<Float>>.stride * Self.maxCircles, index: 1)
 
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         enc.endEncoding()
@@ -296,7 +299,9 @@ final class ObsidianBlobMetal {
             // doesn't step (comb ridges) where the taper changes between samples.
             float w = saturate(0.5 + 0.5 * (d - di) / (0.35 * max(rr, r)));
             r = mix(r, rr, w);
-            d = min(d, di);
+            // Soft union (scaled to the local thickness) removes the crease that a hard min leaves where two
+            // tapered segments overlap, which otherwise shows up as regular ribs along a smooth strand.
+            d = smin(d, di, max(0.18 * rr, 0.5));
         }
         // Pin / head lobes: smooth-unioned so they pool into the tether like liquid.
         for (uint i = spine; i < n; i++) {
@@ -371,7 +376,7 @@ final class ObsidianBlobMetal {
                                       constant Uniforms &u [[buffer(0)]],
                                       constant float4 *circles [[buffer(1)]]) {
         float2 p = float2(in.uv.x * u.resolution.x, in.uv.y * u.resolution.y);
-        uint n = min(u.circleCount, 32u);
+        uint n = min(u.circleCount, 96u);
         uint sp = min(u.spineCount, n);
         float k = max(u.fillet, 1.0);
 

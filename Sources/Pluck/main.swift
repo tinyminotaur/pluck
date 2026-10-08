@@ -7,6 +7,11 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-preview") {
     exit(code)
 }
 
+// `Pluck --sim-report`: headless physics diagnostic, then exit.
+if CommandLine.arguments.contains("--sim-report") {
+    exit(MainActor.assumeIsolated { SimReport.run() })
+}
+
 // Menu-bar accessory: no Dock icon when packaged with LSUIElement; policy covers `swift run`.
 MainActor.assumeIsolated {
     CursorGuard.installExitHooks()

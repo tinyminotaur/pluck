@@ -39,6 +39,8 @@ final class ChordEngine {
     private var touchTimer: Timer?
     private var touchArm = HoldArm()
     private var touchElig = TouchEligibility()
+    private var touchRelease = TouchReleaseDebounce()
+    private var touchReleaseTimer: Timer?
     private var configSub: AnyCancellable?
     private var gestureStartedAt: CFTimeInterval = 0
     private var lastActivityAt: CFTimeInterval = 0
@@ -317,6 +319,14 @@ final class ChordEngine {
         }
     }
 
+    private func finishTouchGesture() {
+        touchReleaseTimer?.invalidate()
+        touchReleaseTimer = nil
+        let loc = Self.mouseLocation()
+        endGestureLocally()
+        session?.complete(at: loc)
+    }
+
     private func cancelTouchWatch() {
         touchTimer?.invalidate()
         touchTimer = nil
@@ -331,10 +341,20 @@ final class ChordEngine {
         cancelTouchWatch()
 
         if gestureActive, gestureSource == .touch {
-            if count < 3 {
-                let loc = Self.mouseLocation()
-                endGestureLocally()
-                session?.complete(at: loc)
+            // Contact counts flicker while fingers move: only release after the count has stayed below three
+            // for a moment (or every finger is up). Lifting your hand is still immediate.
+            touchRelease.update(count: count, at: now)
+            touchReleaseTimer?.invalidate()
+            touchReleaseTimer = nil
+            if touchRelease.shouldRelease(at: now) {
+                finishTouchGesture()
+            } else if count < 3 {
+                touchReleaseTimer = Timer.scheduledTimer(withTimeInterval: touchRelease.grace + 0.01, repeats: false) { [weak self] _ in
+                    Task { @MainActor in
+                        guard let self, self.gestureActive, self.gestureSource == .touch else { return }
+                        if self.touchRelease.shouldRelease(at: CACurrentMediaTime()) { self.finishTouchGesture() }
+                    }
+                }
             }
             return
         }
@@ -360,6 +380,7 @@ final class ChordEngine {
 
     private func startGesture(source: Source, at location: CGPoint) {
         gestureSource = source
+        touchRelease.reset()
         gestureActive = true
         armFailsafe()
         session?.begin(at: location)

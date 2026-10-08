@@ -48,6 +48,33 @@ public enum GestureMath {
         hypot(a.x - b.x, a.y - b.y)
     }
 
+    /// Pointer distance over which the extra gain ramps in (1x at the pin, up to 1 + boost beyond this).
+    public static let gainRamp: CGFloat = 140
+
+    /// Drawn pull length for a raw pointer distance. Near the pin it is 1:1 (fine control); further out the
+    /// gain ramps up so a short trackpad motion reads as a long pull, then it soft-saturates toward
+    /// `maxLength` instead of stopping dead. Monotonic, so the liquid always keeps stretching while you pull.
+    public static func virtualLength(_ d: CGFloat, gainBoost: CGFloat, maxLength: CGFloat) -> CGFloat {
+        let x = max(0, d)
+        let s = min(1, x / gainRamp)
+        let smooth = s * s * (3 - 2 * s)
+        let v = x * (1 + max(0, gainBoost) * smooth)
+        let knee = maxLength * 0.75
+        if v <= knee { return v }
+        let room = maxLength - knee
+        return knee + room * CGFloat(tanh(Double((v - knee) / room)))
+    }
+
+    /// Where the drawn head sits for a given pointer: same direction, gain-mapped length.
+    public static func virtualHead(pin: CGPoint, pointer: CGPoint, gainBoost: CGFloat, maxLength: CGFloat) -> CGPoint {
+        let dx = pointer.x - pin.x
+        let dy = pointer.y - pin.y
+        let d = hypot(dx, dy)
+        guard d > 0.0001 else { return pin }
+        let v = virtualLength(d, gainBoost: gainBoost, maxLength: maxLength)
+        return CGPoint(x: pin.x + dx / d * v, y: pin.y + dy / d * v)
+    }
+
     /// Visual head position: pin + (pointer - pin) * stretchGain.
     public static func stretchedHead(pin: CGPoint, pointer: CGPoint) -> CGPoint {
         let dx = pointer.x - pin.x
