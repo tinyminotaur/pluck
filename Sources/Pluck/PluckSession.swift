@@ -32,6 +32,12 @@ final class PluckSession: ObservableObject {
         engine.session = self
     }
 
+    /// `NSEvent.mouseLocation` is AppKit space (y up); `GestureMath` / `CompassRole` use screen
+    /// space (y down, north = up on screen). Flip once, here, so North really is up.
+    private static func screenSpace(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x, y: -p.y)
+    }
+
     func startListening() {
         engine.start()
         if !FeelLab.enabled {
@@ -87,9 +93,20 @@ final class PluckSession: ObservableObject {
         pointer = location
         let available = context?.items.map(\.role) ?? CompassRole.allCases
         let previous = capturedRole
-        capturedRole = GestureMath.capture(pin: pin, pointer: pointer, available: available, current: capturedRole)
+        capturedRole = GestureMath.capture(
+            pin: Self.screenSpace(pin), pointer: Self.screenSpace(pointer),
+            available: available, current: capturedRole
+        )
         // Fidget detents: a tick when a direction latches, and a ratchet click every ~56 pt of stretch.
-        if capturedRole != previous, capturedRole != nil { Haptics.tick(.alignment) }
+        if capturedRole != previous, let role = capturedRole {
+            Haptics.tick(.alignment)
+            // VoiceOver: say which direction is armed.
+            NSAccessibility.post(
+                element: NSApp as Any,
+                notification: .announcementRequested,
+                userInfo: [.announcement: role.accessibilityLabel]
+            )
+        }
         let ring = Int(max(0, GestureMath.distance(pin, pointer) - GestureMath.deadZone) / 56)
         if ring != lastRing {
             lastRing = ring
@@ -104,7 +121,8 @@ final class PluckSession: ObservableObject {
 
         let available = context?.items.map(\.role) ?? []
         let role = GestureMath.roleAtRelease(
-            pin: pin, pointer: pointer, available: available, current: capturedRole
+            pin: Self.screenSpace(pin), pointer: Self.screenSpace(pointer),
+            available: available, current: capturedRole
         )
         let ctx = context
         let resultTitle = FeelLab.title(for: role)

@@ -20,7 +20,12 @@ final class MetaballView: NSView {
     var head: CGPoint = .zero
     var emerge: CGFloat = 0
     var bloom: CGFloat = 0
-    var captured: CompassRole?
+    var captured: CompassRole? {
+        didSet {
+            guard captured != oldValue, captured != nil else { return }
+            latchPulse = 1   // little "click" when a direction latches
+        }
+    }
     var items: [CompassItem] = []
     var tintColor: NSColor = NSColor(calibratedRed: 0.05, green: 0.055, blue: 0.07, alpha: 1)
     var reducedMotion = false
@@ -58,6 +63,13 @@ final class MetaballView: NSView {
     private var recoilPulse: CGFloat = 0
     private var recoilDone: (() -> Void)?
 
+    // Direction UI
+    private var gestureTime: CGFloat = 0
+    private var labelAlpha: CGFloat = 0
+    private var latchPulse: CGFloat = 0
+    private var armedPos: [CompassRole: CGFloat] = [:]
+    private var armedVel: [CompassRole: CGFloat] = [:]
+
     private let metal = ObsidianBlobMetal.shared
 
     private var cfg: FeelLabConfig { FeelLabConfig.shared }
@@ -90,6 +102,11 @@ final class MetaballView: NSView {
         recoiling = false
         recoilDone = nil
         recoilPulse = 0
+        gestureTime = 0
+        labelAlpha = 0
+        latchPulse = 0
+        armedPos = [:]
+        armedVel = [:]
         headVel = .zero
         guard !physicsRunning else { return }
         physicsRunning = true
@@ -139,7 +156,38 @@ final class MetaballView: NSView {
         time += CGFloat(dt)
         tintColor = cfg.tintColor
         tickFixed(frameDt: CGFloat(dt))
+        updateCompassUI(dt: CGFloat(dt))
         needsDisplay = true
+    }
+
+    /// Label visibility gate + per-label "pop" springs. Labels stay out of the way of fast
+    /// flicks (experts mark ahead without ever seeing them) and fade in once you linger.
+    private func updateCompassUI(dt: CGFloat) {
+        gestureTime += dt
+        latchPulse = max(0, latchPulse - dt / 0.35)
+
+        let speed = hypot(headVel.x, headVel.y)
+        let lingering = gestureTime > 0.22 || (gestureTime > 0.10 && speed < 150)
+        var target: CGFloat = (bloom > 0.05 && lingering && !recoiling) ? 1 : 0
+        if speed > 1600 { target *= 0.25 }
+        labelAlpha += (target - labelAlpha) * GestureMath.smoothingAlpha(retain: 0.78, dt: dt)
+
+        // Armed label: springy overshoot toward 1, others relax to 0.
+        let omega = RecoilSpring.omega(period: 0.20)
+        let zeta: CGFloat = 0.42
+        for role in CompassRole.allCases {
+            let goal: CGFloat = (captured == role) ? 1 : 0
+            var x = CGPoint(x: (armedPos[role] ?? 0) - goal, y: 0)
+            var v = CGPoint(x: armedVel[role] ?? 0, y: 0)
+            var left = dt
+            while left > 0 {
+                let h = min(left, Self.fixedStep)
+                RecoilSpring.step(x: &x, v: &v, omega: omega, zeta: zeta, h: h)
+                left -= h
+            }
+            armedPos[role] = goal + x.x
+            armedVel[role] = v.x
+        }
     }
 
     /// Fixed-timestep accumulator: physics always advances in fixed (`fixedStep`) so damping,
@@ -385,9 +433,82 @@ final class MetaballView: NSView {
 
         if reducedMotion || metal == nil {
             drawFallbackFlat(ctx)
+            drawCompass(ctx)
             return
         }
         _ = drawOptical(ctx)
+        drawCompass(ctx)
+    }
+
+    // MARK: Direction labels
+
+    /// Cancel ring + one pill per available role. Slices are fixed (see `GestureMath`); only the
+    /// labels move, to stay on screen near display edges.
+    private func drawCompass(_ ctx: CGContext) {
+        let alpha = reducedMotion ? bloom : labelAlpha
+        guard alpha > 0.01, !items.isEmpty else { return }
+        let c = lockedPin
+
+        // Cancel zone: release inside the ring cancels.
+        let ringR = GestureMath.deadZone
+        let ring = NSBezierPath(ovalIn: CGRect(x: c.x - ringR, y: c.y - ringR, width: ringR * 2, height: ringR * 2))
+        ring.lineWidth = 1
+        ring.setLineDash([3, 4], count: 2, phase: 0)
+        let inside = captured == nil
+        NSColor.white.withAlphaComponent(alpha * (inside ? 0.30 : 0.10)).setStroke()
+        ring.stroke()
+
+        let anyArmed = captured != nil
+        for item in items {
+            let armed = captured == item.role
+            let pop = reducedMotion ? (armed ? 1 : 0) : (armedPos[item.role] ?? 0)
+            let titleAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                .foregroundColor: armed ? NSColor(calibratedWhite: 0.06, alpha: 1) : NSColor(calibratedWhite: 0.97, alpha: 1),
+            ]
+            let subAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: armed ? NSColor(calibratedWhite: 0.2, alpha: 1) : NSColor(calibratedWhite: 0.75, alpha: 1),
+            ]
+            let title = NSAttributedString(string: item.title, attributes: titleAttrs)
+            let sub = item.subtitle.map { NSAttributedString(string: $0, attributes: subAttrs) }
+            let tSize = title.size()
+            let sSize = sub?.size() ?? .zero
+            let size = CGSize(
+                width: max(tSize.width, sSize.width) + 26,
+                height: sub == nil ? 28 : 28 + sSize.height + 2
+            )
+
+            let scale = 1 + 0.16 * pop
+            let dist = LabelLayout.distance + 7 * max(0, pop)
+            let raw = LabelLayout.center(pin: c, role: item.role, distance: dist)
+            let scaled = CGSize(width: size.width * scale, height: size.height * scale)
+            let center = LabelLayout.clamped(center: raw, size: scaled, in: bounds)
+
+            ctx.saveGState()
+            ctx.setAlpha(alpha * ((anyArmed && !armed) ? 0.55 : 1))
+            ctx.translateBy(x: center.x, y: center.y)
+            ctx.scaleBy(x: scale, y: scale)
+
+            let pill = NSBezierPath(
+                roundedRect: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height),
+                xRadius: size.height / 2, yRadius: size.height / 2
+            )
+            (armed ? NSColor(calibratedRed: 0.86, green: 0.92, blue: 1.0, alpha: 0.96)
+                   : NSColor(calibratedRed: 0.05, green: 0.06, blue: 0.09, alpha: 0.78)).setFill()
+            pill.fill()
+            NSColor.white.withAlphaComponent(armed ? 0.0 : 0.20).setStroke()
+            pill.lineWidth = 1
+            pill.stroke()
+
+            if let sub {
+                title.draw(at: CGPoint(x: -tSize.width / 2, y: -tSize.height / 2 + sSize.height / 2 + 1))
+                sub.draw(at: CGPoint(x: -sSize.width / 2, y: -sSize.height / 2 - tSize.height / 2 + 2))
+            } else {
+                title.draw(at: CGPoint(x: -tSize.width / 2, y: -tSize.height / 2))
+            }
+            ctx.restoreGState()
+        }
     }
 
     @discardableResult
@@ -410,6 +531,7 @@ final class MetaballView: NSView {
         let params = mass
         let pinR = max(radii.first ?? 20, params.restRadius * params.pinMinFraction * 0.75 * emerge)
         let headR = max(radii.last ?? 14, params.restRadius * params.headMinFraction * 0.85 * emerge)
+            * (1 + 0.22 * latchPulse)
         circles.append(.init(center: local(anchor), radius: Float(pinR)))
         circles.append(.init(center: local(head), radius: Float(headR)))
 
@@ -434,7 +556,7 @@ final class MetaballView: NSView {
         let chordNow = hypot(head.x - anchor.x, head.y - anchor.y)
         let stretchT = smoothstep01((chordNow - 40) / 200)
         let cry = CGFloat(cfg.crystallize)
-        let facetEff = CGFloat(cfg.facetAmount) * ((1 - cry) + cry * (0.3 + 0.9 * stretchT)) + 0.35 * recoilPulse
+        let facetEff = CGFloat(cfg.facetAmount) * ((1 - cry) + cry * (0.3 + 0.9 * stretchT)) + 0.35 * recoilPulse + 0.25 * latchPulse
 
         let look = ObsidianBlobMetal.Look(
             lightDir: SIMD2(Float(smoothLight.x), Float(smoothLight.y)),

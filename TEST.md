@@ -37,6 +37,16 @@ Input Monitoring is **not required** and is **not automated**.
 9. On a trackpad: haptic tick when a direction latches and a ratchet click every ~56 pt of stretch
 10. Your next click right after release must go to the app underneath (the overlay must not eat it)
 
+## Direction UI (check these too)
+
+11. **North must be up** (it was previously inverted: mouse up armed "South" because AppKit y is up)
+12. Fast flick: no labels flash. Linger ~0.2 s: pills fade in at N/E/S/W around the pin
+13. Move toward a direction: its pill pops (springy), brightens, others dim; the head squashes slightly
+14. A dashed ring marks the cancel zone; it brightens while you are inside it (release = cancel)
+15. Start a gesture near a screen edge: labels slide to stay on screen, but the direction slices don't change
+16. VoiceOver: each newly armed direction is announced
+17. Reduce Motion: labels appear without springs
+
 ## If anything feels wrong
 
 - Escape, or stop moving for 12s
