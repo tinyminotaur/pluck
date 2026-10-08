@@ -928,7 +928,13 @@ final class MetaballView: NSView {
             slosh[i] = prev + v
             // Mass pools toward the lowest part of the thread (a drip forming under gravity); gentle ripple on top.
             let pool = max(-2.5, min(2.5, (yMean - spine[i].y) * 0.04)) * gravityK * (0.4 + 0.6 * mid) * waistK
-            baseRadii[i] = max(profile.solution.waist * 0.8, baseRadii[i] + slosh[i] * 0.12 * waistK + pool)
+            // Rayleigh-Plateau: a stretched liquid thread beads up with a ripple spacing of about nine thread radii.
+            // The ripple is zero-mean (mass-neutral), grows with the stretch, and drifts slowly along the thread.
+            let waistR = profile.solution.waist
+            let lambda = max(9 * waistR, chord / 6, 30)
+            let beadGrow = smoothstep01((chord - 3.5 * CGFloat(cfg.restRadius)) / (5 * CGFloat(cfg.restRadius)))
+            let bead = sin(2 * .pi * (t * chord / lambda) - time * 0.9) * 0.45 * waistR * beadGrow * mid
+            baseRadii[i] = max(waistR * 0.8, baseRadii[i] + slosh[i] * 0.12 * waistK + pool + bead)
         }
 
         // Volume is conserved by construction (DumbbellMass), so no rescaling: just emergence.
