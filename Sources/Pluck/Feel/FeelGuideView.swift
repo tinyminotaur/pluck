@@ -149,17 +149,28 @@ struct FeelGuideView: View {
     private var triggerSection: some View {
         GroupBox("Trackpad triggers") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("The two-mouse-button chord always works. On a trackpad, use one of these:")
+                Text("The two-mouse-button chord always works. Without a second button, use one of these:")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Toggle("Modifier + press-and-hold, then drag", isOn: $config.trackpadTriggerEnabled)
+                Picker("No-click trigger", selection: $config.modifierTriggerRaw) {
+                    Text("Off").tag(0)
+                    Text("Hold ⌥").tag(1)
+                    Text("Hold Hyper ⌃⌥⇧⌘").tag(2)
+                }
+                .pickerStyle(.segmented)
+                knob("Hold time before it arms", value: $config.modifierHoldMs, range: 100...600, format: "%.0f ms")
+                Text("Hold the modifier (⌥ also needs the pointer held still), then move to stretch. Release the modifier to commit; Esc cancels. No click, so nothing reaches the app underneath.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Divider()
+                Toggle("Modifier + press-and-hold, then drag (clicks)", isOn: $config.trackpadTriggerEnabled)
                     .font(.caption)
                 Picker("Modifier", selection: $config.trackpadModifierRaw) {
                     ForEach(TriggerModifier.allCases) { Text($0.title).tag($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
                 .disabled(!config.trackpadTriggerEnabled)
-                knob("Hold time before it arms", value: $config.trackpadHoldMs, range: 120...500, format: "%.0f ms")
+                knob("Press-and-hold time", value: $config.trackpadHoldMs, range: 120...500, format: "%.0f ms")
                 Text("Pluck only listens, so the click/drag also reaches the app underneath (⌥ is the least intrusive).")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

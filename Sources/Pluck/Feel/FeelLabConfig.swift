@@ -81,6 +81,10 @@ final class FeelLabConfig: ObservableObject {
     @Published var trackpadTriggerEnabled: Bool { didSet { saveBool("trackpadTriggerEnabled", trackpadTriggerEnabled) } }
     @Published var trackpadModifierRaw: Int { didSet { save("trackpadModifierRaw", Double(trackpadModifierRaw)) } }
     @Published var trackpadHoldMs: Double { didSet { save("trackpadHoldMs", trackpadHoldMs) } }
+    /// No-click trigger: hold ⌥ (or Hyper), move to stretch, release the modifier to commit.
+    @Published var modifierTriggerRaw: Int { didSet { save("modifierTriggerRaw", Double(modifierTriggerRaw)) } }
+    @Published var modifierHoldMs: Double { didSet { save("modifierHoldMs", modifierHoldMs) } }
+    var modifierTrigger: ModifierTrigger { ModifierTrigger(rawValue: modifierTriggerRaw) ?? .option }
     /// EXPERIMENTAL (private MultitouchSupport): three fingers down starts a gesture.
     @Published var threeFingerEnabled: Bool { didSet { saveBool("threeFingerEnabled", threeFingerEnabled) } }
 
@@ -123,7 +127,9 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         flingMomentum = Self.load("flingMomentum", 0.5)
         meetingMode = Self.loadBool("meetingMode", false)
-        trackpadTriggerEnabled = Self.loadBool("trackpadTriggerEnabled", true)
+        trackpadTriggerEnabled = Self.loadBool("trackpadTriggerEnabled", false)
+        modifierTriggerRaw = Int(Self.load("modifierTriggerRaw", 1))
+        modifierHoldMs = Self.load("modifierHoldMs", 250)
         trackpadModifierRaw = Int(Self.load("trackpadModifierRaw", 0))
         trackpadHoldMs = Self.load("trackpadHoldMs", 220)
         threeFingerEnabled = Self.loadBool("threeFingerEnabled", false)
@@ -163,7 +169,9 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = true
         flingMomentum = 0.5
         meetingMode = false
-        trackpadTriggerEnabled = true
+        trackpadTriggerEnabled = false
+        modifierTriggerRaw = 1
+        modifierHoldMs = 250
         trackpadModifierRaw = 0
         trackpadHoldMs = 220
         threeFingerEnabled = false

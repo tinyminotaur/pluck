@@ -29,10 +29,12 @@ final class ChordEngine {
     private static let idleSeconds: TimeInterval = 12
     /// Absolute cap — after this, gesture ends and cursor is restored. No exceptions.
     private static let hardCapSeconds: TimeInterval = 30 * 60
-    private enum Source { case chord, hold, touch }
+    private enum Source { case chord, hold, touch, modifier }
     private var gestureSource: Source = .chord
     private var holdArm = HoldArm()
     private var holdTimer: Timer?
+    private var modArm = HoldArm()
+    private var modTimer: Timer?
     private var touchCount = 0
     private var touchTimer: Timer?
     private var configSub: AnyCancellable?
@@ -64,6 +66,7 @@ final class ChordEngine {
         configSub = nil
         setThreeFinger(false)
         cancelHold()
+        cancelModifierWatch()
         endGestureLocally()
         removeNSEvent()
         removePanicHotkey()
@@ -91,7 +94,7 @@ final class ChordEngine {
             .leftMouseDown, .leftMouseUp,
             .rightMouseDown, .rightMouseUp,
             .leftMouseDragged, .rightMouseDragged,
-            .mouseMoved, .keyDown,
+            .mouseMoved, .keyDown, .flagsChanged,
         ]
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] e in
             DispatchQueue.main.async { self?.onNSEvent(e) }
@@ -144,7 +147,10 @@ final class ChordEngine {
             handleUp(.right, at: loc)
         case .leftMouseDragged, .rightMouseDragged, .mouseMoved:
             handleMove(at: loc)
+        case .flagsChanged:
+            handleFlags(ModifierSet(event.modifierFlags))
         case .keyDown:
+            cancelModifierWatch() // typing with ⌥ held is not our gesture
             if event.keyCode == 53 { // Escape
                 cancelActive()
             }
@@ -156,6 +162,7 @@ final class ChordEngine {
     // MARK: - State machine
 
     private func handleDown(_ button: MouseButton, at location: CGPoint, modifiers: NSEvent.ModifierFlags = []) {
+        cancelModifierWatch() // a click means this is ordinary use
         if frontmostExcluded() {
             held.insert(button)
             return
@@ -194,12 +201,66 @@ final class ChordEngine {
 
     private func handleMove(at location: CGPoint) {
         if holdArm.isPressed { holdArm.move(to: location) }
+        if modArm.isPressed { modArm.move(to: location) }
         guard gestureActive else { return }
         let now = CACurrentMediaTime()
         lastActivityAt = now
         guard now - lastMoveAt >= Self.moveHz else { return }
         lastMoveAt = now
         session?.pointerMoved(to: location)
+    }
+
+    // MARK: - No-click modifier trigger
+
+    private func handleFlags(_ held: ModifierSet) {
+        let trigger = FeelLabConfig.shared.modifierTrigger
+        if gestureActive, gestureSource == .modifier {
+            // Releasing the modifier commits, exactly like releasing a mouse button.
+            if !trigger.shouldContinue(held: held) {
+                let loc = Self.mouseLocation()
+                endGestureLocally()
+                session?.complete(at: loc)
+            }
+            return
+        }
+        guard !gestureActive else { return }
+        if trigger.shouldArm(held: held), !isDown(.left), !isDown(.right), !frontmostExcluded() {
+            beginModifierWatch(trigger)
+        } else {
+            cancelModifierWatch()
+        }
+    }
+
+    private func beginModifierWatch(_ trigger: ModifierTrigger) {
+        guard modTimer == nil else { return }
+        let seconds = FeelLabConfig.shared.modifierHoldMs / 1000
+        modArm = HoldArm(
+            holdSeconds: seconds,
+            moveTolerance: trigger.requiresStillness ? 8 : .greatestFiniteMagnitude
+        )
+        modArm.press(at: Self.mouseLocation(), time: CACurrentMediaTime())
+        modTimer = Timer.scheduledTimer(withTimeInterval: seconds + 0.01, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.modifierWatchMatured(trigger) }
+        }
+    }
+
+    private func modifierWatchMatured(_ trigger: ModifierTrigger) {
+        modTimer = nil
+        let live = ModifierSet(NSEvent.modifierFlags)
+        guard modArm.isReady(at: CACurrentMediaTime()),
+              !gestureActive, !isDown(.left), !isDown(.right),
+              trigger.shouldArm(held: live), !frontmostExcluded() else {
+            modArm.release()
+            return
+        }
+        modArm.release()
+        startGesture(source: .modifier, at: Self.mouseLocation())
+    }
+
+    private func cancelModifierWatch() {
+        modTimer?.invalidate()
+        modTimer = nil
+        modArm.release()
     }
 
     // MARK: - Trackpad triggers
@@ -315,6 +376,14 @@ final class ChordEngine {
             Task { @MainActor in
                 guard let self, self.gestureActive else { return }
                 CursorGuard.shared.checkIn()
+                if self.gestureSource == .modifier,
+                   !FeelLabConfig.shared.modifierTrigger.shouldContinue(held: ModifierSet(NSEvent.modifierFlags)) {
+                    // A modifier-up event was missed. Trust the hardware state.
+                    let loc = Self.mouseLocation()
+                    self.endGestureLocally()
+                    self.session?.complete(at: loc)
+                    return
+                }
                 let now = CACurrentMediaTime()
                 let idle = now - self.lastActivityAt
                 let total = now - self.gestureStartedAt
@@ -338,5 +407,16 @@ final class ChordEngine {
     static func mouseLocation() -> CGPoint {
         let p = NSEvent.mouseLocation
         return CGPoint(x: p.x, y: p.y)
+    }
+}
+
+extension ModifierSet {
+    init(_ flags: NSEvent.ModifierFlags) {
+        var s: ModifierSet = []
+        if flags.contains(.control) { s.insert(.control) }
+        if flags.contains(.option) { s.insert(.option) }
+        if flags.contains(.shift) { s.insert(.shift) }
+        if flags.contains(.command) { s.insert(.command) }
+        self = s
     }
 }
