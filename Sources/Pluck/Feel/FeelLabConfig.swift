@@ -73,6 +73,15 @@ final class FeelLabConfig: ObservableObject {
     @Published var crystallize: Double { didSet { save("crystallize", crystallize) } }
     /// Idle breathing while held still.
     @Published var idleLife: Double { didSet { save("idleLife", idleLife) } }
+    // MARK: Liquid in a container (gravity + magnetic pull)
+    /// Downward pull: the tether sags and mass pools at the low point.
+    @Published var gravity: Double { didSet { save("gravity", gravity) } }
+    /// How tightly the head follows the cursor (rad/s). Lower = heavier liquid that trails and sloshes.
+    @Published var magnetPull: Double { didSet { save("magnetPull", magnetPull) } }
+    /// Damping of that pull. Below ~0.8 it overshoots and wobbles into place.
+    @Published var magnetWeight: Double { didSet { save("magnetWeight", magnetWeight) } }
+    /// Extra stiffness right at the cursor: trails when far, snaps and sticks when close.
+    @Published var magnetStick: Double { didSet { save("magnetStick", magnetStick) } }
     @Published var hapticsEnabled: Bool { didSet { saveBool("hapticsEnabled", hapticsEnabled) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
@@ -130,6 +139,10 @@ final class FeelLabConfig: ObservableObject {
         recoilBounce = Self.load("recoilBounce", 0.6)
         crystallize = Self.load("crystallize", 0.7)
         idleLife = Self.load("idleLife", 0.5)
+        gravity = Self.load("gravity", 0.6)
+        magnetPull = Self.load("magnetPull", 52)
+        magnetWeight = Self.load("magnetWeight", 0.62)
+        magnetStick = Self.load("magnetStick", 0.9)
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         flingMomentum = Self.load("flingMomentum", 0.5)
         meetingMode = Self.loadBool("meetingMode", false)
@@ -174,6 +187,10 @@ final class FeelLabConfig: ObservableObject {
         recoilBounce = 0.6
         crystallize = 0.7
         idleLife = 0.5
+        gravity = 0.6
+        magnetPull = 52
+        magnetWeight = 0.62
+        magnetStick = 0.9
         hapticsEnabled = true
         flingMomentum = 0.5
         meetingMode = false

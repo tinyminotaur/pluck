@@ -41,6 +41,7 @@ final class OverlayController {
         view.tintColor = FeelLabConfig.shared.tintColor
         view.pin = toView(pin)
         view.head = toView(pin)
+        view.pointerTarget = toView(pin)
         panel.contentView = view
 
         panel.orderFrontRegardless()
@@ -61,7 +62,8 @@ final class OverlayController {
     ) {
         guard let view = blobView else { return }
         // Head tracks pointer 1:1. Pin was locked in startPhysics — do not move it.
-        view.head = toView(pointer)
+        view.pointerTarget = toView(pointer)
+        if reducedMotion { view.head = view.pointerTarget }   // no physics: the head is the pointer
         view.emerge = emerge
         view.bloom = bloom
         view.captured = captured

@@ -17,7 +17,12 @@ final class MetaballView: NSView {
             if !pinLocked { lockedPin = pin }
         }
     }
+    /// Smoothed head: the liquid's leading edge. It is pulled toward `pointerTarget` like iron toward a
+    /// magnet (see `stepMagnet`), so it trails fast moves and sloshes into place. Set by the overlay's
+    /// `head` only while reduced motion is on (no physics).
     var head: CGPoint = .zero
+    /// The raw cursor position the head is attracted to.
+    var pointerTarget: CGPoint = .zero
     var emerge: CGFloat = 0
     var bloom: CGFloat = 0
     var captured: CompassRole? {
@@ -55,6 +60,8 @@ final class MetaballView: NSView {
     private static let maxDriveSpeed: CGFloat = 3500
     private var accumulator: CGFloat = 0
     private var frameStartHead: CGPoint = .zero
+    private var frameStartTarget: CGPoint = .zero
+    private var magVel: CGPoint = .zero
 
     private var recoiling = false
     private var recoilSettled = false
@@ -102,6 +109,9 @@ final class MetaballView: NSView {
         resetSpineStraight()
         prevHead = head
         frameStartHead = head
+        pointerTarget = head
+        frameStartTarget = head
+        magVel = .zero
         accumulator = 0
         recoiling = false
         recoilDone = nil
@@ -215,15 +225,52 @@ final class MetaballView: NSView {
         }
         guard steps > 0 else { return }
 
-        if recoiling { integrateRecoil(steps: steps, h: h, frameDt: frameDt) }
-        let start = frameStartHead
-        let end = head
+        if recoiling {
+            integrateRecoil(steps: steps, h: h, frameDt: frameDt)
+            // Recoil drives the head directly; keep the magnet state continuous for the next grab.
+            let start = frameStartHead
+            let end = head
+            for k in 1...steps {
+                let t = CGFloat(k) / CGFloat(steps)
+                stepPhysics(dt: h, head: lerp(start, end, t))
+            }
+            frameStartHead = end
+            frameStartTarget = pointerTarget
+            magVel = recoilVel
+            finishRecoilIfSettled(frameDt: frameDt)
+            return
+        }
+        let startTarget = frameStartTarget
+        let endTarget = pointerTarget
         for k in 1...steps {
             let t = CGFloat(k) / CGFloat(steps)
-            stepPhysics(dt: h, head: lerp(start, end, t))
+            stepMagnet(target: lerp(startTarget, endTarget, t), h: h)
+            stepPhysics(dt: h, head: head)
         }
-        frameStartHead = end
-        if recoiling { finishRecoilIfSettled(frameDt: frameDt) }
+        frameStartTarget = endTarget
+        frameStartHead = head
+    }
+
+    /// The head is a heavy liquid mass attracted to the cursor like iron to a magnet: pulled by a spring
+    /// that gets stiffer as the gap closes (`MagnetPull`), so it trails fast moves and sloshes into place.
+    /// A faint wander keeps it from ever being perfectly still, as water never is.
+    private func stepMagnet(target: CGPoint, h: CGFloat) {
+        let idle = CGFloat(cfg.idleLife)
+        let wander = CGPoint(
+            x: 1.3 * idle * sin(time * 1.17 + 0.6),
+            y: 1.3 * idle * cos(time * 0.93)
+        )
+        let tgt = CGPoint(x: target.x + wander.x, y: target.y + wander.y)
+        var x = CGPoint(x: head.x - tgt.x, y: head.y - tgt.y)
+        let omega = MagnetPull.omega(
+            distance: hypot(x.x, x.y),
+            base: CGFloat(cfg.magnetPull),
+            stick: CGFloat(cfg.magnetStick)
+        )
+        var v = magVel
+        RecoilSpring.step(x: &x, v: &v, omega: omega, zeta: CGFloat(cfg.magnetWeight), h: h)
+        magVel = v
+        head = CGPoint(x: tgt.x + x.x, y: tgt.y + x.y)
     }
 
     // MARK: Recoil (the satisfying snap-back on release)
@@ -365,6 +412,9 @@ final class MetaballView: NSView {
         let ideal = max(0.5, chord / CGFloat(n - 1) * slack)
         let idle = CGFloat(cfg.idleLife)
         let curSpeed = speedNow
+        let gravityK = CGFloat(cfg.gravity)
+        let gravityAccel = 90 * gravityK
+        let yMean = spine.reduce(0) { $0 + $1.y } / CGFloat(max(1, n))
 
         for i in 1..<(n - 1) {
             let cur = spine[i]
@@ -379,6 +429,9 @@ final class MetaballView: NSView {
             let impulse = latSpeed * mid * 0.05 * whip
             vel.x += nx * impulse * step * 60
             vel.y += ny * impulse * step * 60
+            // Gravity: the liquid hangs under its own weight (view space is y-up, so down is -y). The
+            // neck spring balances it, which gives a soft catenary sag that is deepest mid-span.
+            vel.y -= gravityAccel * step
             prevSpine[i] = cur
             spine[i] = CGPoint(x: cur.x + vel.x, y: cur.y + vel.y)
         }
@@ -402,7 +455,9 @@ final class MetaballView: NSView {
             v += (drive - prev) * 16 * step
             prevSlosh[i] = prev
             slosh[i] = prev + v
-            baseRadii[i] = max(params.minRadius, baseRadii[i] + slosh[i])
+            // Mass pools toward the lowest part of the tether (a drip forming under gravity).
+            let pool = max(-3.5, min(3.5, (yMean - spine[i].y) * 0.05)) * gravityK * (0.4 + 0.6 * mid)
+            baseRadii[i] = max(params.minRadius, baseRadii[i] + slosh[i] + pool)
         }
 
         radii = BlobMass.rescaleToTotalArea(radii: baseRadii, length: max(chord, 1), params: params)
