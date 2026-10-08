@@ -73,6 +73,7 @@ enum PreviewRender {
                     FileHandle.standardError.write(Data("PreviewRender: render failed\n".utf8))
                     return 4
                 }
+                print(stats(of: image, label: "light\(r) scene\(c) len=\(Int(len)) facet=\(String(format: "%.2f", facet))"))
                 // Row 0 at the top of the output image.
                 let origin = CGPoint(
                     x: CGFloat(c) * tile.width * scale,
@@ -93,5 +94,43 @@ enum PreviewRender {
             FileHandle.standardError.write(Data("PreviewRender: \(error)\n".utf8))
             return 7
         }
+    }
+
+    /// Coverage and brightness summary so a log reader can sanity-check a render without the PNG.
+    private static func stats(of image: CGImage, label: String) -> String {
+        let w = image.width, h = image.height
+        var buf = [UInt8](repeating: 0, count: w * h * 4)
+        let ok = buf.withUnsafeMutableBytes { raw -> Bool in
+            guard let c = CGContext(
+                data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            c.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard ok else { return "\(label): stats unavailable" }
+        var covered = 0
+        var lumSum = 0.0
+        var lumMax = 0.0
+        var bright = 0
+        var i = 0
+        while i < buf.count {
+            let a = Double(buf[i + 3])
+            if a > 16 {
+                covered += 1
+                let lum = (0.2126 * Double(buf[i]) + 0.7152 * Double(buf[i + 1]) + 0.0722 * Double(buf[i + 2])) / max(a, 1)
+                lumSum += lum
+                lumMax = max(lumMax, lum)
+                if lum > 0.8 { bright += 1 }
+            }
+            i += 4
+        }
+        let total = Double(w * h)
+        let cov = Double(covered) / total * 100
+        let mean = covered > 0 ? lumSum / Double(covered) : 0
+        let glint = covered > 0 ? Double(bright) / Double(covered) * 100 : 0
+        return String(format: "%@: coverage=%.1f%% meanLum=%.2f maxLum=%.2f glintPixels=%.1f%%",
+                      label, cov, mean, lumMax, glint)
     }
 }
