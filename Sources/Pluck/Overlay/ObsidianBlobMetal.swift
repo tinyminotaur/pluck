@@ -289,14 +289,18 @@ final class ObsidianBlobMetal {
             float t = saturate(dot(p - a, ab) / max(dot(ab, ab), 1e-4));
             float rr = mix(c[i].z, c[i + 1].z, t);
             float di = length(p - (a + ab * t)) - rr;
-            if (di < d) { d = di; r = rr; }
+            // Blend the local radius across neighbouring segments so the shading height
+            // doesn't step (comb ridges) where the taper changes between samples.
+            float w = saturate(0.5 + 0.5 * (d - di) / (0.35 * max(rr, r)));
+            r = mix(r, rr, w);
+            d = min(d, di);
         }
         // Pin / head lobes: smooth-unioned so they pool into the tether like liquid.
         for (uint i = spine; i < n; i++) {
             float rr = max(c[i].z, 1.0);
             float di = length(p - c[i].xy) - rr;
             float w = saturate(0.5 + 0.5 * (d - di) / k);
-            r = mix(r, rr, w);
+            r = max(r, mix(r, rr, w));
             d = smin(d, di, k);
         }
         return float2(d, max(r, 1.0));
@@ -398,7 +402,7 @@ final class ObsidianBlobMetal {
         float3 H = normalize(L + V);
         float gloss = mix(12.0, 48.0, saturate(u.shininess));
         float spec = pow(saturate(dot(N, H)), gloss) * (0.45 + u.shininess);
-        body += spec * float3(1.0) * 1.1;
+        body += spec * float3(1.0) * 1.1 * (1.0 - 0.45 * saturate(u.facet));
 
         // Faint bright seams where planes meet, plus a per-facet glint that wakes up as the
         // light swings with the motion.
