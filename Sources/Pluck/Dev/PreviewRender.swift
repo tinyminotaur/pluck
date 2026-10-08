@@ -16,7 +16,6 @@ enum PreviewRender {
 
         let tile = CGSize(width: 500, height: 300)
         let scale: CGFloat = 2
-        let params = BlobMassParams.default
         let scenes: [(pin: CGPoint, head: CGPoint, sag: CGFloat)] = [
             (CGPoint(x: 170, y: 150), CGPoint(x: 210, y: 140), 0),
             (CGPoint(x: 130, y: 150), CGPoint(x: 300, y: 120), 10),
@@ -44,7 +43,10 @@ enum PreviewRender {
                 let n = 16
                 let dx = s.head.x - s.pin.x, dy = s.head.y - s.pin.y
                 let len = hypot(dx, dy)
-                let radii = BlobMass.radiusProfile(length: len, samples: n, params: params)
+                let prof = DumbbellMass.profile(DumbbellMass.Params(restRadius: 42), length: len, samples: n)
+                var radii = prof.radii
+                radii[0] = min(radii[0], prof.solution.pin * 0.88)
+                radii[n - 1] = min(radii[n - 1], prof.solution.head * 0.88)
                 let nx = -dy / max(len, 1), ny = dx / max(len, 1)
                 var circles: [ObsidianBlobMetal.Circle] = []
                 for i in 0..<n {
@@ -65,21 +67,9 @@ enum PreviewRender {
                     ObsidianBlobMetal.Circle(center: SIMD2(Float($0.x), Float($0.y)), radius: Float($1))
                 }
                 let strandCount = circles.count
-                // Organic lump clusters (same generator as the live view), then pin and head last.
-                let pinR0 = max(radii[0], params.restRadius * params.pinMinFraction * 0.75)
-                let headR0 = max(radii[n - 1], params.restRadius * params.headMinFraction * 0.85)
-                for sp in BlobLumps.specs(seed: UInt64(7 + c), count: 4) {
-                    let l = BlobLumps.place(sp, center: s.pin, baseRadius: pinR0, time: 1.3)
-                    circles.append(.init(center: SIMD2(Float(l.center.x), Float(l.center.y)), radius: Float(l.radius)))
-                }
-                for sp in BlobLumps.specs(seed: UInt64(99 + c), count: 2) {
-                    let l = BlobLumps.place(sp, center: s.head, baseRadius: headR0, time: 1.3)
-                    circles.append(.init(center: SIMD2(Float(l.center.x), Float(l.center.y)), radius: Float(l.radius)))
-                }
-                circles.append(.init(center: SIMD2(Float(s.pin.x), Float(s.pin.y)),
-                                     radius: Float(max(radii[0], params.restRadius * params.pinMinFraction * 0.75))))
-                circles.append(.init(center: SIMD2(Float(s.head.x), Float(s.head.y)),
-                                     radius: Float(max(radii[n - 1], params.restRadius * params.headMinFraction * 0.85))))
+                // Round pin and head bulbs last (the shader treats the final two circles as pin and head).
+                circles.append(.init(center: SIMD2(Float(s.pin.x), Float(s.pin.y)), radius: Float(prof.solution.pin)))
+                circles.append(.init(center: SIMD2(Float(s.head.x), Float(s.head.y)), radius: Float(prof.solution.head)))
 
                 let stretchT = min(1, max(0, (len - 40) / 200))
                 let eased = stretchT * stretchT * (3 - 2 * stretchT)
@@ -103,7 +93,7 @@ enum PreviewRender {
                 )
                 guard let image = metal.render(
                     size: tile, scale: scale, circles: circles, spineCount: strandCount,
-                    fillet: params.restRadius * 0.22, look: look
+                    fillet: 42 * 0.38, look: look
                 ) else {
                     FileHandle.standardError.write(Data("PreviewRender: render failed\n".utf8))
                     return 4
@@ -171,6 +161,47 @@ enum PreviewRender {
                 view.stopPhysics()
             }
         }
+        guard let out = ctx.makeImage(),
+              let png = NSBitmapImageRep(cgImage: out).representation(using: .png, properties: [:]) else { return 5 }
+        do { try png.write(to: URL(fileURLWithPath: outputPath)); print("PreviewRender: wrote \(outputPath)"); return 0 }
+        catch { return 7 }
+    }
+
+    /// `Pluck --render-pinch out.png`: pull east, commit, and show the pinch-off over the next 420 ms.
+    static func runPinch(outputPath: String) -> Int32 {
+        let tile = CGSize(width: 560, height: 260)
+        let scale: CGFloat = 2
+        let times: [CGFloat] = [0, 0.04, 0.08, 0.14, 0.24, 0.42]
+        let cols = 3
+        let rows = (times.count + cols - 1) / cols
+        let W = Int(tile.width * scale) * cols, H = Int(tile.height * scale) * rows
+        guard let ctx = CGContext(
+            data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return 3 }
+        ctx.setFillColor(CGColor(red: 0.16, green: 0.17, blue: 0.2, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        let items = FeelLab.context.items
+        let view = MetaballView(frame: NSRect(origin: .zero, size: tile))
+        let pin = CGPoint(x: 120, y: 130)
+        view.debugPose(pin: pin, pointer: CGPoint(x: 330, y: 130), armed: .east, items: items, seconds: 1.4)
+        view.debugCommit(role: .east)
+        var t: CGFloat = 0
+        for (i, target) in times.enumerated() {
+            while t < target - 1e-5 { view.debugAdvance(dt: 1.0 / 240); t += 1.0 / 240 }
+            ctx.saveGState()
+            ctx.translateBy(x: CGFloat(i % cols) * tile.width * scale, y: CGFloat(rows - 1 - i / cols) * tile.height * scale)
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.clip(to: CGRect(origin: .zero, size: tile))
+            let gc = NSGraphicsContext(cgContext: ctx, flipped: false)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = gc
+            view.draw(CGRect(origin: .zero, size: tile))
+            NSGraphicsContext.restoreGraphicsState()
+            ctx.restoreGState()
+        }
+        view.stopPhysics()
         guard let out = ctx.makeImage(),
               let png = NSBitmapImageRep(cgImage: out).representation(using: .png, properties: [:]) else { return 5 }
         do { try png.write(to: URL(fileURLWithPath: outputPath)); print("PreviewRender: wrote \(outputPath)"); return 0 }

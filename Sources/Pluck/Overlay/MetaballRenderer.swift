@@ -65,12 +65,17 @@ final class MetaballView: NSView {
     private var magVel: CGPoint = .zero
     // Organic mass: lopsided lump clusters at the pin and head, seeded per gesture, that jiggle with
     // inertia and gravity. Plus slow swelling along the tether. Nothing is ever a perfect disc.
-    private var pinLumps: [BlobLumpSpec] = []
-    private var headLumps: [BlobLumpSpec] = []
-    private var pinJig: [CGPoint] = []
-    private var pinJigVel: [CGPoint] = []
-    private var headJig: [CGPoint] = []
-    private var headJigVel: [CGPoint] = []
+    /// Radii of the two round bulbs (pin, head) from the volume-conserving dumbbell model, already scaled by emergence.
+    private var bulbPin: CGFloat = 0
+    /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
+    private struct Drop { var p: CGPoint; var v: CGPoint; var r: CGFloat; var decay: CGFloat; var isMain: Bool }
+    private var drops: [Drop] = []
+    private var pinching = false
+    private var pinchTime: CGFloat = 0
+    /// Damped wobble of each bulb: oval (l=2) and triangular (l=3) modes as 2D vectors (cos, sin amplitude) + velocity.
+    private var pinM2 = CGPoint.zero, pinM2v = CGPoint.zero, pinM3 = CGPoint.zero, pinM3v = CGPoint.zero
+    private var headM2 = CGPoint.zero, headM2v = CGPoint.zero, headM3 = CGPoint.zero, headM3v = CGPoint.zero
+    private var bulbHead: CGFloat = 0
     private var swellPhase: [CGFloat] = []
     private var prevVelForAcc: CGPoint = .zero
     private var headAcc: CGPoint = .zero
@@ -124,6 +129,9 @@ final class MetaballView: NSView {
         pointerTarget = head
         frameStartTarget = head
         magVel = .zero
+        pinM2 = .zero; pinM2v = .zero; pinM3 = .zero; pinM3v = .zero
+        headM2 = .zero; headM2v = .zero; headM3 = .zero; headM3v = .zero
+        drops = []; pinching = false; pinchTime = 0
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -167,6 +175,8 @@ final class MetaballView: NSView {
 
     func stopPhysics() {
         physicsRunning = false
+        drops = []
+        pinching = false
         recoiling = false
         recoilDone = nil
         pinLocked = false
@@ -204,6 +214,11 @@ final class MetaballView: NSView {
         let t0 = CACurrentMediaTime()
         _ = drawOptical(ctx)
         return (CACurrentMediaTime() - t0) * 1000
+    }
+
+    /// Starts the commit animation for `--render-pinch`.
+    func debugCommit(role: CompassRole) {
+        beginRecoil(role: role) {}
     }
 
     /// Poses the view for `--render-compass`: runs the real physics until it settles with the pointer pulled to
@@ -287,7 +302,8 @@ final class MetaballView: NSView {
             for k in 1...steps {
                 let t = CGFloat(k) / CGFloat(steps)
                 stepPhysics(dt: h, head: lerp(start, end, t))
-                stepJiggle(h)
+                stepModes(h)
+                stepDrops(h)
             }
             frameStartHead = end
             frameStartTarget = pointerTarget
@@ -301,7 +317,8 @@ final class MetaballView: NSView {
             let t = CGFloat(k) / CGFloat(steps)
             stepMagnet(target: lerp(startTarget, endTarget, t), h: h)
             stepPhysics(dt: h, head: head)
-            stepJiggle(h)
+            stepModes(h)
+            stepDrops(h)
         }
         frameStartTarget = endTarget
         frameStartHead = head
@@ -310,39 +327,54 @@ final class MetaballView: NSView {
     /// New random shape for each gesture, and a random start in the time-driven noise so no two
     /// gestures look alike.
     private func seedOrganicShape() {
-        let seed = UInt64.random(in: 0...UInt64.max)
-        pinLumps = BlobLumps.specs(seed: seed, count: 4)
-        headLumps = BlobLumps.specs(seed: seed ^ 0xA5A5_5A5A_1234_4321, count: 2)
-        pinJig = Array(repeating: .zero, count: pinLumps.count)
-        pinJigVel = pinJig
-        headJig = Array(repeating: .zero, count: headLumps.count)
-        headJigVel = headJig
         swellPhase = (0..<32).map { _ in CGFloat.random(in: 0..<(2 * .pi)) }
         headAcc = .zero
         prevVelForAcc = .zero
         time = CGFloat.random(in: 0..<200)
     }
 
-    /// Each lump is a little spring-mass: it lurches against head acceleration (inertia) and sinks under
-    /// gravity, then wobbles back at its own pace. Different lumps wobble differently, so the mass
-    /// moves like jelly instead of rotating rigidly.
-    private func stepJiggle(_ h: CGFloat) {
+    /// Each bulb is a drop with surface tension: pulled and accelerated, it elongates and then rings back to round in
+    /// a couple of slow, damped oscillations (the lowest oval mode of a real drop). The pin stretches toward the
+    /// head like a teardrop; the head lurches against its own acceleration; gravity gently flattens both; a faint
+    /// slow breathing keeps them alive. Calm by design: a few coherent motions, not noise.
+    private func stepModes(_ h: CGFloat) {
+        let chordV = CGPoint(x: head.x - lockedPin.x, y: head.y - lockedPin.y)
+        let chord = hypot(chordV.x, chordV.y)
         let g = CGFloat(cfg.gravity)
-        let drive = CGPoint(
-            x: max(-9, min(9, -headAcc.x * 0.0035)),
-            y: max(-9, min(9, -headAcc.y * 0.0035)) - 2.5 * g
-        )
-        func advance(_ specs: [BlobLumpSpec], _ off: inout [CGPoint], _ vel: inout [CGPoint]) {
-            for i in specs.indices {
-                var x = CGPoint(x: off[i].x - drive.x * specs[i].size, y: off[i].y - drive.y * specs[i].size)
-                var v = vel[i]
-                RecoilSpring.step(x: &x, v: &v, omega: specs[i].omega, zeta: specs[i].zeta, h: h)
-                vel[i] = v
-                off[i] = CGPoint(x: x.x + drive.x * specs[i].size, y: x.y + drive.y * specs[i].size)
-            }
+        let idle = CGFloat(cfg.idleLife)
+        let axis = chord > 1 ? atan2(chordV.y, chordV.x) : 0
+        let pull = min(1, chord / 220)
+
+        // Elongation along the tether (pin toward the head, head toward the pin) grows with the pull.
+        let tetherA = 0.085 * pull
+        var pinTarget = CGPoint(x: tetherA * cos(2 * axis), y: tetherA * sin(2 * axis))
+        var headTarget = CGPoint(x: 0.6 * tetherA * cos(2 * axis), y: 0.6 * tetherA * sin(2 * axis))
+        // The head also lurches along its own acceleration.
+        let accMag = hypot(headAcc.x, headAcc.y)
+        if accMag > 1 {
+            let psi = atan2(headAcc.y, headAcc.x)
+            let a = min(0.14, accMag * 5e-5)
+            headTarget.x += a * cos(2 * psi); headTarget.y += a * sin(2 * psi)
         }
-        advance(pinLumps, &pinJig, &pinJigVel)
-        advance(headLumps, &headJig, &headJigVel)
+        // Gravity flattens a drop: wider than tall.
+        pinTarget.x += 0.045 * g; headTarget.x += 0.04 * g
+        // Slow breathing.
+        let b = 0.012 * idle
+        pinTarget.x += b * cos(time * 0.55); pinTarget.y += b * sin(time * 0.55)
+        headTarget.x += b * cos(time * 0.8 + 1.7); headTarget.y += b * sin(time * 0.8 + 1.7)
+
+        func spring(_ x: inout CGPoint, _ v: inout CGPoint, target: CGPoint, omega: CGFloat, zeta: CGFloat) {
+            var d = CGPoint(x: x.x - target.x, y: x.y - target.y)
+            RecoilSpring.step(x: &d, v: &v, omega: omega, zeta: zeta, h: h)
+            x = CGPoint(x: target.x + d.x, y: target.y + d.y)
+        }
+        spring(&pinM2, &pinM2v, target: pinTarget, omega: 12, zeta: 0.20)
+        spring(&headM2, &headM2v, target: headTarget, omega: 16, zeta: 0.20)
+        // The triangular mode only rings after sharp accelerations: a little life without lumpiness.
+        let tri = min(0.06, accMag * 2e-5)
+        let psi3 = accMag > 1 ? atan2(headAcc.y, headAcc.x) : 0
+        spring(&headM3, &headM3v, target: CGPoint(x: tri * cos(3 * psi3), y: tri * sin(3 * psi3)), omega: 21, zeta: 0.18)
+        spring(&pinM3, &pinM3v, target: .zero, omega: 18, zeta: 0.2)
     }
 
     /// The head is a heavy liquid mass attracted to the cursor like iron to a magnet: pulled by a spring
@@ -351,8 +383,8 @@ final class MetaballView: NSView {
     private func stepMagnet(target: CGPoint, h: CGFloat) {
         let idle = CGFloat(cfg.idleLife)
         let wander = CGPoint(
-            x: 1.3 * idle * sin(time * 1.17 + 0.6),
-            y: 1.3 * idle * cos(time * 0.93)
+            x: 0.5 * idle * sin(time * 1.17 + 0.6),
+            y: 0.5 * idle * cos(time * 0.93)
         )
         let tgt = CGPoint(x: target.x + wander.x, y: target.y + wander.y)
         var x = CGPoint(x: head.x - tgt.x, y: head.y - tgt.y)
@@ -383,6 +415,43 @@ final class MetaballView: NSView {
         let fling = CGFloat(cfg.flingMomentum)
         recoilVel = CGPoint(x: headVel.x * fling, y: headVel.y * fling)
         recoilPulse = 1
+        if role != nil { startPinchOff() }
+    }
+
+    /// The thread snaps at about 62% of its length. The head bulb leaves as a droplet along the pull direction with
+    /// the label inside it; a tiny satellite bead is flicked from the break (as real liquid threads do); the rest
+    /// of the thread whips back into the pin.
+    private func startPinchOff() {
+        let dx = head.x - lockedPin.x, dy = head.y - lockedPin.y
+        let len = max(1, hypot(dx, dy))
+        let dir = CGPoint(x: dx / len, y: dy / len)
+        let perp = CGPoint(x: -dir.y, y: dir.x)
+        let speed = 360 + hypot(headVel.x, headVel.y) * 0.3
+        drops = [
+            Drop(p: head, v: CGPoint(x: dir.x * speed + headVel.x * 0.2, y: dir.y * speed + headVel.y * 0.2),
+                 r: max(6, bulbHead * 0.95), decay: 3.4, isMain: true),
+            Drop(p: CGPoint(x: lockedPin.x + dx * 0.62, y: lockedPin.y + dy * 0.62),
+                 v: CGPoint(x: dir.x * 150 + perp.x * (CGFloat.random(in: -1...1) * 70), y: dir.y * 150 + perp.y * (CGFloat.random(in: -1...1) * 70)),
+                 r: max(3.2, bulbHead * 0.20), decay: 4.6, isMain: false),
+        ]
+        pinching = true
+        pinchTime = 0
+    }
+
+    /// Per-substep droplet motion: they fly on, slow down a little, sag under gravity, and shrink away.
+    private func stepDrops(_ h: CGFloat) {
+        guard !drops.isEmpty || pinching else { return }
+        if pinching { pinchTime += h }
+        let g = CGFloat(cfg.gravity)
+        for i in drops.indices {
+            drops[i].p.x += drops[i].v.x * h
+            drops[i].p.y += drops[i].v.y * h
+            let drag = CGFloat(exp(Double(-1.8 * h)))
+            drops[i].v.x *= drag
+            drops[i].v.y = drops[i].v.y * drag - g * 180 * h
+            drops[i].r *= CGFloat(exp(Double(-drops[i].decay * h)))
+        }
+        drops.removeAll { $0.r < 1.2 }
     }
 
     private func integrateRecoil(steps: Int, h: CGFloat, frameDt: CGFloat) {
@@ -406,7 +475,7 @@ final class MetaballView: NSView {
     }
 
     private func finishRecoilIfSettled(frameDt: CGFloat) {
-        guard recoilSettled else { return }
+        guard recoilSettled, drops.isEmpty else { return }
         emerge = max(0, emerge - frameDt / 0.14)
         if emerge <= 0.001 {
             emerge = 0
@@ -422,11 +491,10 @@ final class MetaballView: NSView {
         let anchor = lockedPin
         spine = (0..<n).map { i in lerp(anchor, head, CGFloat(i) / CGFloat(max(1, n - 1))) }
         prevSpine = spine
-        radii = BlobMass.radiusProfile(
-            length: hypot(head.x - anchor.x, head.y - anchor.y),
-            samples: n,
-            params: mass
-        )
+        let prof = DumbbellMass.profile(cfg.dumbbell, length: hypot(head.x - anchor.x, head.y - anchor.y), samples: n)
+        radii = prof.radii
+        bulbPin = prof.solution.pin
+        bulbHead = prof.solution.head
         slosh = Array(repeating: 0, count: n)
         prevSlosh = slosh
     }
@@ -497,7 +565,9 @@ final class MetaballView: NSView {
         let latSpeed = headVel.x * nx + headVel.y * ny
         let tanSpeed = headVel.x * tx + headVel.y * ty
 
-        var baseRadii = BlobMass.radiusProfile(length: chord, samples: n, params: params)
+        let profile = DumbbellMass.profile(cfg.dumbbell, length: chord * 1.04, samples: n)
+        var baseRadii = profile.radii
+        let waistK = max(0.25, profile.solution.waist / 8)   // ripples scale with the thread, so a thin thread stays calm
         let emergeScale = max(0.08, emerge)
 
         // LOCKED anchors.
@@ -530,8 +600,8 @@ final class MetaballView: NSView {
             // ruled line. Zero at both ends, scaled to the length.
             let ph0 = swellPhase.count > 30 ? swellPhase[30] : 0
             let ph1 = swellPhase.count > 31 ? swellPhase[31] : 0
-            let swayAmp = min(9, 0.02 * chord + 1.5)
-            let sway = (0.6 * sin(time * 0.9 + t * 4.1 + ph0) + 0.4 * sin(time * 1.7 + t * 7.3 + ph1)) * swayAmp * mid
+            let swayAmp = min(3.2, 0.009 * chord + 0.6)
+            let sway = sin(time * 0.6 + t * 3.0 + ph0 + 0.0 * ph1) * swayAmp * mid
             let target = CGPoint(x: lerp(anchor, head, t).x + nx * sway, y: lerp(anchor, head, t).y + ny * sway)
             let k = spring * (0.4 + 0.6 * (1 - mid)) * step
             vel.x += (target.x - cur.x) * k
@@ -565,17 +635,32 @@ final class MetaballView: NSView {
             v += (drive - prev) * 16 * step
             prevSlosh[i] = prev
             slosh[i] = prev + v
-            // Mass pools toward the lowest part of the tether (a drip forming under gravity).
-            let pool = max(-3.5, min(3.5, (yMean - spine[i].y) * 0.05)) * gravityK * (0.4 + 0.6 * mid)
-            // Slow, out-of-step swelling so the thickness is never even along the tether.
-            let ph = i < swellPhase.count ? swellPhase[i] : 0
-            let swell = 1 + 0.10 * sin(time * 0.55 + ph) + 0.06 * sin(time * 1.05 + ph * 1.9)
-            baseRadii[i] = max(params.minRadius, (baseRadii[i] + slosh[i] + pool) * swell)
+            // Mass pools toward the lowest part of the thread (a drip forming under gravity); gentle ripple on top.
+            let pool = max(-2.5, min(2.5, (yMean - spine[i].y) * 0.04)) * gravityK * (0.4 + 0.6 * mid) * waistK
+            baseRadii[i] = max(profile.solution.waist * 0.8, baseRadii[i] + slosh[i] * 0.12 * waistK + pool)
         }
 
-        radii = BlobMass.rescaleToTotalArea(radii: baseRadii, length: max(chord, 1), params: params)
-            .map { $0 * emergeScale }
-        BlobMass.applyEndFloors(radii: &radii, emerge: emergeScale, params: params)
+        // Volume is conserved by construction (DumbbellMass), so no rescaling: just emergence.
+        radii = baseRadii.map { $0 * emergeScale }
+        bulbPin = profile.solution.pin * emergeScale
+        bulbHead = profile.solution.head * emergeScale
+        if pinching {
+            func smooth(_ x: CGFloat) -> CGFloat { let c = max(0, min(1, x)); return c * c * (3 - 2 * c) }
+            let pt = pinchTime / 0.16
+            let breakAt: CGFloat = 0.62
+            for i in 0..<n {
+                let sPos = CGFloat(i) / CGFloat(n - 1)
+                var f: CGFloat = 1 - smooth(pt) * CGFloat(exp(-Double(pow((sPos - breakAt) / 0.10, 2))))   // thins to nothing at the break
+                if sPos > breakAt { f *= 1 - smooth(pt * 1.3) }                                           // the far half leaves with the droplet
+                // After the snap, the remaining thread is drawn back into the pin.
+                if sPos > 0.02 && sPos < 0.98 { f *= 1 - smooth((pinchTime - 0.10) / 0.30) }
+                radii[i] *= f
+            }
+            bulbHead *= 1 - smooth(pt * 1.3)
+        }
+        // The chain ends a touch inside the bulbs; the bulb circles themselves form the rounded ends.
+        radii[0] = min(radii[0], bulbPin * 0.88)
+        radii[n - 1] = min(radii[n - 1], bulbHead * 0.88)
 
         for _ in 0..<3 {
             spine[0] = anchor
@@ -587,7 +672,9 @@ final class MetaballView: NSView {
                 let segDy = b.y - a.y
                 let d = hypot(segDx, segDy)
                 guard d > 0.001 else { continue }
-                let diff = (d - ideal) / d
+                // One-sided: resist stretching, never compression. A rope longer than its span must be allowed to sit
+                // slack, or it buckles into a high-frequency zigzag.
+                let diff = max(0, d - ideal) / d
                 let ox = segDx * 0.5 * diff
                 let oy = segDy * 0.5 * diff
                 if i == 0 {
@@ -658,6 +745,10 @@ final class MetaballView: NSView {
         let ease = appear * appear * (3 - 2 * appear)
         let r = base * ease * (1 + 0.18 * max(0, pop - 1))
         let glow = committing ? 1 : 0.35 + 0.65 * appear
+        if committing, let drop = drops.first(where: { $0.isMain }) {
+            // On commit the label rides inside the droplet as it flies to the action, shrinking away with it.
+            return [Bud(item: item, center: drop.p, radius: min(r, drop.r * 1.15), pop: pop, armed: true, glow: 1)]
+        }
         return [Bud(item: item, center: head, radius: r, pop: pop, armed: true, glow: glow)]
     }
 
@@ -680,7 +771,7 @@ final class MetaballView: NSView {
             ring.stroke()
         }
 
-        let pinR = max(radii.first ?? 20, mass.restRadius * mass.pinMinFraction * 0.75 * emerge)
+        let pinR = bulbPin
         for bud in budGeometry(pinR: pinR) {
             let fit = bud.radius / (Self.budBaseRadius * (cfg.meetingMode ? 0.8 : 1))
             let textFade = smoothstep01((fit - 0.4) / 0.5)   // text appears once the bud is big enough to hold it
@@ -728,7 +819,7 @@ final class MetaballView: NSView {
         let sub = spine.count <= 20 ? 3 : 2
         let strand = StrandSmoothing.resample(
             points: spine,
-            radii: StrandSmoothing.smoothRadii(radii, passes: 2),
+            radii: StrandSmoothing.smoothRadii(radii, passes: 4),
             subdivisions: sub
         )
         for i in strand.points.indices {
@@ -736,19 +827,11 @@ final class MetaballView: NSView {
         }
         let strandCount = strand.points.count
         let params = mass
-        let pinR = max(radii.first ?? 20, params.restRadius * params.pinMinFraction * 0.75 * emerge)
-        let headR = max(radii.last ?? 14, params.restRadius * params.headMinFraction * 0.85 * emerge)
+        let pinR = bulbPin
+        let headR = bulbHead
             * (1 + 0.22 * latchPulse)
-        // Lopsided lump clusters (before pin/head so the last two circles stay pin and head).
-        if circles.count + pinLumps.count + headLumps.count + 2 <= ObsidianBlobMetal.maxCircles {
-            for (i, s) in pinLumps.enumerated() {
-                let l = BlobLumps.place(s, center: anchor, baseRadius: pinR, time: time, jiggle: pinJig[i])
-                circles.append(.init(center: local(l.center), radius: Float(l.radius)))
-            }
-            for (i, s) in headLumps.enumerated() {
-                let l = BlobLumps.place(s, center: head, baseRadius: headR, time: time, jiggle: headJig[i])
-                circles.append(.init(center: local(l.center), radius: Float(l.radius)))
-            }
+        for d in drops where circles.count < ObsidianBlobMetal.maxCircles - 3 {
+            circles.append(.init(center: local(d.p), radius: Float(d.r)))
         }
         // Action buds: each direction is a liquid bud on the pin, big enough to hold its label.
         for bud in budGeometry(pinR: pinR) where circles.count < ObsidianBlobMetal.maxCircles - 2 {
@@ -790,7 +873,9 @@ final class MetaballView: NSView {
             themeC: SIMD4(theme.c.r, theme.c.g, theme.c.b, 0),
             gradient: SIMD3(theme.gradientScale, theme.gradientSpeed, theme.iridescence),
             fill: theme.fill,
-            chrome: theme.chrome
+            chrome: theme.chrome,
+            pinMode: SIMD4(Float(pinM2.x), Float(pinM2.y), Float(pinM3.x), Float(pinM3.y)),
+            headMode: SIMD4(Float(headM2.x), Float(headM2.y), Float(headM3.x), Float(headM3.y))
         )
 
         guard let image = metal.render(
@@ -798,7 +883,7 @@ final class MetaballView: NSView {
             scale: scale,
             circles: circles,
             spineCount: strandCount,
-            fillet: params.restRadius * 0.22,
+            fillet: params.restRadius * 0.38,
             look: look
         ) else {
             return false
@@ -828,10 +913,14 @@ final class MetaballView: NSView {
             maxY = max(maxY, p.y + r)
         }
         // The pin lobes and the action buds bulge past the strand: include them or they render cut off.
-        let pinR = max(radii.first ?? 20, mass.restRadius * mass.pinMinFraction * 0.75 * emerge)
-        let pinReach = max(pinR, radii.first ?? 0) * 1.35
+        let pinR = bulbPin
+        let pinReach = pinR * 1.35
         minX = min(minX, anchor.x - pinReach); maxX = max(maxX, anchor.x + pinReach)
         minY = min(minY, anchor.y - pinReach); maxY = max(maxY, anchor.y + pinReach)
+        for d in drops {
+            minX = min(minX, d.p.x - d.r); maxX = max(maxX, d.p.x + d.r)
+            minY = min(minY, d.p.y - d.r); maxY = max(maxY, d.p.y + d.r)
+        }
         for bud in budGeometry(pinR: pinR) {
             minX = min(minX, bud.center.x - bud.radius); maxX = max(maxX, bud.center.x + bud.radius)
             minY = min(minY, bud.center.y - bud.radius); maxY = max(maxY, bud.center.y + bud.radius)

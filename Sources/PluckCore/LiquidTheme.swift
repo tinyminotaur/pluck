@@ -72,7 +72,7 @@ public enum ThemeLibrary {
         id: "oil-slick", name: "Oil Slick", tagline: "Black with a magenta, teal and gold sheen",
         a: RGB(0.95, 0.20, 0.65), b: RGB(0.10, 0.80, 0.75), c: RGB(0.95, 0.75, 0.15),
         body: RGB(0.020, 0.022, 0.030), absorb: RGB(2.0, 2.2, 2.0),
-        ember: 0.45, sheen: 1.2, rim: 1.6, gradientScale: 110, gradientSpeed: 0.06, iridescence: 2.0, fill: 0.30, chrome: 0
+        ember: 0.45, sheen: 1.2, rim: 1.6, gradientScale: 230, gradientSpeed: 0.04, iridescence: 1.2, fill: 0.22, chrome: 0
     )
     public static let aurora = LiquidTheme(
         id: "aurora", name: "Aurora", tagline: "Green, cyan and violet light in deep night",
@@ -111,8 +111,16 @@ public enum ThemeLibrary {
         ember: 1.00, sheen: 1.0, rim: 1.2, gradientScale: 200, gradientSpeed: 0.05, iridescence: 0.4, fill: 0.4, chrome: 0
     )
 
+    public static let mist = LiquidTheme(
+        id: "mist", name: "Mist", tagline: "Quiet, clear glass in soft blue and lilac",
+        a: RGB(0.58, 0.76, 1.00), b: RGB(0.82, 0.70, 1.00), c: RGB(0.66, 0.90, 0.98),
+        body: RGB(0.20, 0.24, 0.32), absorb: RGB(0.55, 0.45, 0.35),
+        ember: 0.0, sheen: 1.7, rim: 0.8, gradientScale: 380, gradientSpeed: 0.015, iridescence: 0.25,
+        fill: 0.42, chrome: 0.22
+    )
+
     public static let all: [LiquidTheme] = [
-        obsidianEmber, oilSlick, aurora, moltenGold, mercury, neonJelly, deepSea, sunsetLava,
+        obsidianEmber, mist, oilSlick, aurora, moltenGold, mercury, neonJelly, deepSea, sunsetLava,
     ]
 
     public static func theme(id: String) -> LiquidTheme? { all.first { $0.id == id } }
@@ -175,8 +183,7 @@ public struct FeelPreset: Identifiable, Sendable {
 public enum PresetLibrary {
     /// The shipped defaults for every knob a preset may touch.
     public static let baseline: [String: Double] = [
-        "restRadius": 56, "stretchPull": 0.78, "neckFloor": 6.5, "pinMass": 0.72, "headMass": 0.45,
-        "pinMinFraction": 0.55, "headMinFraction": 0.40,
+        "restRadius": 42, "waistRest": 0.20, "headShare": 0.40, "meniscus": 0.85,
         "responsiveness": 0.45, "damping": 0.93, "sloshAmount": 0.7, "whipResponse": 0.7, "particleCount": 16,
         "shininess": 0.95, "fresnel": 0.85, "transmission": 0.7, "absorption": 0.75, "glassOpacity": 0.92,
         "rimStrength": 0.55, "shadowStrength": 0.55, "ember": 1.0,
@@ -187,53 +194,61 @@ public enum PresetLibrary {
     public static let all: [FeelPreset] = [
         FeelPreset(id: "obsidian-ember", name: "Obsidian Ember", tagline: "The default: heavy black glass, amber heartbeat",
                    themeID: "obsidian-ember", values: [:]),
+        FeelPreset(id: "minimal-elegant", name: "Minimal & Elegant", tagline: "Calm clear glass; quiet, smooth, no drama",
+                   themeID: "mist", values: [
+                    "restRadius": 34, "waistRest": 0.16, "headShare": 0.40, "meniscus": 1.0,
+                    "gravity": 0.15, "magnetPull": 58, "magnetWeight": 0.7, "magnetStick": 0.8,
+                    "sloshAmount": 0.4, "idleLife": 0.35, "recoilBounce": 0.35, "flingMomentum": 0.3,
+                    "reachGain": 1.8, "glassOpacity": 0.88, "shininess": 1.0, "transmission": 0.9,
+                    "shadowStrength": 0.4, "rimStrength": 0.5,
+                   ]),
         FeelPreset(id: "lava-lamp", name: "Lava Lamp", tagline: "Slow, heavy, drippy; sinks and sloshes lazily",
                    themeID: "sunset-lava", values: [
-                    "restRadius": 66, "gravity": 1.1, "magnetPull": 28, "magnetWeight": 0.5, "magnetStick": 0.4,
+                    "restRadius": 52, "gravity": 1.1, "magnetPull": 28, "magnetWeight": 0.5, "magnetStick": 0.4,
                     "sloshAmount": 1.2, "damping": 0.96, "whipResponse": 0.3, "idleLife": 1.0, "reachGain": 1.4,
-                    "recoilBounce": 0.9, "stretchPull": 0.5, "pinMinFraction": 0.5, "neckFloor": 9,
+                    "recoilBounce": 0.9, "waistRest": 0.30, "headShare": 0.45, "meniscus": 1.1,
                     "shininess": 0.7, "transmission": 0.9, "glassOpacity": 0.9,
                    ]),
         FeelPreset(id: "mercury", name: "Mercury", tagline: "Tight, fast, glossy chrome droplet",
                    themeID: "mercury", values: [
-                    "restRadius": 40, "gravity": 0.8, "magnetPull": 100, "magnetWeight": 0.78, "magnetStick": 1.4,
+                    "restRadius": 32, "gravity": 0.8, "magnetPull": 100, "magnetWeight": 0.78, "magnetStick": 1.4,
                     "sloshAmount": 0.35, "damping": 0.9, "recoilBounce": 0.35, "idleLife": 0.3, "reachGain": 2.2,
-                    "neckFloor": 5, "shininess": 1.4, "fresnel": 1.1, "transmission": 0.2, "glassOpacity": 1.0,
+                    "waistRest": 0.14, "headShare": 0.35, "shininess": 1.4, "fresnel": 1.1, "transmission": 0.2, "glassOpacity": 1.0,
                     "rimStrength": 0.5, "flingMomentum": 0.8,
                    ]),
         FeelPreset(id: "water", name: "Water", tagline: "Loose and wobbly; ripples and rings after every move",
                    themeID: "deep-sea", values: [
-                    "restRadius": 50, "gravity": 0.7, "magnetPull": 40, "magnetWeight": 0.42, "magnetStick": 0.3,
+                    "restRadius": 40, "gravity": 0.7, "magnetPull": 40, "magnetWeight": 0.42, "magnetStick": 0.3,
                     "sloshAmount": 1.35, "whipResponse": 1.1, "damping": 0.95, "idleLife": 1.1, "recoilBounce": 1.0,
-                    "flingMomentum": 0.9, "glassOpacity": 0.82, "transmission": 1.0, "neckFloor": 7,
+                    "flingMomentum": 0.9, "glassOpacity": 0.82, "transmission": 1.0, "waistRest": 0.18, "meniscus": 1.0,
                    ]),
         FeelPreset(id: "taffy", name: "Taffy", tagline: "Stretches forever; thick, stringy, slow to let go",
                    themeID: "neon-jelly", values: [
-                    "restRadius": 52, "stretchPull": 0.35, "pinMinFraction": 0.45, "neckFloor": 10, "gravity": 0.25,
+                    "restRadius": 40, "waistRest": 0.34, "headShare": 0.45, "meniscus": 1.2, "gravity": 0.25,
                     "magnetPull": 36, "magnetWeight": 0.7, "reachGain": 3.0, "sloshAmount": 0.5, "damping": 0.97,
                     "recoilBounce": 0.7, "glassOpacity": 0.85,
                    ]),
         FeelPreset(id: "aurora-silk", name: "Aurora Silk", tagline: "Floaty and weightless, always drifting",
                    themeID: "aurora", values: [
-                    "restRadius": 44, "gravity": 0.1, "magnetPull": 34, "magnetWeight": 0.55, "sloshAmount": 0.9,
-                    "idleLife": 1.4, "damping": 0.97, "reachGain": 2.2, "recoilBounce": 0.8, "neckFloor": 5.5,
+                    "restRadius": 36, "gravity": 0.1, "magnetPull": 34, "magnetWeight": 0.55, "sloshAmount": 0.9,
+                    "idleLife": 1.4, "damping": 0.97, "reachGain": 2.2, "recoilBounce": 0.8, "waistRest": 0.15, "meniscus": 1.1,
                     "glassOpacity": 0.9,
                    ]),
         FeelPreset(id: "flick", name: "Flick", tagline: "Snappy and precise for expert marking",
                    themeID: "oil-slick", values: [
-                    "restRadius": 34, "gravity": 0.3, "magnetPull": 120, "magnetWeight": 0.85, "magnetStick": 1.8,
+                    "restRadius": 30, "gravity": 0.3, "magnetPull": 120, "magnetWeight": 0.85, "magnetStick": 1.8,
                     "sloshAmount": 0.3, "whipResponse": 0.4, "damping": 0.88, "idleLife": 0.3, "recoilBounce": 0.2,
-                    "reachGain": 2.6, "flingMomentum": 0.2,
+                    "reachGain": 2.6, "flingMomentum": 0.2, "waistRest": 0.13, "headShare": 0.32,
                    ]),
         FeelPreset(id: "jelly-bounce", name: "Jelly Bounce", tagline: "Springy and playful; wobbles back and forth",
                    themeID: "neon-jelly", values: [
-                    "restRadius": 48, "gravity": 0.5, "magnetPull": 46, "magnetWeight": 0.35, "magnetStick": 0.6,
+                    "restRadius": 38, "gravity": 0.5, "magnetPull": 46, "magnetWeight": 0.35, "magnetStick": 0.6,
                     "sloshAmount": 1.3, "whipResponse": 1.0, "recoilBounce": 1.0, "flingMomentum": 1.1,
                     "idleLife": 1.0, "glassOpacity": 0.88,
                    ]),
         FeelPreset(id: "molten-gold", name: "Molten Gold", tagline: "Heavy liquid metal that glows as it moves",
                    themeID: "molten-gold", values: [
-                    "restRadius": 58, "gravity": 0.9, "magnetPull": 44, "magnetWeight": 0.58, "magnetStick": 1.0,
+                    "restRadius": 44, "gravity": 0.9, "magnetPull": 44, "magnetWeight": 0.58, "magnetStick": 1.0,
                     "sloshAmount": 0.9, "idleLife": 0.8, "shininess": 1.25, "transmission": 0.6, "glassOpacity": 0.96,
                    ]),
     ]

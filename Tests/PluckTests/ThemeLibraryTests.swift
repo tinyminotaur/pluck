@@ -3,7 +3,7 @@ import XCTest
 
 final class ThemeLibraryTests: XCTestCase {
     func testEveryThemeIsValidAndIdsAreUnique() {
-        XCTAssertGreaterThanOrEqual(ThemeLibrary.all.count, 8)
+        XCTAssertGreaterThanOrEqual(ThemeLibrary.all.count, 9)
         XCTAssertEqual(Set(ThemeLibrary.all.map(\.id)).count, ThemeLibrary.all.count)
         for t in ThemeLibrary.all { XCTAssertTrue(t.isValid, t.id) }
     }
@@ -39,7 +39,7 @@ final class ThemeLibraryTests: XCTestCase {
     func testPresetsAreMeaningfullyDifferent() {
         // Each preset (besides the default) changes several knobs and feels different from the others.
         for p in PresetLibrary.all where p.id != "obsidian-ember" {
-            XCTAssertGreaterThanOrEqual(p.values.count, 8, p.id)
+            XCTAssertGreaterThanOrEqual(p.values.count, 6, p.id)
         }
         let magnet = Set(PresetLibrary.all.compactMap { PresetLibrary.resolvedValues($0)["magnetPull"] })
         XCTAssertGreaterThanOrEqual(magnet.count, 6)

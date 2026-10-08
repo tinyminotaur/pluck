@@ -95,6 +95,9 @@ final class ObsidianBlobMetal {
         /// Colour glow from within the glass, and chrome-like environment reflection (0...1).
         var fill: Float = 0.1
         var chrome: Float = 0
+        /// Damped oval/triangular wobble of the pin and head bulbs: (cos2, sin2, cos3, sin3) amplitudes, as a fraction of radius.
+        var pinMode = SIMD4<Float>(repeating: 0)
+        var headMode = SIMD4<Float>(repeating: 0)
     }
 
     /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
@@ -148,7 +151,9 @@ final class ObsidianBlobMetal {
             themeA: look.themeA,
             themeB: look.themeB,
             themeC: SIMD4(look.themeC.x, look.themeC.y, look.themeC.z, look.chrome),
-            grad: SIMD4(look.gradient.x * Float(scale), look.gradient.y, look.gradient.z, look.fill)
+            grad: SIMD4(look.gradient.x * Float(scale), look.gradient.y, look.gradient.z, look.fill),
+            pinMode: look.pinMode,
+            headMode: look.headMode
         )
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
 
@@ -253,6 +258,8 @@ final class ObsidianBlobMetal {
         var themeB: SIMD4<Float>
         var themeC: SIMD4<Float>
         var grad: SIMD4<Float>
+        var pinMode: SIMD4<Float>
+        var headMode: SIMD4<Float>
     }
 
     private static let shaderSource = """
@@ -281,6 +288,8 @@ final class ObsidianBlobMetal {
         float4 themeB;
         float4 themeC;
         float4 grad;
+        float4 pinMode;
+        float4 headMode;
     };
 
     struct VertexOut {
@@ -306,8 +315,24 @@ final class ObsidianBlobMetal {
         return min(a, b) - h * h * k * 0.25;
     }
 
+    // Cubic smooth-min: C2-smooth blends, so the join between thread and bulb is one gentle concave curve.
+    float smin3(float a, float b, float k) {
+        float h = max(k - abs(a - b), 0.0) / k;
+        return min(a, b) - h * h * h * k * (1.0 / 6.0);
+    }
+
     // Signed distance (negative inside) and the local tube radius at that point.
-    float2 blobField(float2 p, constant float4 *c, uint n, uint spine, float k) {
+    // Radial shape modes: oval (l=2) and triangular (l=3) wobble of a bulb, as a fraction of its radius.
+    float modeScale(float2 v, float4 m) {
+        float l = length(v);
+        if (l < 1e-3) return 0.0;
+        v /= l;
+        float c2 = v.x * v.x - v.y * v.y, s2 = 2.0 * v.x * v.y;
+        float c3 = v.x * (v.x * v.x - 3.0 * v.y * v.y), s3 = v.y * (3.0 * v.x * v.x - v.y * v.y);
+        return m.x * c2 + m.y * s2 + m.z * c3 + m.w * s3;
+    }
+
+    float2 blobField(float2 p, constant float4 *c, uint n, uint spine, float k, constant Uniforms &u) {
         float d = 1e5;
         float r = 1.0;
         // Tether: tapered round-cone segments between consecutive spine samples (hard union,
@@ -329,10 +354,14 @@ final class ObsidianBlobMetal {
         // Pin / head lobes: smooth-unioned so they pool into the tether like liquid.
         for (uint i = spine; i < n; i++) {
             float rr = max(c[i].z, 1.0);
-            float di = length(p - c[i].xy) - rr;
+            // The last two circles are the pin and the head: they carry the wobble modes.
+            float modeAmt = 0.0;
+            if (i + 2 == n) modeAmt = modeScale(p - c[i].xy, u.pinMode);
+            else if (i + 1 == n) modeAmt = modeScale(p - c[i].xy, u.headMode);
+            float di = length(p - c[i].xy) - rr * (1.0 + clamp(modeAmt, -0.3, 0.3));
             float w = saturate(0.5 + 0.5 * (d - di) / k);
             r = max(r, mix(r, rr, w));
-            d = smin(d, di, k);
+            d = smin3(d, di, k);
         }
         return float2(d, max(r, 1.0));
     }
@@ -415,13 +444,13 @@ final class ObsidianBlobMetal {
         float2 wPin = (n >= 2u) ? circles[n - 2].xy : float2(0.0);
         // Amplitude scales with the blob (k is the fillet width, ~0.22 × rest radius) and is capped by the
         // local thickness, so a thin neck ripples a little instead of tearing.
-        float wAmp = 0.9 * k;
+        float wAmp = 0.2 * k;
         float wScale = max(wAmp * 6.5, 24.0);
-        float2 f00 = blobField(p, circles, n, sp, k);
+        float2 f00 = blobField(p, circles, n, sp, k, u);
         // Far outside the liquid (beyond any warp): done, without the warped and gradient lookups.
         if (f00.x > wAmp + 4.0) { return float4(0.0, 0.0, 0.0, 0.0); }
         float wAmpL = min(wAmp, 0.5 * f00.y);
-        float2 f0 = blobField(waterWarp(p, wPin, wAmpL, wScale, u.time), circles, n, sp, k);
+        float2 f0 = blobField(waterWarp(p, wPin, wAmpL, wScale, u.time), circles, n, sp, k, u);
 
         // Obsidian facets live in ONE fixed environment: a screen-aligned cell field anchored at the
         // pin. The liquid moves through it, so the cells never turn, stretch or re-orient when the
@@ -448,8 +477,8 @@ final class ObsidianBlobMetal {
 
         float h = pillow(f0);
         float e = 1.5;
-        float2 fxp = blobField(waterWarp(p + float2(e, 0.0), wPin, wAmpL, wScale, u.time), circles, n, sp, k);
-        float2 fyp = blobField(waterWarp(p + float2(0.0, e), wPin, wAmpL, wScale, u.time), circles, n, sp, k);
+        float2 fxp = blobField(waterWarp(p + float2(e, 0.0), wPin, wAmpL, wScale, u.time), circles, n, sp, k, u);
+        float2 fyp = blobField(waterWarp(p + float2(0.0, e), wPin, wAmpL, wScale, u.time), circles, n, sp, k, u);
         float hx = pillow(fxp) - h;
         float hy = pillow(fyp) - h;
         // Rim bevel from the pillow profile, plus a spherical dome from the distance gradient so the

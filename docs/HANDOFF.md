@@ -55,3 +55,11 @@ Keep it listen-only (no event tap, no synthesized input). Commit small, push, an
 - **Integrated label:** nothing shows at rest. Once a direction latches, that one action's glyph + name appears *inside the head of the liquid* (the head swells into a bud: a field circle with an `emphasis` value, text drawn with a screen blend tinted by the theme). Quiet during fast flicks; on commit the chosen one swells. (An earlier version showed four permanent buds around the pin; rejected as ugly.)
 - **Diagnostics:** `~/Library/Logs/Pluck/gesture.log` (why gestures end), `Pluck --sim-report`, `--render-preview`, `--render-themes`, `--render-compass` (all headless, no input).
 - **Not verified live:** feel of the magnet/gravity physics, bud labels in the live view, cursor hiding with the private opt-in, three-finger on hardware.
+
+## Update: shape and motion redesign ("dark and dramatic", then "minimal and elegant")
+- **Silhouette:** `PluckCore/DumbbellMass` (tested). Two round bulbs (pin, head) + a thin thread, volume-conserving: bulbs shrink and the thread thins as it lengthens, with a concave meniscus flare (`profile`) and a cubic smooth-min blend in the shader. Replaces the old `BlobMass` taper (a straight cone) and the random lobes. Knobs: `waistRest`, `headShare`, `meniscus`.
+- **Calm motion:** each bulb carries damped oval/triangular shape modes (`stepModes`): the pin stretches toward the head like a teardrop, the head lurches against its acceleration, gravity flattens both, faint slow breathing. Water warp, wander and meander were cut way back. Rope constraints are **one-sided** (a slack rope must not buckle into a zigzag).
+- **Commit = pinch-off:** the thread thins and snaps at ~62%, the head leaves as a droplet carrying the label (it shrinks away with it), a tiny satellite bead is flicked from the break, the rest whips back into the pin (`startPinchOff`/`stepDrops`).
+- **Looks:** default is dark obsidian + amber. New "Mist" theme and "Minimal & Elegant" preset for the calm clear-glass direction. Oil Slick bands are wider/softer.
+- **Headless previews (no input, no permissions):** `--render-compass`, `--render-pinch` (commit frames), `--render-themes`, `--render-preview`, `--sim-report`.
+- **Not verified live:** how the modes/pinch feel in motion; the Mist look on real desktops (light and dark).

@@ -41,6 +41,10 @@ final class FeelLabConfig: ObservableObject {
     @Published var stretchPull: Double { didSet { save("stretchPull", stretchPull) } }
     @Published var pinMinFraction: Double { didSet { save("pinMinFraction", pinMinFraction) } }
     @Published var headMinFraction: Double { didSet { save("headMinFraction", headMinFraction) } }
+    /// Thread thickness at rest (fraction of the rest radius), pin/head mass split, and how far the concave blend reaches.
+    @Published var waistRest: Double { didSet { save("waistRest", waistRest) } }
+    @Published var headShare: Double { didSet { save("headShare", headShare) } }
+    @Published var meniscus: Double { didSet { save("meniscus", meniscus) } }
     @Published var neckFloor: Double { didSet { save("neckFloor", neckFloor) } }
 
     // MARK: Physics
@@ -119,13 +123,16 @@ final class FeelLabConfig: ObservableObject {
     @Published var useGooFilter: Bool { didSet { saveBool("useGooFilter", useGooFilter) } }
 
     private init() {
-        restRadius = Self.load("restRadius", 56)
+        restRadius = Self.load("restRadius", 42)
         pinMass = Self.load("pinMass", 0.72)
         headMass = Self.load("headMass", 0.45)
         stretchPull = Self.load("stretchPull", 0.78)
         pinMinFraction = Self.load("pinMinFraction", 0.55)
         headMinFraction = Self.load("headMinFraction", 0.40)
         neckFloor = Self.load("neckFloor", 6.5)
+        waistRest = Self.load("waistRest", 0.20)
+        headShare = Self.load("headShare", 0.40)
+        meniscus = Self.load("meniscus", 0.85)
 
         responsiveness = Self.load("responsiveness", 0.45)
         damping = Self.load("damping", 0.93)
@@ -174,13 +181,16 @@ final class FeelLabConfig: ObservableObject {
     }
 
     func resetToDefaults() {
-        restRadius = 56
+        restRadius = 42
         pinMass = 0.72
         headMass = 0.45
         stretchPull = 0.78
         pinMinFraction = 0.55
         headMinFraction = 0.40
         neckFloor = 6.5
+        waistRest = 0.20
+        headShare = 0.40
+        meniscus = 0.85
         responsiveness = 0.45
         damping = 0.93
         sloshAmount = 0.7
@@ -222,6 +232,16 @@ final class FeelLabConfig: ObservableObject {
         gooBlur = 16
         gooThreshold = 0.5
         useGooFilter = true
+    }
+
+    /// The dumbbell shape: round pin and head joined by a thin thread with concave blends.
+    var dumbbell: DumbbellMass.Params {
+        DumbbellMass.Params(
+            restRadius: CGFloat(restRadius) * (meetingMode ? 0.65 : 1),
+            waistRest: CGFloat(waistRest),
+            headShare: CGFloat(headShare),
+            meniscus: CGFloat(meniscus)
+        )
     }
 
     var massParams: BlobMassParams {
@@ -278,6 +298,7 @@ final class FeelLabConfig: ObservableObject {
         "absorption": \.absorption, "glassOpacity": \.glassOpacity, "rimStrength": \.rimStrength,
         "shadowStrength": \.shadowStrength, "ember": \.ember, "recoilBounce": \.recoilBounce,
         "crystallize": \.crystallize, "idleLife": \.idleLife, "flingMomentum": \.flingMomentum,
+        "waistRest": \.waistRest, "headShare": \.headShare, "meniscus": \.meniscus,
         "reachGain": \.reachGain, "gravity": \.gravity, "magnetPull": \.magnetPull,
         "magnetWeight": \.magnetWeight, "magnetStick": \.magnetStick,
     ]

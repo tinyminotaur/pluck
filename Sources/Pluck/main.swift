@@ -14,6 +14,12 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-compass") {
     exit(MainActor.assumeIsolated { PreviewRender.runCompass(outputPath: path) })
 }
 
+// `Pluck --render-pinch out.png`: the commit pinch-off over time (headless), then exit.
+if let i = CommandLine.arguments.firstIndex(of: "--render-pinch") {
+    let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "pinch.png"
+    exit(MainActor.assumeIsolated { PreviewRender.runPinch(outputPath: path) })
+}
+
 // `Pluck --render-themes out.png`: one row per theme (headless Metal), then exit.
 if let i = CommandLine.arguments.firstIndex(of: "--render-themes") {
     let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "themes.png"
