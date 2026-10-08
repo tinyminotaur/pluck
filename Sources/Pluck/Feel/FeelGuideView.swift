@@ -225,7 +225,8 @@ struct FeelGuideView: View {
                 knob("Glass opacity", value: $config.glassOpacity, range: 0.4...1, format: "%.2f")
                 knob("Contact shadow", value: $config.shadowStrength, range: 0...1, format: "%.2f")
                 knob("Base lightness", value: $config.lightness, range: 0.02...0.25, format: "%.2f")
-                knob("Cool tint (monitor glow)", value: $config.coolTint, range: 0...1, format: "%.2f")
+                knob("Amber warmth", value: $config.coolTint, range: 0...1, format: "%.2f")
+                knob("Ember pulse glow", value: $config.ember, range: 0...1, format: "%.2f")
                 knob("Facets (liquid → obsidian)", value: $config.facetAmount, range: 0...1, format: "%.2f")
                 knob("Facet size", value: $config.facetSize, range: 8...50, format: "%.0f pt")
             }

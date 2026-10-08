@@ -61,10 +61,10 @@ enum PreviewRender {
                 let look = ObsidianBlobMetal.Look(
                     lightDir: light, time: 1.3, shininess: 0.95, fresnel: 0.85, transmission: 0.7,
                     opacity: 0.92, edgeSoft: 0.1,
-                    baseColor: SIMD3(0.06, 0.06, 0.08),
-                    absorb: SIMD3(Float(0.9 + 0.75 * 0.7), Float(0.7 + 0.75 * 0.55), Float(0.45 + 0.75 * 0.35)),
-                    glow: SIMD3(0.64, 0.7, 0.92),
-                    facet: facet, facetSize: 22
+                    baseColor: SIMD3(0.04, 0.034, 0.03),
+                    absorb: ObsidianPalette.absorb(depth: 0.75),
+                    glow: ObsidianPalette.glow(warmth: 0.45),
+                    facet: facet, facetSize: 22, ember: 0.55
                 )
                 guard let image = metal.render(
                     size: tile, scale: scale, circles: circles, spineCount: n,

@@ -17,7 +17,7 @@ function profile(L,n){const base=uniformR(L),st=Math.min(1,L/(P.rest*5));const r
 // ---- shader (Metal -> GLSL port, same math) ----
 const FS=`#version 300 es
 precision highp float;
-uniform vec2 res; uniform vec2 lightDir; uniform float time,fillet,facet,facetSize,shin,fres_,trans,opac;
+uniform vec2 res; uniform vec2 lightDir; uniform float time,fillet,facet,facetSize,shin,fres_,trans,opac,ember;
 uniform vec3 baseC,absorb,glowC; uniform int nC,nS; uniform vec4 c[32];
 out vec4 outC;
 float smin(float a,float b,float k){float h=max(k-abs(a-b),0.)/k;return min(a,b)-h*h*k*.25;}
@@ -27,6 +27,11 @@ vec2 blobField(vec2 p,int n,int sp,float k){float d=1e5,r=1.;
  for(int i=0;i<32;i++){ if(i<sp)continue; if(i>=n)break; float rr=max(c[i].z,1.); float di=length(p-c[i].xy)-rr;
   float w=clamp(.5+.5*(d-di)/k,0.,1.); r=max(r,mix(r,rr,w)); d=smin(d,di,k);}
  return vec2(d,max(r,1.));}
+float hash12(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash12(i),hash12(i+vec2(1,0)),f.x),mix(hash12(i+vec2(0,1)),hash12(i+vec2(1,1)),f.x),f.y);}
+vec2 waterWarp(vec2 p,vec2 pin,float amp,float scale,float t){vec2 q=(p-pin)/scale;
+ vec2 w=vec2(vnoise(q+vec2(t*.21,0.))-.5,vnoise(q+vec2(0.,t*.17)+7.3)-.5);
+ w+=.28*vec2(vnoise(q*1.7+vec2(-t*.29,3.1))-.5,vnoise(q*1.7+vec2(t*.25,9.7))-.5);return p+w*amp;}
 float pillow(vec2 f){float u=clamp(-f.x/(f.y*.95),0.,1.);float v=1.-u;return sqrt(max(0.,1.-v*v));}
 vec2 hash22(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453);}
 vec4 facetCells(vec2 m,out vec2 toSeed){vec2 g=floor(m),f=fract(m);float d1=8.,d2=8.;vec2 id=vec2(0);toSeed=vec2(0);
@@ -35,26 +40,31 @@ vec4 facetCells(vec2 m,out vec2 toSeed){vec2 g=floor(m),f=fract(m);float d1=8.,d
  d1=sqrt(d1);d2=sqrt(d2);return vec4(d1,d2-d1,hash22(id+17.));}
 void main(){
  vec2 p=gl_FragCoord.xy; int n=min(nC,32); int sp=min(nS,n); float k=max(fillet,1.);
- vec2 f0=blobField(p,n,sp,k);
+ vec2 wPin=n>=2?c[n-2].xy:vec2(0.); float wAmp=.62*k; float wScale=max(wAmp*6.5,24.);
+ vec2 f00=blobField(p,n,sp,k); float wAmpL=min(wAmp,.5*f00.y);
+ vec2 f0=blobField(waterWarp(p,wPin,wAmpL,wScale,time),n,sp,k);
  vec4 cell=vec4(0,1,.5,.5); vec2 domeS=vec2(0);
  if(facet>.001 && n>=sp+2){vec2 pin=c[n-2].xy; vec2 m=(p-pin)/facetSize;
   vec2 toSeed; cell=facetCells(m,toSeed); domeS=-toSeed; f0.x+=facet*facetSize*.09*(cell.z-.5)*2.;}
  float alpha=clamp(.5-f0.x/1.5,0.,1.);
  if(alpha<.02){outC=vec4(0);return;}
  float h=pillow(f0);float e=1.5;
- float hx=pillow(blobField(p+vec2(e,0),n,sp,k))-h; float hy=pillow(blobField(p+vec2(0,e),n,sp,k))-h;
+ float hx=pillow(blobField(waterWarp(p+vec2(e,0),wPin,wAmpL,wScale,time),n,sp,k))-h; float hy=pillow(blobField(waterWarp(p+vec2(0,e),wPin,wAmpL,wScale,time),n,sp,k))-h;
  vec3 N=normalize(vec3(-hx*4.8,-hy*4.8,1.));
  vec2 tilt=(cell.zw-.5)*2.; float ripple=sin(cell.x*38.+cell.z*6.2831)*.035; vec3 Nf=normalize(vec3(N.xy*.45+tilt*.45+domeS*.30+domeS*ripple,N.z)); N=normalize(mix(N,Nf,clamp(facet,0.,1.)));
  vec3 V=vec3(0,0,1); vec3 L=normalize(vec3(lightDir,.85));
  float thick=clamp(h,0.,1.);
- vec3 dark=baseC*.35+vec3(.02,.025,.04); float tAmt=clamp(trans,0.,1.)*(.38+1.0*pow(1.-thick,1.6));
- vec3 beer=exp(-absorb*thick*1.7); vec3 body=mix(dark,glowC*beer,tAmt); body+=vec3(.018,.02,.028)*(.35+.65*thick);
+ vec3 dark=baseC*.30+vec3(.014,.011,.009); float tAmt=clamp(trans,0.,1.)*(.14+1.05*pow(1.-thick,1.9));
+ vec3 beer=exp(-absorb*thick*1.7); vec3 body=mix(dark,glowC*beer,tAmt); body+=vec3(.012,.009,.007)*(.35+.65*thick);
  float ndl=clamp(dot(N,L),0.,1.); float wrap=clamp(dot(N,normalize(vec3(-L.x,-L.y,.9)))*.5+.5,0.,1.);
  body*=.55+.55*ndl+.25*wrap;
- float fr=pow(1.-clamp(dot(N,V),0.,1.),2.2)*(.55+fres_); body+=fr*vec3(.85,.9,1.)*.6;
- vec3 H=normalize(L+V); float gloss=mix(12.,48.,clamp(shin,0.,1.)); float spec=pow(clamp(dot(N,H),0.,1.),gloss)*(.45+shin); body+=spec*1.1*(1.-.45*clamp(facet,0.,1.));
- float seam=1.-smoothstep(0.,.07,cell.y); body+=seam*facet*.12*vec3(.75,.85,1.)*(.35+.65*thick);
- float glint=smoothstep(.972,.996,dot(N,H))*(.35+.65*cell.w); body+=glint*facet*.9*vec3(1.,.97,.92)*(1.-seam);
+ float fr=pow(1.-clamp(dot(N,V),0.,1.),2.2)*(.55+fres_); body+=fr*vec3(1.,.72,.42)*.36;
+ vec3 H=normalize(L+V); float gloss=mix(12.,48.,clamp(shin,0.,1.)); float spec=pow(clamp(dot(N,H),0.,1.),gloss)*(.45+shin); body+=spec*vec3(1.,.94,.86)*1.1*(1.-.45*clamp(facet,0.,1.));
+ float seam=1.-smoothstep(0.,.07,cell.y); body+=seam*facet*.12*vec3(1.,.62,.22)*(.35+.65*thick);
+ float glint=smoothstep(.972,.996,dot(N,H))*(.35+.65*cell.w); body+=glint*facet*.9*vec3(1.,.9,.74)*(1.-seam);
+ float pulse=.65*(.5+.5*sin(time*2.1))+.35*(.5+.5*sin(time*3.4+1.3)); float emberAmt=ember*(.35+.65*pulse); vec3 emberCol=vec3(1.,.42,.07);
+ body+=emberCol*emberAmt*(.10*pow(1.-thick,1.3)+.05*thick*thick);
+ float crackle=.5+.5*sin(time*1.7+cell.z*6.2831); body+=emberCol*emberAmt*seam*clamp(facet,0.,1.)*(.35+.65*crackle)*.9;
  float ign=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715)))); body+=(ign-.5)*(1.4/255.);
  float a=clamp(alpha*opac,0.,1.); outC=vec4(body*a,a);}`;
 const VS=`#version 300 es
@@ -84,8 +94,8 @@ function drawScene(x0,y0,w,h,pin,head,sag,facet,fsize,ld){
  gl.uniform1f(U('fillet'),P.rest*.22*SC);gl.uniform1f(U('facet'),facet);gl.uniform1f(U('facetSize'),fsize*SC);
  gl.uniform1f(U('shin'),.95);gl.uniform1f(U('fres_'),.85);gl.uniform1f(U('trans'),.7);gl.uniform1f(U('opac'),.92);
  const cool=.45,ab=.75;
- gl.uniform3f(U('baseC'),.06,.06,.08);
- gl.uniform3f(U('absorb'),.9+ab*.7,.7+ab*.55,.45+ab*.35);gl.uniform3f(U('glowC'),.55+.2*(1-cool),.65+.15*cool,.85+.15*cool);
+ gl.uniform3f(U('baseC'),.04,.034,.03); gl.uniform1f(U('ember'),.55);
+ gl.uniform3f(U('absorb'),.85+ab*.8,1.9+ab*1.2,3.2+ab*1.4);gl.uniform3f(U('glowC'),.78+.22*cool,.26+.34*cool,.04+.10*cool);
  gl.uniform1i(U('nC'),circles.length);gl.uniform1i(U('nS'),N);gl.uniform4fv(U('c'),flat);
  gl.drawArrays(gl.TRIANGLES,0,6);
 }

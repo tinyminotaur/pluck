@@ -59,7 +59,10 @@ final class FeelLabConfig: ObservableObject {
     @Published var rimStrength: Double { didSet { save("rimStrength", rimStrength) } }
     @Published var shadowStrength: Double { didSet { save("shadowStrength", shadowStrength) } }
     @Published var lightness: Double { didSet { save("lightness", lightness) } }
+    /// Amber warmth (0 = deep red-amber, 1 = hot amber). Stored under the legacy key `coolTint`.
     @Published var coolTint: Double { didSet { save("coolTint", coolTint) } }
+    /// Strength of the slow pulsing amber glow.
+    @Published var ember: Double { didSet { save("ember", ember) } }
     @Published var facetAmount: Double { didSet { save("facetAmount", facetAmount) } }
     @Published var facetSize: Double { didSet { save("facetSize", facetSize) } }
 
@@ -121,6 +124,7 @@ final class FeelLabConfig: ObservableObject {
         shadowStrength = Self.load("shadowStrength", 0.55)
         lightness = Self.load("lightness", 0.06)
         coolTint = Self.load("coolTint", 0.45)
+        ember = Self.load("ember", 0.55)
         facetAmount = Self.load("facetAmount", 0.55)
         facetSize = Self.load("facetSize", 22)
         recoilBounce = Self.load("recoilBounce", 0.6)
@@ -164,6 +168,7 @@ final class FeelLabConfig: ObservableObject {
         shadowStrength = 0.55
         lightness = 0.06
         coolTint = 0.45
+        ember = 0.55
         facetAmount = 0.55
         facetSize = 22
         recoilBounce = 0.6
@@ -211,10 +216,11 @@ final class FeelLabConfig: ObservableObject {
     var tintColor: NSColor {
         let L = CGFloat(lightness)
         let cool = CGFloat(coolTint)
+        // Warm black: obsidian with a trace of amber, not blue.
         return NSColor(
-            calibratedRed: L * (1 - cool * 0.2),
-            green: L * (1 - cool * 0.05),
-            blue: L * (1 + cool * 0.7),
+            calibratedRed: L * (1 + cool * 0.9),
+            green: L * (1 + cool * 0.25),
+            blue: L * (1 - cool * 0.3),
             alpha: 1
         )
     }

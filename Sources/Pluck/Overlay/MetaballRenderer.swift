@@ -580,17 +580,8 @@ final class MetaballView: NSView {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         c.getRed(&r, green: &g, blue: &b, alpha: &a)
 
-        let cool = CGFloat(cfg.coolTint)
-        let glow = SIMD3<Float>(
-            Float(0.55 + 0.2 * (1 - cool)),
-            Float(0.65 + 0.15 * cool),
-            Float(0.85 + 0.15 * cool)
-        )
-        let absorb = SIMD3<Float>(
-            Float(0.9 + cfg.absorption * 0.7),
-            Float(0.7 + cfg.absorption * 0.55),
-            Float(0.45 + cfg.absorption * 0.35)
-        )
+        let glow = ObsidianPalette.glow(warmth: Float(cfg.coolTint))
+        let absorb = ObsidianPalette.absorb(depth: Float(cfg.absorption))
 
         // Liquid at rest, obsidian under tension: facets sharpen as the tether stretches and
         // flash on release (recoil pulse).
@@ -615,7 +606,8 @@ final class MetaballView: NSView {
             absorb: absorb,
             glow: glow,
             facet: Float(min(1, facetEff)),
-            facetSize: Float(cfg.facetSize)
+            facetSize: Float(cfg.facetSize),
+            ember: Float(cfg.ember * (cfg.meetingMode ? 0.5 : 1))
         )
 
         guard let image = metal.render(

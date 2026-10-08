@@ -79,6 +79,8 @@ final class ObsidianBlobMetal {
         var facet: Float = 0
         /// Facet cell size across the blob, in points.
         var facetSize: Float = 22
+        /// 0…1 strength of the slow pulsing amber glow.
+        var ember: Float = 0.5
     }
 
     /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
@@ -127,7 +129,8 @@ final class ObsidianBlobMetal {
             spineCount: UInt32(min(32, max(0, spineCount))),
             fillet: Float(max(1, fillet * scale)),
             facet: min(1, max(0, look.facet)),
-            facetSize: max(6, look.facetSize * Float(scale))
+            facetSize: max(6, look.facetSize * Float(scale)),
+            ember: min(1, max(0, look.ember))
         )
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
 
@@ -227,7 +230,7 @@ final class ObsidianBlobMetal {
         var fillet: Float
         var facet: Float
         var facetSize: Float
-        var _pad: UInt32 = 0
+        var ember: Float
     }
 
     private static let shaderSource = """
@@ -251,7 +254,7 @@ final class ObsidianBlobMetal {
         float fillet;
         float facet;
         float facetSize;
-        uint _pad;
+        float ember;
     };
 
     struct VertexOut {
@@ -306,6 +309,30 @@ final class ObsidianBlobMetal {
         return float2(d, max(r, 1.0));
     }
 
+    float hash12(float2 p) {
+        return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+    }
+
+    float vnoise(float2 p) {
+        float2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash12(i), hash12(i + float2(1, 0)), f.x),
+                   mix(hash12(i + float2(0, 1)), hash12(i + float2(1, 1)), f.x), f.y);
+    }
+
+    // Water never holds a perfect shape: a slow two-octave flow warps the field. It is anchored at the
+    // pin in screen space (one fixed environment), so it never turns with the cursor, and it is driven
+    // by time alone, so the surface keeps moving even when you hold perfectly still.
+    float2 waterWarp(float2 p, float2 pin, float amp, float scale, float t) {
+        float2 q = (p - pin) / scale;
+        float2 w = float2(vnoise(q + float2(t * 0.21, 0.0)) - 0.5,
+                          vnoise(q + float2(0.0, t * 0.17) + 7.3) - 0.5);
+        // A gentler second swell (never fine ripples: water at this size is smooth).
+        w += 0.28 * float2(vnoise(q * 1.7 + float2(-t * 0.29, 3.1)) - 0.5,
+                           vnoise(q * 1.7 + float2(t * 0.25, 9.7)) - 0.5);
+        return p + w * amp;
+    }
+
     // Pillow profile: rises steeply at the silhouette and flattens toward the core,
     // scaled by the local tube radius so a thin neck reads as a round thread.
     float pillow(float2 f) {
@@ -348,7 +375,14 @@ final class ObsidianBlobMetal {
         uint sp = min(u.spineCount, n);
         float k = max(u.fillet, 1.0);
 
-        float2 f0 = blobField(p, circles, n, sp, k);
+        float2 wPin = (n >= 2u) ? circles[n - 2].xy : float2(0.0);
+        // Amplitude scales with the blob (k is the fillet width, ~0.22 × rest radius) and is capped by the
+        // local thickness, so a thin neck ripples a little instead of tearing.
+        float wAmp = 0.62 * k;
+        float wScale = max(wAmp * 6.5, 24.0);
+        float2 f00 = blobField(p, circles, n, sp, k);
+        float wAmpL = min(wAmp, 0.5 * f00.y);
+        float2 f0 = blobField(waterWarp(p, wPin, wAmpL, wScale, u.time), circles, n, sp, k);
 
         // Obsidian facets live in ONE fixed environment: a screen-aligned cell field anchored at the
         // pin. The liquid moves through it, so the cells never turn, stretch or re-orient when the
@@ -375,8 +409,8 @@ final class ObsidianBlobMetal {
 
         float h = pillow(f0);
         float e = 1.5;
-        float hx = pillow(blobField(p + float2(e, 0.0), circles, n, sp, k)) - h;
-        float hy = pillow(blobField(p + float2(0.0, e), circles, n, sp, k)) - h;
+        float hx = pillow(blobField(waterWarp(p + float2(e, 0.0), wPin, wAmpL, wScale, u.time), circles, n, sp, k)) - h;
+        float hy = pillow(blobField(waterWarp(p + float2(0.0, e), wPin, wAmpL, wScale, u.time), circles, n, sp, k)) - h;
         float3 N = normalize(float3(-hx * 4.8, -hy * 4.8, 1.0));
         // Flat conchoidal planes: each cell tilts the surface its own way.
         float2 tilt = (cell.zw - 0.5) * 2.0;
@@ -387,33 +421,42 @@ final class ObsidianBlobMetal {
         float3 L = normalize(float3(u.lightDir.x, u.lightDir.y, 0.85));
 
         float thick = saturate(h);
-        float3 dark = u.baseColor.xyz * 0.35 + float3(0.02, 0.025, 0.04);
+        float3 dark = u.baseColor.xyz * 0.30 + float3(0.014, 0.011, 0.009);
         float3 glow = u.glow.xyz;
-        float tAmt = saturate(u.transmission) * (0.38 + 1.0 * pow(1.0 - thick, 1.6));
+        float tAmt = saturate(u.transmission) * (0.14 + 1.05 * pow(1.0 - thick, 1.9));
         float3 beer = exp(-u.absorb.xyz * thick * 1.7);
         float3 body = mix(dark, glow * beer, tAmt);
-        body += float3(0.018, 0.02, 0.028) * (0.35 + 0.65 * thick);
+        body += float3(0.012, 0.009, 0.007) * (0.35 + 0.65 * thick);
 
         float ndl = saturate(dot(N, L));
         float wrap = saturate(dot(N, normalize(float3(-L.x, -L.y, 0.9))) * 0.5 + 0.5);
         body *= 0.55 + 0.55 * ndl + 0.25 * wrap;
 
         float fres = pow(1.0 - saturate(dot(N, V)), 2.2) * (0.55 + u.fresnel);
-        body += fres * float3(0.85, 0.9, 1.0) * 0.6;
+        body += fres * float3(1.0, 0.72, 0.42) * 0.36;
 
         float3 H = normalize(L + V);
         float gloss = mix(12.0, 48.0, saturate(u.shininess));
         float spec = pow(saturate(dot(N, H)), gloss) * (0.45 + u.shininess);
-        body += spec * float3(1.0) * 1.1 * (1.0 - 0.45 * saturate(u.facet));
+        body += spec * float3(1.0, 0.94, 0.86) * 1.1 * (1.0 - 0.45 * saturate(u.facet));
 
         // Faint bright seams where planes meet, plus a per-facet glint that wakes up as the
         // light swings with the motion.
         float seam = 1.0 - smoothstep(0.0, 0.07, cell.y);
-        body += seam * u.facet * 0.12 * float3(0.75, 0.85, 1.0) * (0.4 + 0.6 * thick);
+        body += seam * u.facet * 0.12 * float3(1.0, 0.62, 0.22) * (0.4 + 0.6 * thick);
         // Sharp, snap-on glints: only facets whose plane lines up with the light flash, and
         // they flash hard rather than shimmer. Moving the light (i.e. the mouse) sweeps them.
         float glint = smoothstep(0.972, 0.996, dot(N, H)) * (0.35 + 0.65 * cell.w);
-        body += glint * u.facet * 0.9 * float3(1.0, 0.97, 0.92) * (1.0 - seam);
+        body += glint * u.facet * 0.9 * float3(1.0, 0.90, 0.74) * (1.0 - seam);
+
+        // Ember: a slow, slightly irregular pulse (two out-of-step sines) of amber light from inside.
+        // It pools in the thin edges and crackles faintly along the facet seams.
+        float pulse = 0.65 * (0.5 + 0.5 * sin(u.time * 2.1)) + 0.35 * (0.5 + 0.5 * sin(u.time * 3.4 + 1.3));
+        float emberAmt = u.ember * (0.35 + 0.65 * pulse);
+        float3 emberCol = float3(1.0, 0.42, 0.07);
+        body += emberCol * emberAmt * (0.10 * pow(1.0 - thick, 1.3) + 0.05 * thick * thick);
+        float crackle = 0.5 + 0.5 * sin(u.time * 1.7 + cell.z * 6.2831);
+        body += emberCol * emberAmt * seam * saturate(u.facet) * (0.35 + 0.65 * crackle) * 0.9;
 
         // Interleaved-gradient-noise dither: near-black gradients band badly at 8 bits.
         float ign = fract(52.9829189 * fract(dot(in.position.xy, float2(0.06711056, 0.00583715))));
@@ -423,4 +466,22 @@ final class ObsidianBlobMetal {
         return float4(body * a, a);
     }
     """
+}
+
+/// Black obsidian with deep amber light bleeding through the thin parts. One definition, used by
+/// the live view and the headless preview so they cannot drift apart.
+enum ObsidianPalette {
+    /// Colour of transmitted light: deep red-amber (0) to hot amber (1).
+    static func glow(warmth: Float) -> SIMD3<Float> {
+        let w = min(1, max(0, warmth))
+        let deep = SIMD3<Float>(0.78, 0.26, 0.04)
+        let hot = SIMD3<Float>(1.0, 0.60, 0.14)
+        return deep + (hot - deep) * w
+    }
+
+    /// Beer-Lambert absorption: thick glass eats blue and green first, so the core goes black and the
+    /// thin edges stay amber. `depth` is the Feel Lab "absorption" knob.
+    static func absorb(depth: Float) -> SIMD3<Float> {
+        SIMD3(0.85 + 0.8 * depth, 1.9 + 1.2 * depth, 3.2 + 1.4 * depth)
+    }
 }
