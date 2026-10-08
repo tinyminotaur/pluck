@@ -299,9 +299,19 @@ public enum PresetLibrary {
                     "restRadius": 42, "magnetPull": 80, "magnetWeight": 0.92, "magnetStick": 0.15, "reachGain": 2.3,
                     "idleLife": 0.4, "glassOpacity": 0.96, "shadowStrength": 0.35,
                    ], style: .crystal),
+        FeelPreset(id: "binary-star", name: "Binary Star", tagline: "A heavy body and a light one; dust orbits and streams between them",
+                   themeID: "molten-gold", values: [
+                    "restRadius": 44, "magnetPull": 85, "magnetWeight": 0.9, "magnetStick": 0.2, "reachGain": 2.2,
+                    "idleLife": 0.4, "glassOpacity": 0.97, "shadowStrength": 0.35,
+                   ], style: .gravity),
+        FeelPreset(id: "deep-space", name: "Deep Space", tagline: "A cold blue planet and its moon, trailing glittering rings",
+                   themeID: "deep-sea", values: [
+                    "restRadius": 40, "magnetPull": 70, "magnetWeight": 0.88, "magnetStick": 0.25, "reachGain": 2.0,
+                    "idleLife": 0.5, "glassOpacity": 0.96, "shadowStrength": 0.3,
+                   ], style: .gravity),
     ]
 
-    /// Every preset: the liquid ones, then ferrofluid and crystal.
+    /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.
     public static var everything: [FeelPreset] { all + styled }
 
     public static func preset(id: String) -> FeelPreset? { (all + styled).first { $0.id == id } }

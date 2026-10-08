@@ -175,6 +175,7 @@ enum PreviewRender {
         let chords: [CGFloat] = [0, 150, 330, 330]
         let rows: [(AnimationStyle, LiquidTheme)] = [
             (.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst), (.crystal, ThemeLibrary.frost),
+            (.gravity, ThemeLibrary.moltenGold),
         ]
         let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
         guard let ctx = CGContext(
@@ -200,6 +201,17 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
+                } else if row.0 == .gravity {
+                    var a = AstroSim()
+                    a.params.bodyRadius = 30
+                    a.reset(pin: pin)
+                    var t: CGFloat = 0
+                    while t < 2.4 {
+                        let k = min(1, t / 0.9)
+                        a.step(dt: dt, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))))
+                        t += dt
+                    }
+                    prims = a.primitives(emerge: 1, headGlow: armed)
                 } else {
                     var cr = CrystalSim()
                     cr.reset(pin: pin, seed: UInt64(11 + r))
@@ -211,7 +223,7 @@ enum PreviewRender {
                     }
                     prims = cr.primitives(emerge: 1, headGlow: armed)
                 }
-                let look = ShapeListMetal.look(mode: row.0 == .ferro ? .ferro : .crystal, theme: row.1, time: 1.3)
+                let look = ShapeListMetal.look(mode: row.0 == .crystal ? .crystal : .ferro, theme: row.1, time: 1.3)
                 guard let img = shapes.render(size: tile, scale: scale, prims: prims, look: look) else { return 4 }
                 ctx.draw(img, in: CGRect(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale,
                                          width: tile.width * scale, height: tile.height * scale))

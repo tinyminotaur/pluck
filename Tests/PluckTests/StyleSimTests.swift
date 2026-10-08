@@ -144,7 +144,44 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 3)
+        XCTAssertEqual(AnimationStyle.allCases.count, 4)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
+    }
+}
+
+final class AstroSimTests: XCTestCase {
+    private func run(chord: CGFloat, seconds: CGFloat = 2) -> AstroSim {
+        var a = AstroSim()
+        let pin = CGPoint(x: 500, y: 500)
+        a.reset(pin: pin)
+        var t: CGFloat = 0
+        while t < seconds {
+            let k = min(1, t / 0.5)
+            a.step(dt: 1.0 / 120, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y))
+            t += 1.0 / 120
+        }
+        return a
+    }
+
+    func testThePinnedBodyPullsHarderAndDrainsAsTheHeadMovesAway() {
+        let near = run(chord: 60), far = run(chord: 500)
+        XCTAssertGreaterThan(far.gravity().pin, far.gravity().head)
+        XCTAssertGreaterThan(near.pinRadius, far.pinRadius)
+        XCTAssertGreaterThan(far.headRadius, near.headRadius)
+    }
+
+    func testGrainsStayFiniteAndBoundedWhileStretched() {
+        let a = run(chord: 700, seconds: 6)
+        let prims = a.primitives(emerge: 1)
+        XCTAssertEqual(prims.count > 2, true)
+        for p in prims { XCTAssertTrue(p.a.x.isFinite && p.a.y.isFinite && p.ra.isFinite) }
+        XCTAssertEqual(a.grainCount, AstroSim.Params().grains)
+    }
+
+    func testReleaseFinishes() {
+        var a = run(chord: 300)
+        a.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<100 { a.step(dt: 1.0 / 120, pin: CGPoint(x: 500, y: 500), head: CGPoint(x: 800, y: 500)) }
+        XCTAssertTrue(a.isFinished)
     }
 }

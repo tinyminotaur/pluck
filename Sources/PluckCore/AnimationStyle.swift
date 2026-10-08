@@ -7,12 +7,14 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case liquid
     case ferro
     case crystal
+    case gravity
 
     public var name: String {
         switch self {
         case .liquid: return "Liquid"
         case .ferro: return "Ferrofluid"
         case .crystal: return "Crystal"
+        case .gravity: return "Gravity"
         }
     }
 
@@ -21,6 +23,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .liquid: return "Stretchy liquid with a pinch-off"
         case .ferro: return "Spikes bristle toward the magnet; iron filings string the field"
         case .crystal: return "A crystal grows toward you, branching and evolving; it shatters on commit"
+        case .gravity: return "Two bodies: the heavy pin pulls harder, grains orbit and stream between them"
         }
     }
 }
