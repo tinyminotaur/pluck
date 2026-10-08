@@ -156,6 +156,7 @@ final class MetaballView: NSView {
 
     private func tick() {
         guard physicsRunning || emerge > 0.01 else { return }
+        CursorGuard.shared.checkIn()
         let now = CACurrentMediaTime()
         var dt = now - lastTick
         lastTick = now

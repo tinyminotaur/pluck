@@ -9,6 +9,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-preview") {
 
 // Menu-bar accessory: no Dock icon when packaged with LSUIElement; policy covers `swift run`.
 MainActor.assumeIsolated {
+    CursorGuard.installExitHooks()
     let app = NSApplication.shared
     let delegate = AppDelegate()
     app.delegate = delegate

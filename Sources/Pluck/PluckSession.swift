@@ -49,6 +49,7 @@ final class PluckSession: ObservableObject {
         if isActive { cancel() }
         engine.stop()
         showCursor()
+        CursorGuard.forceVisible()
         clipboardHistory.stop()
     }
 
@@ -90,6 +91,7 @@ final class PluckSession: ObservableObject {
 
     func pointerMoved(to location: CGPoint) {
         guard isActive, !finishing else { return }
+        CursorGuard.shared.checkIn()
         pointer = location
         let available = context?.items.map(\.role) ?? CompassRole.allCases
         let previous = capturedRole
@@ -158,6 +160,7 @@ final class PluckSession: ObservableObject {
         animTimer = nil
         overlay.hide()
         showCursor()
+        CursorGuard.forceVisible()
         context = nil
         capturedRole = nil
         engine.gestureDidEnd()
@@ -234,22 +237,14 @@ final class PluckSession: ObservableObject {
         }
     }
 
+    /// All cursor hiding goes through `CursorGuard` (one balanced hide, watchdog, exit hooks).
     private func hideCursor() {
-        // Hide repeatedly — AppKit can re-show the cursor when windows key.
-        for _ in 0..<4 { NSCursor.hide() }
-        CGDisplayHideCursor(CGMainDisplayID())
+        CursorGuard.shared.hide()
         cursorHidden = true
     }
 
     private func showCursor() {
-        if cursorHidden {
-            NSCursor.unhide()
-            cursorHidden = false
-        }
-        for _ in 0..<4 { NSCursor.unhide() }
-        CGDisplayShowCursor(CGMainDisplayID())
-        CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
+        CursorGuard.shared.show()
         cursorHidden = false
     }
-
 }

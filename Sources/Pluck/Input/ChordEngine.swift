@@ -314,6 +314,7 @@ final class ChordEngine {
         failsafeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.gestureActive else { return }
+                CursorGuard.shared.checkIn()
                 let now = CACurrentMediaTime()
                 let idle = now - self.lastActivityAt
                 let total = now - self.gestureStartedAt
@@ -331,9 +332,7 @@ final class ChordEngine {
     }
 
     private func forceCursorVisible() {
-        for _ in 0..<12 { NSCursor.unhide() }
-        CGDisplayShowCursor(CGMainDisplayID())
-        CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
+        CursorGuard.forceVisible()
     }
 
     static func mouseLocation() -> CGPoint {
