@@ -7,10 +7,13 @@ final class OverlayController {
     private var panel: NSPanel?
     private var blobView: MetaballView?
     private var screenFrame: CGRect = .zero
+    /// Where the current gesture started (global, y-up).
+    private var gesturePin: CGPoint = .zero
     private var reducedMotion = false
     private var commitWork: DispatchWorkItem?
 
     func show(pin: CGPoint, context: GrabContext, reducedMotion: Bool) {
+        gesturePin = pin
         self.reducedMotion = reducedMotion
         hide()
 
@@ -49,6 +52,11 @@ final class OverlayController {
         self.panel = panel
         self.blobView = view
         // Lock pin after pin/head are set in view space.
+        // Sample the cursor fresh on every display frame (mouse events arrive on their own, irregular schedule).
+        view.pointerProvider = { [weak self] in
+            guard let self else { return nil }
+            return self.headTarget(for: NSEvent.mouseLocation)
+        }
         view.startPhysics()
     }
 
@@ -64,16 +72,7 @@ final class OverlayController {
         // Head tracks pointer 1:1. Pin was locked in startPhysics — do not move it.
         // The drawn head is the pointer run through the screen-aware reach curve: exaggerated near the pin,
         // exactly 1:1 at the screen edge, with no length cap. Capture/commit still use the raw pointer.
-        let cfg = FeelLabConfig.shared
-        let virtual = GestureMath.reachHead(
-            pin: pin, pointer: pointer,
-            bounds: screenFrame.insetBy(dx: 8, dy: 8), gain: CGFloat(cfg.reachGain)
-        )
-        var target = toView(virtual)
-        if let v = blobView {   // never push the head off-screen
-            target.x = min(max(target.x, 8), v.bounds.width - 8)
-            target.y = min(max(target.y, 8), v.bounds.height - 8)
-        }
+        let target = headTarget(for: pointer)
         view.pointerTarget = target
         if reducedMotion { view.head = view.pointerTarget }   // no physics: the head is the (gained) pointer
         view.emerge = emerge
@@ -82,6 +81,21 @@ final class OverlayController {
         view.items = context?.items ?? []
         // Physics display-link redraws; still nudge for reduced-motion / first frame.
         if reducedMotion { view.needsDisplay = true }
+    }
+
+    /// The drawn head position for a raw global pointer position.
+    private func headTarget(for pointer: CGPoint) -> CGPoint {
+        let cfg = FeelLabConfig.shared
+        let virtual = GestureMath.reachHead(
+            pin: gesturePin, pointer: pointer,
+            bounds: screenFrame.insetBy(dx: 8, dy: 8), gain: CGFloat(cfg.reachGain)
+        )
+        var target = toView(virtual)
+        if let v = blobView {   // never push the head off-screen
+            target.x = min(max(target.x, 8), v.bounds.width - 8)
+            target.y = min(max(target.y, 8), v.bounds.height - 8)
+        }
+        return target
     }
 
     func commit(role: CompassRole?, pin: CGPoint, completion: @escaping () -> Void) {

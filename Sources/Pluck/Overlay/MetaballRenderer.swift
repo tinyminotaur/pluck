@@ -23,6 +23,8 @@ final class MetaballView: NSView {
     var head: CGPoint = .zero
     /// The raw cursor position the head is attracted to.
     var pointerTarget: CGPoint = .zero
+    /// When set, called once per display frame for the freshest head target (so motion never waits on mouse events).
+    var pointerProvider: (() -> CGPoint?)?
     var emerge: CGFloat = 0
     var bloom: CGFloat = 0
     var captured: CompassRole? {
@@ -80,7 +82,10 @@ final class MetaballView: NSView {
     private var bulbHead: CGFloat = 0
     private var swellPhase: [CGFloat] = []
     private var prevVelForAcc: CGPoint = .zero
+    private var velSlow: CGPoint = .zero
     private var headAcc: CGPoint = .zero
+    /// `headAcc` with a deadband: what the shape modes actually respond to.
+    private var headAccGated: CGPoint = .zero
 
     private var recoiling = false
     private var recoilSettled = false
@@ -257,6 +262,7 @@ final class MetaballView: NSView {
         var dt = lastLinkTimestamp == 0 ? 1.0 / 60 : link.timestamp - lastLinkTimestamp
         lastLinkTimestamp = link.timestamp
         dt = min(1.0 / 30.0, max(1.0 / 480.0, dt))
+        if !recoiling, let p = pointerProvider?() { pointerTarget = p }
         frameStep(dt: CGFloat(dt))
         presentMetal()
         updateCompassOverlay()
@@ -432,18 +438,12 @@ final class MetaballView: NSView {
     /// Fixed-timestep accumulator: physics always advances in fixed (`fixedStep`) so damping,
     /// spring feel and whip are identical on 60 Hz, 120 Hz and jittery frame pacing.
     private func tickFixed(frameDt: CGFloat) {
-        let h = Self.fixedStep
         updateHeadMotion(dt: frameDt)
 
-        accumulator += frameDt
-        var steps = Int(accumulator / h)
-        if steps > Self.maxSubsteps {
-            steps = Self.maxSubsteps
-            accumulator = 0
-        } else {
-            accumulator -= CGFloat(steps) * h
-        }
-        guard steps > 0 else { return }
+        // Equal substeps that exactly cover this frame. (A fixed step with a carried-over remainder aliases against
+        // the display: at 120 Hz it flips between 1, 2 and 3 steps, a ~4 ms time jump that shows as jitter.)
+        let steps = max(1, min(Self.maxSubsteps, Int((frameDt / Self.fixedStep).rounded())))
+        let h = frameDt / CGFloat(steps)
 
         if recoiling {
             integrateRecoil(steps: steps, h: h, frameDt: frameDt)
@@ -480,7 +480,10 @@ final class MetaballView: NSView {
     private func seedOrganicShape() {
         swellPhase = (0..<32).map { _ in CGFloat.random(in: 0..<(2 * .pi)) }
         headAcc = .zero
+        headAccGated = .zero
         prevVelForAcc = .zero
+        velSlow = .zero
+        lastStepH = 0
         time = CGFloat.random(in: 0..<200)
     }
 
@@ -501,10 +504,10 @@ final class MetaballView: NSView {
         var pinTarget = CGPoint(x: tetherA * cos(2 * axis), y: tetherA * sin(2 * axis))
         var headTarget = CGPoint(x: 0.6 * tetherA * cos(2 * axis), y: 0.6 * tetherA * sin(2 * axis))
         // The head also lurches along its own acceleration.
-        let accMag = hypot(headAcc.x, headAcc.y)
+        let accMag = hypot(headAccGated.x, headAccGated.y)
         if accMag > 1 {
-            let psi = atan2(headAcc.y, headAcc.x)
-            let a = min(0.14, accMag * 5e-5)
+            let psi = atan2(headAccGated.y, headAccGated.x)
+            let a = min(0.10, accMag * 3e-5)
             headTarget.x += a * cos(2 * psi); headTarget.y += a * sin(2 * psi)
         }
         // Gravity flattens a drop: wider than tall.
@@ -522,8 +525,8 @@ final class MetaballView: NSView {
         spring(&pinM2, &pinM2v, target: pinTarget, omega: 12, zeta: 0.20)
         spring(&headM2, &headM2v, target: headTarget, omega: 16, zeta: 0.20)
         // The triangular mode only rings after sharp accelerations: a little life without lumpiness.
-        let tri = min(0.06, accMag * 2e-5)
-        let psi3 = accMag > 1 ? atan2(headAcc.y, headAcc.x) : 0
+        let tri = min(0.04, accMag * 1.2e-5)
+        let psi3 = accMag > 1 ? atan2(headAccGated.y, headAccGated.x) : 0
         spring(&headM3, &headM3v, target: CGPoint(x: tri * cos(3 * psi3), y: tri * sin(3 * psi3)), omega: 21, zeta: 0.18)
         spring(&pinM3, &pinM3v, target: .zero, omega: 18, zeta: 0.2)
     }
@@ -663,15 +666,20 @@ final class MetaballView: NSView {
         )
         prevHead = head
 
-        // Smoothed head acceleration: the lumps lurch against it like jelly.
-        let dtA = max(dt, 1.0 / 240.0)
-        let rawAcc = CGPoint(x: (headVel.x - prevVelForAcc.x) / dtA, y: (headVel.y - prevVelForAcc.y) / dtA)
-        let accAlpha = GestureMath.smoothingAlpha(retain: 0.7, dt: dt)
-        headAcc = CGPoint(
-            x: max(-20000, min(20000, headAcc.x + (rawAcc.x - headAcc.x) * accAlpha)),
-            y: max(-20000, min(20000, headAcc.y + (rawAcc.y - headAcc.y) * accAlpha))
-        )
-        prevVelForAcc = headVel
+        // Head acceleration for the wobble. Differentiating a sub-pixel-quantised position twice amplifies noise by
+        // 1/dt^2, which is huge at 120 Hz: so filter the velocity first (~65 ms), differentiate, filter again, and
+        // ignore small values (a deadband) so only real accelerations make the bulbs lurch.
+        let dtA = max(dt, 1.0 / 480.0)
+        let slowAlpha = GestureMath.smoothingAlpha(retain: 0.78, dt: dt)
+        velSlow = CGPoint(x: velSlow.x + (headVel.x - velSlow.x) * slowAlpha, y: velSlow.y + (headVel.y - velSlow.y) * slowAlpha)
+        let rawAcc = CGPoint(x: (velSlow.x - prevVelForAcc.x) / dtA, y: (velSlow.y - prevVelForAcc.y) / dtA)
+        let accAlpha = GestureMath.smoothingAlpha(retain: 0.80, dt: dt)
+        let filt = CGPoint(x: headAcc.x + (rawAcc.x - headAcc.x) * accAlpha, y: headAcc.y + (rawAcc.y - headAcc.y) * accAlpha)
+        let fm = hypot(filt.x, filt.y)
+        let gate = smoothstep01((fm - 1500) / 2500)
+        headAcc = CGPoint(x: max(-20000, min(20000, filt.x * (fm > 0 ? 1 : 0))), y: max(-20000, min(20000, filt.y * (fm > 0 ? 1 : 0))))
+        headAccGated = CGPoint(x: headAcc.x * gate, y: headAcc.y * gate)
+        prevVelForAcc = velSlow
 
         // Soft-limit the speed that drives whip and slosh so one coalesced mouse event
         // (or a 5000 px/s flick) can't blow the chain up.
@@ -700,7 +708,12 @@ final class MetaballView: NSView {
     }
 
     /// One fixed physics step. `head` is the (possibly interpolated) head position for this step.
+    private var lastStepH: CGFloat = 0
+
     private func stepPhysics(dt: CGFloat, head: CGPoint) {
+        // Verlet's velocity is (x - xPrev); if the step length changed between frames, rescale it.
+        let hRatio = lastStepH > 0 ? dt / lastStepH : 1
+        lastStepH = dt
         let n = particleCount
         let params = mass
         let anchor = lockedPin
@@ -744,7 +757,7 @@ final class MetaballView: NSView {
         for i in 1..<(n - 1) {
             let cur = spine[i]
             let prv = prevSpine[i]
-            var vel = CGPoint(x: (cur.x - prv.x) * damping, y: (cur.y - prv.y) * damping)
+            var vel = CGPoint(x: (cur.x - prv.x) * damping * hRatio, y: (cur.y - prv.y) * damping * hRatio)
             let t = CGFloat(i) / CGFloat(n - 1)
             let mid = sin(.pi * t)
             // Natural meander: a slow lateral S-curve that never stops, so the strand is a flowing thread, not a
@@ -782,7 +795,7 @@ final class MetaballView: NSView {
                 + breathing
             let prev = slosh[i]
             let prv = prevSlosh[i]
-            var v = (prev - prv) * GestureMath.damping(0.9, dt: dt)
+            var v = (prev - prv) * GestureMath.damping(0.9, dt: dt) * hRatio
             v += (drive - prev) * 16 * step
             prevSlosh[i] = prev
             slosh[i] = prev + v
