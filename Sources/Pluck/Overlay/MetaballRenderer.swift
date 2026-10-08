@@ -126,6 +126,7 @@ final class MetaballView: NSView {
     private var debugLastPresent: CFTimeInterval = 0
     var debugRecordFrames = false
     var debugLiveMetal: Bool { liveMetal }
+    var debugHead: CGPoint { head }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)

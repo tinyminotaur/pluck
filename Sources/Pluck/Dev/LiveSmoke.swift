@@ -82,6 +82,15 @@ enum LiveSmoke {
                         print(String(format: "LiveSmoke: %d frames | avg %.1f ms (%.0f fps) | p50 %.1f | p95 %.1f | worst %.1f ms | >25ms: %d",
                                      iv.count, avg * 1000, 1 / avg, p50 * 1000, p95 * 1000, mx * 1000, slow))
                     }
+                    let pr = view.debugStylePrims()
+                    if !pr.isEmpty {
+                        let tight = pr.filter { $0.blend == .tight }
+                        if !tight.isEmpty {
+                            let xs = tight.map { Double($0.a.x) }, ys = tight.map { Double($0.a.y) }
+                            print("LiveSmoke: beads x \(Int(xs.min()!))...\(Int(xs.max()!)) y \(Int(ys.min()!))...\(Int(ys.max()!)) | head at (\(Int(view.debugHead.x)),\(Int(view.debugHead.y)))")
+                        }
+                        print("LiveSmoke: style prims \(pr.count) | beads \(tight.count)" + (tight.first.map { " first bead at (\(Int($0.a.x)),\(Int($0.a.y)) r=\(String(format: "%.1f", Double($0.ra)))" } ?? ""))
+                    }
                     view.stopPhysics()
                     FeelLabConfig.shared.styleID = savedStyle
                     FeelLabConfig.shared.themeID = savedTheme

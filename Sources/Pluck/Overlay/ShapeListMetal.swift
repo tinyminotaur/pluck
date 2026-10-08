@@ -268,9 +268,11 @@ final class ShapeListMetal {
             // (plus the blend reach), it can neither be the nearest nor change the blend. Skip the exact test.
             {
                 float4 Ab = pr[i * 3];
-                float2 mid = (Ab.xy + Ab.zw) * 0.5;
-                float reach = (int(pr[i * 3 + 1].z) & 3) == 0 ? 0.0 : length(Ab.zw - Ab.xy) * 0.5;
-                float bd = length(p - mid) - (reach + max(pr[i * 3 + 1].x, pr[i * 3 + 1].y * ((int(pr[i * 3 + 1].z) & 3) == 1 ? 1.0 : 0.0)));
+                int bk = int(pr[i * 3 + 1].z) & 3;
+                // A circle's second point is unused (zero): its centre is just `a`.
+                float2 mid = bk == 0 ? Ab.xy : (Ab.xy + Ab.zw) * 0.5;
+                float reach = bk == 0 ? 0.0 : length(Ab.zw - Ab.xy) * 0.5;
+                float bd = length(p - mid) - (reach + max(pr[i * 3 + 1].x, bk == 1 ? pr[i * 3 + 1].y : 0.0));
                 if (bd > d + max(kk, 0.5) && bd > 0.0) continue;
             }
             float di = primDist(p, pr, i, rr, uv, ax, L, W, TL);
