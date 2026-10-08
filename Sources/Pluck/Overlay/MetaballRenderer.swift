@@ -78,6 +78,7 @@ final class MetaballView: NSView {
     private var pearls = PearlSim()
     private var swarm = SwarmSim()
     private var tendrils = TendrilSim()
+    private var jumprope = JumpRopeSim()
     /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
     private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
@@ -201,6 +202,7 @@ final class MetaballView: NSView {
         pearls = PearlSim(); pearls.params.bodyRadius = radius * 0.72; pearls.reset(pin: lockedPin)
         swarm = SwarmSim(); swarm.params.bodyRadius = radius * 0.62; swarm.reset(pin: lockedPin)
         tendrils = TendrilSim(); tendrils.params.bodyRadius = radius * 0.66; tendrils.reset(pin: lockedPin)
+        jumprope = JumpRopeSim(); jumprope.params.bodyRadius = radius * 0.72; jumprope.reset(pin: lockedPin)
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -328,6 +330,7 @@ final class MetaballView: NSView {
             case .pearls: pearls.step(dt: h, pin: lockedPin, head: head)
             case .swarm: swarm.step(dt: h, pin: lockedPin, head: head)
             case .tendrils: tendrils.step(dt: h, pin: lockedPin, head: head)
+            case .jumprope: jumprope.step(dt: h, pin: lockedPin, head: head)
             case .liquid: break
             }
         }
@@ -342,6 +345,7 @@ final class MetaballView: NSView {
         case .pearls: return pearls.isFinished
         case .swarm: return swarm.isFinished
         case .tendrils: return tendrils.isFinished
+        case .jumprope: return jumprope.isFinished
         }
     }
 
@@ -393,6 +397,7 @@ final class MetaballView: NSView {
         case .pearls: return pearls.primitives(emerge: emerge, headGlow: glow)
         case .swarm: return swarm.primitives(emerge: emerge, headGlow: glow)
         case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
+        case .jumprope: return jumprope.primitives(emerge: emerge, headGlow: glow)
         case .liquid: return []
         }
     }
@@ -716,6 +721,8 @@ final class MetaballView: NSView {
             swarm.release(commit: role != nil ? actionDirection() : nil)
         case .tendrils:
             tendrils.release(commit: role != nil ? actionDirection() : nil)
+        case .jumprope:
+            jumprope.release(commit: role != nil ? actionDirection() : nil)
         }
     }
 

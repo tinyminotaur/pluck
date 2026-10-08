@@ -8,44 +8,53 @@ struct FeelGuideView: View {
     @State private var axOK = Permissions.accessibilityTrusted
     @State private var lastResult = "—"
     @State private var poll: Task<Void, Never>?
+    @State private var tab: Tab = Tab(rawValue: UserDefaults.standard.string(forKey: "feelLab.tab") ?? "") ?? .looks
+    @State private var styleFilter: String = "all"
+
+    enum Tab: String, CaseIterable, Identifiable {
+        case looks, feel, trigger, advanced, help
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .looks: return "Looks"
+            case .feel: return "Feel"
+            case .trigger: return "Trigger"
+            case .advanced: return "Advanced"
+            case .help: return "Help"
+            }
+        }
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
                 header
-                instructions
-                safetyBox
-                resultRow
-                actionsRow
-
-                looksSection
-
-                Divider().padding(.vertical, 4)
-
-                Text("Blob studio")
-                    .font(.headline)
-
-                Text("Changes apply on the next gesture (and live while a gesture is active).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                massSection
-                distributionSection
-                triggerSection
-                fidgetSection
-                physicsSection
-                lookSection
-                gooSection
-
-                HStack {
-                    Button("Reset all knobs") { config.resetToDefaults() }
-                    Spacer()
+                Picker("", selection: $tab) {
+                    ForEach(Tab.allCases) { Text($0.title).tag($0) }
                 }
-                .padding(.top, 4)
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: tab) { _, new in UserDefaults.standard.set(new.rawValue, forKey: "feelLab.tab") }
             }
-            .padding(20)
+            .padding([.horizontal, .top], 18)
+            .padding(.bottom, 10)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    switch tab {
+                    case .looks: looksTab
+                    case .feel: feelTab
+                    case .trigger: triggerTab
+                    case .advanced: advancedTab
+                    case .help: helpTab
+                    }
+                }
+                .padding(18)
+            }
+            Divider()
+            footer
         }
-        .frame(minWidth: 460, idealWidth: 480, maxWidth: 520, minHeight: 560)
+        .frame(minWidth: 460, idealWidth: 500, maxWidth: 560, minHeight: 560)
         .onAppear {
             NotificationCenter.default.addObserver(
                 forName: .pluckFeelResult,
@@ -68,6 +77,172 @@ struct FeelGuideView: View {
         .onDisappear { poll?.cancel() }
     }
 
+    // MARK: - Tabs
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Text("Last: \(lastResult)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Spacer()
+            Button("Reset pointer") { NotificationCenter.default.post(name: .pluckResetHard, object: nil) }
+                .controlSize(.small)
+                .help("If the cursor ever looks stuck or hidden")
+            Text("Esc cancels · ⌃⌥⌘P quits").font(.caption2).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func sectionTitle(_ text: String, _ sub: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(text).font(.headline)
+            if let sub { hint(sub) }
+        }
+    }
+
+    private static let styleIcons: [String: String] = [
+        "liquid": "drop.fill", "ferro": "bolt.fill", "crystal": "diamond.fill", "gravity": "moon.stars.fill",
+        "pearls": "circle.grid.3x3.fill", "swarm": "sparkles", "tendrils": "leaf.fill", "jumprope": "figure.jumprope",
+    ]
+
+    private var looksTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("Style", "How it moves and what it's made of. Pick one, then a preset or colours below.")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(AnimationStyle.allCases, id: \.rawValue) { st in styleCard(st) }
+            }
+
+            sectionTitle("Presets", "A style, its physics and its colours together.")
+            Picker("", selection: $styleFilter) {
+                Text("All").tag("all")
+                ForEach(AnimationStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: 200, alignment: .leading)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(PresetLibrary.everything.filter { styleFilter == "all" || $0.style.rawValue == styleFilter }) { p in presetCard(p) }
+            }
+
+            sectionTitle("Colours", "Keep the current feel and change only the look.")
+            themeStrip
+        }
+    }
+
+    private func styleCard(_ st: AnimationStyle) -> some View {
+        let selected = config.styleID == st.rawValue
+        return Button { config.styleID = st.rawValue } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: Self.styleIcons[st.rawValue] ?? "circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 26, height: 26)
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(st.name).font(.caption.weight(.semibold))
+                    Text(st.tagline).font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(selected ? Color.accentColor : Color.clear, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var themeStrip: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(ThemeLibrary.all) { t in themeChip(t) }
+                    if let custom = config.customTheme { themeChip(custom) }
+                    Button { config.surpriseMe() } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "dice")
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(width: 36, height: 36)
+                                .background(Circle().fill(Color.accentColor.opacity(0.18)))
+                            Text("Surprise").font(.system(size: 9))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("A random harmonious palette")
+                }
+                .padding(.vertical, 2)
+            }
+            hint("Now: \(config.theme.name)")
+        }
+    }
+
+    private var feelTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("How it feels", "The few controls that matter most. Changes show on the next pull.")
+            simpleKnob("Size", "How big the blob is at rest.", value: $config.restRadius, range: 24...110, format: "%.0f")
+            simpleKnob("Stretchiness", "How much material the thread draws out of the ends as you pull.", value: $config.stretchPull, range: 0...1.4, format: "%.2f")
+            simpleKnob("Follow speed", "How quickly the blob chases your cursor. Higher is snappier.", value: $config.magnetPull, range: 25...120, format: "%.0f")
+            simpleKnob("Weight", "Heavy and slow to settle, or light and quick.", value: $config.magnetWeight, range: 0.3...1.1, format: "%.2f")
+            simpleKnob("Reach", "How far a small hand movement stretches it across the screen.", value: $config.reachGain, range: 0...4, format: "%.1f")
+            simpleKnob("Bounce on release", "The wobble when it snaps back.", value: $config.recoilBounce, range: 0...1, format: "%.2f")
+            simpleKnob("Gravity", "How much it sags and pools downward.", value: $config.gravity, range: 0...1.5, format: "%.2f")
+            simpleKnob("Aliveness", "How much it breathes and drifts when you hold still.", value: $config.idleLife, range: 0...1.5, format: "%.2f")
+            simpleKnob("Flick momentum", "How far it overshoots when you flick and let go.", value: $config.flingMomentum, range: 0...1.2, format: "%.2f")
+            Divider()
+            Toggle("Meeting mode (smaller and quieter)", isOn: $config.meetingMode)
+            Toggle("Trackpad haptic ticks", isOn: $config.hapticsEnabled)
+            Toggle("Soft sounds", isOn: $config.soundEnabled)
+            HStack {
+                Spacer()
+                Button("Reset all to defaults") { config.resetToDefaults() }
+                    .controlSize(.small)
+            }
+        }
+        .font(.callout)
+    }
+
+    private func simpleKnob(_ title: String, _ blurb: String, value: Binding<Double>, range: ClosedRange<Double>, format: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title).font(.callout.weight(.medium))
+                Spacer()
+                Text(String(format: format, value.wrappedValue)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: range)
+            Text(blurb).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private var triggerTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("How you start it", "Pluck only listens. It never clicks or types for you. Pick whichever suits your hands.")
+            triggerSection
+        }
+    }
+
+    private var advancedTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            hint("Fine controls for tuning by hand. Most people never need these.")
+            DisclosureGroup("Mass distribution") { VStack(spacing: 10) { massSection; distributionSection }.padding(.top, 6) }
+            DisclosureGroup("Physics") { physicsSection.padding(.top, 6) }
+            DisclosureGroup("Optics (glass)") { lookSection.padding(.top, 6) }
+            DisclosureGroup("Metaball field") { gooSection.padding(.top, 6) }
+            DisclosureGroup("Fidget extras") { fidgetSection.padding(.top, 6) }
+        }
+    }
+
+    private var helpTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("How it works")
+            instructions
+            safetyBox
+            actionsRow
+        }
+    }
+
     private var header: some View {
         HStack {
             Label("Feel Lab (safe)", systemImage: "drop.fill")
@@ -84,12 +259,12 @@ struct FeelGuideView: View {
 
     private var instructions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Listen-only. Hold both buttons → stretch → release. Escape cancels.")
+            Text("Listen-only: nothing is ever clicked or typed for you.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            step(1, "Hold left, then right (or reverse)")
-            step(2, "Blob eats the cursor — move to stretch")
-            step(3, "Aim N/E/S/W · release to select")
+            step(1, "Start it: hold ⌥ or Hyper, rest three fingers, or hold both mouse buttons (see Trigger)")
+            step(2, "Move: the blob stretches from where you started and follows your cursor anywhere on screen")
+            step(3, "Aim toward a direction to arm its action, then release to choose it. Esc cancels")
         }
     }
 

@@ -324,6 +324,11 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 55, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
                     "idleLife": 0.6, "glassOpacity": 0.95, "shadowStrength": 0.3,
                    ], style: .tendrils),
+        FeelPreset(id: "jump-rope", name: "Jump Rope", tagline: "A little critter hops the rope in the middle of the span",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
+                    "idleLife": 0.5, "glassOpacity": 0.97, "shadowStrength": 0.35,
+                   ], style: .jumprope),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.

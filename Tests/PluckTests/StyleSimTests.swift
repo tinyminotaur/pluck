@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 7)
+        XCTAssertEqual(AnimationStyle.allCases.count, 8)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -224,5 +224,17 @@ final class DelightSimTests: XCTestCase {
             t.step(dt: 1 / 120, pin: pin, head: head(1, 300))
         }
         XCTAssertTrue(p.isFinished && s.isFinished && t.isFinished)
+    }
+
+    func testCritterHopsOverTheRopeAndLandsBack() {
+        var j = JumpRopeSim(); j.reset(pin: pin)
+        var maxLift: CGFloat = 0, grounded = 0
+        for i in 0..<800 {
+            j.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 60), 500))
+            if i > 150 { maxLift = max(maxLift, j.critterLift); if j.critterLift < 0.5 { grounded += 1 } }
+        }
+        XCTAssertGreaterThan(maxLift, 15)       // it actually leaves the ground
+        XCTAssertGreaterThan(grounded, 100)     // and spends time landed
+        XCTAssertTrue(j.primitives(emerge: 1).allSatisfy { $0.a.x.isFinite && $0.a.y.isFinite })
     }
 }

@@ -11,6 +11,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case pearls
     case swarm
     case tendrils
+    case jumprope
 
     public var name: String {
         switch self {
@@ -21,6 +22,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .pearls: return "Pearls"
         case .swarm: return "Fireflies"
         case .tendrils: return "Tendrils"
+        case .jumprope: return "Jump Rope"
         }
     }
 
@@ -33,6 +35,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .pearls: return "A beaded necklace on rope physics: it sags, swings and flings its pearls"
         case .swarm: return "A swarm of glowing fireflies hovers at the pin and streams toward you"
         case .tendrils: return "Tentacles reach for the cursor, undulating and tapering to fine tips"
+        case .jumprope: return "Two turners swing a rope; a little critter hops it at the middle of the span"
         }
     }
 }

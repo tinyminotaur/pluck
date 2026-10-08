@@ -318,3 +318,151 @@ public struct TendrilSim: Sendable {
         return out
     }
 }
+
+/// Jump rope: the pin and head are the two turners, the rope swings between them in a vertical plane (seen side-on:
+/// a loop that rises over, then dips under the middle), and a little round critter with floppy ears stands at the
+/// centre of the span and hops the rope each time it sweeps under its feet, landing with a squash. The ears and
+/// tail lag the body. Commit: the critter bounds off along the pull and the rope falls slack.
+public struct JumpRopeSim: Sendable {
+    public struct Params: Equatable, Sendable {
+        public var bodyRadius: CGFloat = 30
+        public var links: Int = 28
+        /// Rope turns per second.
+        public var turnRate: CGFloat = 1.15
+        public var dumbbell = DumbbellMass.Params()
+        public init() {}
+    }
+    public var params: Params
+    private var pin = CGPoint.zero, head = CGPoint.zero
+    private var flow: DumbbellMass.Solution?
+    private var sol = DumbbellMass.Solution(pin: 1, head: 1, waist: 1)
+    private var phase: CGFloat = 0
+    private var time: CGFloat = 0
+    private var releaseT: CGFloat = -1
+    private var releaseDir = CGPoint(x: 1, y: 0)
+    private var earLag: CGFloat = 0, earLagV: CGFloat = 0
+    private var lastLift: CGFloat = 0
+    private var squash: CGFloat = 0, squashV: CGFloat = 0
+    private var lift: CGFloat = 0
+    public init(params: Params = Params()) { self.params = params }
+    public var isFinished: Bool { releaseT > 0.7 }
+    /// 0...1 how much of the toy is shown (grows in as the head pulls away).
+    public var reachAmount: CGFloat { StyleHash.smoothstep(40, 220, hypot(head.x - pin.x, head.y - pin.y)) }
+    public var critterLift: CGFloat { lift }
+
+    public mutating func reset(pin: CGPoint) {
+        self.pin = pin; head = pin; phase = 0; time = 0; releaseT = -1; flow = nil
+        earLag = 0; earLagV = 0; lastLift = 0; squash = 0; squashV = 0; lift = 0
+        sol = DumbbellMass.solve(params.dumbbell, length: 0)
+    }
+
+    private func axes() -> (mid: CGPoint, along: CGPoint, up: CGPoint, chord: CGFloat) {
+        let dx = head.x - pin.x, dy = head.y - pin.y
+        let chord = hypot(dx, dy)
+        let along = chord > 1 ? CGPoint(x: dx / chord, y: dy / chord) : CGPoint(x: 1, y: 0)
+        var up = CGPoint(x: -along.y, y: along.x)
+        if up.y < 0 || (abs(up.y) < 1e-6 && up.x < 0) { up = CGPoint(x: -up.x, y: -up.y) }   // "up" is the screen's up
+        return (CGPoint(x: (pin.x + head.x) / 2, y: (pin.y + head.y) / 2), along, up, chord)
+    }
+
+    public mutating func step(dt: CGFloat, pin newPin: CGPoint, head newHead: CGPoint) {
+        guard dt > 0 else { return }
+        time += dt
+        pin = newPin; head = newHead
+        let ax = axes()
+        let target = DumbbellMass.solve(params.dumbbell, length: ax.chord)
+        var f = flow ?? target
+        let k = CGFloat(1 - exp(-Double(dt) / 0.05))
+        f = .init(pin: f.pin + (target.pin - f.pin) * k, head: f.head + (target.head - f.head) * k, waist: target.waist)
+        flow = f
+        let rs = params.bodyRadius / params.dumbbell.restRadius
+        sol = .init(pin: f.pin * rs, head: f.head * rs, waist: f.waist)
+
+        // The rope turns; the critter hops as it sweeps under (rope phase 3*pi/2: rising through the feet).
+        phase += 2 * .pi * params.turnRate * dt * (releaseT >= 0 ? 0.2 : 1)
+        var p = phase.truncatingRemainder(dividingBy: 2 * .pi)
+        if p < 0 { p += 2 * .pi }
+        let toPass = p - 1.5 * .pi                              // 0 at the instant the rope is under the feet
+        let hop = abs(toPass) < 0.55 * .pi ? 1 - pow(abs(toPass) / (0.55 * .pi), 2) : 0
+        // Lead the jump a touch so the feet leave before the rope arrives.
+        let air = max(0, hop)
+        let rest = params.bodyRadius * 0.9
+        lift = air * rest * 1.15 * reachAmount
+        // Landing squash when the lift falls back to the ground, and ears lag the vertical motion.
+        let vy = (lift - lastLift) / dt
+        lastLift = lift
+        if lift < 0.5 && vy < -1 { squashV += min(2, -vy * 0.004) }
+        var sq = CGPoint(x: squash, y: 0), sv = CGPoint(x: squashV, y: 0)
+        RecoilSpring.step(x: &sq, v: &sv, omega: 22, zeta: 0.28, h: dt)
+        squash = sq.x; squashV = sv.x
+        let earTarget = -vy * 0.012
+        var d = CGPoint(x: earLag - earTarget, y: 0), dv = CGPoint(x: earLagV, y: 0)
+        RecoilSpring.step(x: &d, v: &dv, omega: 16, zeta: 0.25, h: dt)
+        earLag = earTarget + d.x; earLagV = dv.x
+        if releaseT >= 0 { releaseT += dt }
+    }
+
+    public mutating func release(commit direction: CGPoint?) {
+        releaseT = 0
+        if let d = direction { releaseDir = d }
+    }
+
+    public func primitives(emerge: CGFloat, headGlow: CGFloat = 0) -> [ShapePrim] {
+        let e = max(0, min(1.15, emerge))
+        guard e > 0.01 else { return [] }
+        let fade = releaseT >= 0 ? max(0, 1 - releaseT / 0.6) : 1
+        let ax = axes()
+        let reach = reachAmount
+        var out: [ShapePrim] = []
+        // The turners.
+        out.append(ShapePrim(kind: .circle, a: pin, ra: sol.pin * 0.8 * e * (0.5 + 0.5 * fade), blend: .soft))
+        out.append(ShapePrim(kind: .circle, a: head, ra: max(sol.head, 6) * 0.8 * e * (1 + 0.12 * headGlow) * (0.5 + 0.5 * fade),
+                             blend: .soft, emphasis: headGlow))
+        guard reach > 0.02 else { return out }
+
+        // The rope: a loop in the vertical plane. Height at s along the span, sagging slightly behind the turn.
+        let amp = min(ax.chord * 0.32, 150) * reach * (releaseT >= 0 ? max(0, 1 - releaseT / 0.4) : 1)
+        let L = params.links
+        func ropePoint(_ s: CGFloat) -> CGPoint {
+            let swing = CGFloat(cos(Double(phase - 0.25 * sin(Double(.pi * s)))))
+            let v = amp * CGFloat(sin(Double(.pi * s))) * swing
+            let hang: CGFloat = releaseT >= 0 ? min(1, releaseT * 2) * 0.35 * ax.chord * CGFloat(sin(Double(.pi * s))) : 0
+            return CGPoint(x: pin.x + (head.x - pin.x) * s + ax.up.x * (v - hang),
+                           y: pin.y + (head.y - pin.y) * s + ax.up.y * (v - hang))
+        }
+        let rr = max(2.0, params.bodyRadius * 0.09) * e * fade
+        var prev = ropePoint(0)
+        for j in 1...L {
+            let cur = ropePoint(CGFloat(j) / CGFloat(L))
+            out.append(ShapePrim(kind: .cone, a: prev, b: cur, ra: rr, rb: rr, blend: .tight))
+            prev = cur
+        }
+
+        // The critter, standing on the span's centre line and hopping the rope.
+        let R = params.bodyRadius * 0.85 * e * reach
+        let sqx = 1 + 0.22 * squash, sqy = 1 - 0.22 * squash
+        var base = CGPoint(x: ax.mid.x + ax.up.x * (R * 0.95 * sqy + lift), y: ax.mid.y + ax.up.y * (R * 0.95 * sqy + lift))
+        if releaseT >= 0 {
+            let t = releaseT
+            base.x += releaseDir.x * 380 * t; base.y += releaseDir.y * 380 * t + (300 * t - 900 * t * t) * 0.3
+        }
+        let cf = (releaseT >= 0 ? fade : 1)
+        func at(_ u: CGFloat, _ w: CGFloat) -> CGPoint {   // u along the span, w along "up" from the body centre
+            CGPoint(x: base.x + ax.along.x * u * sqx + ax.up.x * w * sqy, y: base.y + ax.along.y * u * sqx + ax.up.y * w * sqy)
+        }
+        out.append(ShapePrim(kind: .circle, a: base, ra: R * cf * (1 + 0.04 * (sqy - 1)), blend: .soft))
+        // Ears: two small round ears that flop with the hop.
+        let flop = max(-R * 0.6, min(R * 0.6, earLag * R))
+        out.append(ShapePrim(kind: .cone, a: at(-R * 0.45, R * 0.7), b: at(-R * 0.75, R * 1.45 + flop), ra: R * 0.30 * cf, rb: R * 0.18 * cf, blend: .soft))
+        out.append(ShapePrim(kind: .cone, a: at(R * 0.45, R * 0.7), b: at(R * 0.75, R * 1.45 + flop), ra: R * 0.30 * cf, rb: R * 0.18 * cf, blend: .soft))
+        // Feet and a little tail.
+        let tuck = lift > 1 ? 0.5 : 0
+        out.append(ShapePrim(kind: .circle, a: at(-R * 0.45, -R * (0.95 - tuck)), ra: R * 0.30 * cf, blend: .soft))
+        out.append(ShapePrim(kind: .circle, a: at(R * 0.45, -R * (0.95 - tuck)), ra: R * 0.30 * cf, blend: .soft))
+        out.append(ShapePrim(kind: .circle, a: at(-R * 1.1, -R * 0.15 - flop * 0.4), ra: R * 0.22 * cf, blend: .soft))
+        // Eyes: two glints on the front of the body.
+        out.append(ShapePrim(kind: .circle, a: at(-R * 0.30, R * 0.15), ra: R * 0.13 * cf, blend: .hard, emphasis: 1))
+        out.append(ShapePrim(kind: .circle, a: at(R * 0.30, R * 0.15), ra: R * 0.13 * cf, blend: .hard, emphasis: 1))
+        return out
+    }
+}
