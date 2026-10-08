@@ -48,31 +48,37 @@ public enum GestureMath {
         hypot(a.x - b.x, a.y - b.y)
     }
 
-    /// Pointer distance over which the extra gain ramps in (1x at the pin, up to 1 + boost beyond this).
-    public static let gainRamp: CGFloat = 140
-
-    /// Drawn pull length for a raw pointer distance. Near the pin it is 1:1 (fine control); further out the
-    /// gain ramps up so a short trackpad motion reads as a long pull, then it soft-saturates toward
-    /// `maxLength` instead of stopping dead. Monotonic, so the liquid always keeps stretching while you pull.
-    public static func virtualLength(_ d: CGFloat, gainBoost: CGFloat, maxLength: CGFloat) -> CGFloat {
-        let x = max(0, d)
-        let s = min(1, x / gainRamp)
-        let smooth = s * s * (3 - 2 * s)
-        let v = x * (1 + max(0, gainBoost) * smooth)
-        let knee = maxLength * 0.75
-        if v <= knee { return v }
-        let room = maxLength - knee
-        return knee + room * CGFloat(tanh(Double((v - knee) / room)))
+    /// Distance from `pin` to the edge of `rect` along the unit direction `dir` (0 if the pin is outside).
+    public static func rayDistance(from pin: CGPoint, direction dir: CGPoint, in rect: CGRect) -> CGFloat {
+        var t = CGFloat.greatestFiniteMagnitude
+        if dir.x > 1e-6 { t = min(t, (rect.maxX - pin.x) / dir.x) } else if dir.x < -1e-6 { t = min(t, (rect.minX - pin.x) / dir.x) }
+        if dir.y > 1e-6 { t = min(t, (rect.maxY - pin.y) / dir.y) } else if dir.y < -1e-6 { t = min(t, (rect.minY - pin.y) / dir.y) }
+        return t == .greatestFiniteMagnitude ? 0 : max(0, t)
     }
 
-    /// Where the drawn head sits for a given pointer: same direction, gain-mapped length.
-    public static func virtualHead(pin: CGPoint, pointer: CGPoint, gainBoost: CGFloat, maxLength: CGFloat) -> CGPoint {
+    /// Drawn pull length for a raw pointer distance `d`, where `maxDist` is how far the screen extends from the
+    /// pin in that direction. There is no artificial length limit: the head can reach any point on screen.
+    /// Gain is exaggerated near the pin (a short motion reads as a long stretch) and eases to exactly
+    /// 1 : 1 at the edge, so the head arrives at the screen edge when the pointer does. Strictly increasing.
+    public static func reachLength(_ d: CGFloat, maxDist: CGFloat, gain: CGFloat) -> CGFloat {
+        let x = max(0, d)
+        guard maxDist > 1 else { return x }
+        if x >= maxDist { return maxDist }
+        let g = max(0.001, gain)
+        let e = CGFloat(exp(-Double(g)))
+        return maxDist * (1 - CGFloat(exp(-Double(g * x / maxDist)))) / (1 - e)
+    }
+
+    /// Where the drawn head sits for a pointer position: same direction, gain-mapped length, inside `bounds`.
+    public static func reachHead(pin: CGPoint, pointer: CGPoint, bounds: CGRect, gain: CGFloat) -> CGPoint {
         let dx = pointer.x - pin.x
         let dy = pointer.y - pin.y
         let d = hypot(dx, dy)
         guard d > 0.0001 else { return pin }
-        let v = virtualLength(d, gainBoost: gainBoost, maxLength: maxLength)
-        return CGPoint(x: pin.x + dx / d * v, y: pin.y + dy / d * v)
+        let dir = CGPoint(x: dx / d, y: dy / d)
+        let reach = rayDistance(from: pin, direction: dir, in: bounds)
+        let v = reachLength(d, maxDist: reach, gain: gain)
+        return CGPoint(x: pin.x + dir.x * v, y: pin.y + dir.y * v)
     }
 
     /// Visual head position: pin + (pointer - pin) * stretchGain.

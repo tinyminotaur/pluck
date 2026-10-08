@@ -386,6 +386,8 @@ final class ObsidianBlobMetal {
         float wAmp = 0.9 * k;
         float wScale = max(wAmp * 6.5, 24.0);
         float2 f00 = blobField(p, circles, n, sp, k);
+        // Far outside the liquid (beyond any warp): done, without the warped and gradient lookups.
+        if (f00.x > wAmp + 4.0) { return float4(0.0, 0.0, 0.0, 0.0); }
         float wAmpL = min(wAmp, 0.5 * f00.y);
         float2 f0 = blobField(waterWarp(p, wPin, wAmpL, wScale, u.time), circles, n, sp, k);
 

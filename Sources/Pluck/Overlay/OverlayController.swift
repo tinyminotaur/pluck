@@ -62,12 +62,12 @@ final class OverlayController {
     ) {
         guard let view = blobView else { return }
         // Head tracks pointer 1:1. Pin was locked in startPhysics — do not move it.
-        // The drawn head is the pointer run through the stretch-gain curve: 1:1 near the pin, exaggerated
-        // further out, soft-capped. Capture/commit still use the raw pointer.
+        // The drawn head is the pointer run through the screen-aware reach curve: exaggerated near the pin,
+        // exactly 1:1 at the screen edge, with no length cap. Capture/commit still use the raw pointer.
         let cfg = FeelLabConfig.shared
-        let virtual = GestureMath.virtualHead(
+        let virtual = GestureMath.reachHead(
             pin: pin, pointer: pointer,
-            gainBoost: CGFloat(cfg.stretchBoost), maxLength: CGFloat(cfg.maxStretch)
+            bounds: screenFrame.insetBy(dx: 8, dy: 8), gain: CGFloat(cfg.reachGain)
         )
         var target = toView(virtual)
         if let v = blobView {   // never push the head off-screen

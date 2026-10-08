@@ -76,10 +76,9 @@ final class FeelLabConfig: ObservableObject {
     /// Idle breathing while held still.
     @Published var idleLife: Double { didSet { save("idleLife", idleLife) } }
     // MARK: Liquid in a container (gravity + magnetic pull)
-    /// Extra drawn pull beyond 1:1 (0 = none). Short trackpad motions read as long stretches.
-    @Published var stretchBoost: Double { didSet { save("stretchBoost", stretchBoost) } }
-    /// Soft ceiling on the drawn stretch (points).
-    @Published var maxStretch: Double { didSet { save("maxStretch", maxStretch) } }
+    /// Reach gain: how much a short motion is exaggerated. The head can reach anywhere on screen (no length cap);
+    /// 0 = plain 1:1, higher = a smaller motion reaches farther.
+    @Published var reachGain: Double { didSet { save("reachGain", reachGain) } }
     /// Downward pull: the tether sags and mass pools at the low point.
     @Published var gravity: Double { didSet { save("gravity", gravity) } }
     /// How tightly the head follows the cursor (rad/s). Lower = heavier liquid that trails and sloshes.
@@ -146,8 +145,7 @@ final class FeelLabConfig: ObservableObject {
         recoilBounce = Self.load("recoilBounce", 0.6)
         crystallize = Self.load("crystallize", 0.7)
         idleLife = Self.load("idleLife", 0.5)
-        stretchBoost = Self.load("stretchBoost", 1.3)
-        maxStretch = Self.load("maxStretch", 700)
+        reachGain = Self.load("reachGain", 1.8)
         gravity = Self.load("gravity", 0.6)
         magnetPull = Self.load("magnetPull", 52)
         magnetWeight = Self.load("magnetWeight", 0.62)
@@ -197,8 +195,7 @@ final class FeelLabConfig: ObservableObject {
         recoilBounce = 0.6
         crystallize = 0.7
         idleLife = 0.5
-        stretchBoost = 1.3
-        maxStretch = 700
+        reachGain = 1.8
         gravity = 0.6
         magnetPull = 52
         magnetWeight = 0.62

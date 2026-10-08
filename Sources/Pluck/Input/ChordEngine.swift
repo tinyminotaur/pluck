@@ -43,6 +43,7 @@ final class ChordEngine {
     private var touchReleaseTimer: Timer?
     private var configSub: AnyCancellable?
     private var gestureStartedAt: CFTimeInterval = 0
+    private var gesturePin: CGPoint = .zero
     private var lastActivityAt: CFTimeInterval = 0
     private static let moveHz: CFTimeInterval = 1.0 / 90.0
 
@@ -205,6 +206,7 @@ final class ChordEngine {
 
         // End as soon as either button is released (safer than waiting for both).
         // Waiting for both empty caused stuck "active" if one up was missed.
+        endLog("button up")
         endGestureLocally()
         session?.complete(at: location)
     }
@@ -229,6 +231,7 @@ final class ChordEngine {
             // Releasing the modifier commits, exactly like releasing a mouse button.
             if !trigger.shouldContinue(held: held) {
                 let loc = Self.mouseLocation()
+                endLog("modifier released (flagsChanged)")
                 endGestureLocally()
                 session?.complete(at: loc)
             }
@@ -257,7 +260,7 @@ final class ChordEngine {
 
     private func modifierWatchMatured(_ trigger: ModifierTrigger) {
         modTimer = nil
-        let live = ModifierSet(NSEvent.modifierFlags)
+        let live = hardwareModifiers()
         guard modArm.isReady(at: CACurrentMediaTime()),
               !gestureActive, !isDown(.left), !isDown(.right),
               trigger.shouldArm(held: live), !frontmostExcluded() else {
@@ -323,6 +326,7 @@ final class ChordEngine {
         touchReleaseTimer?.invalidate()
         touchReleaseTimer = nil
         let loc = Self.mouseLocation()
+        endLog("fingers lifted (count \(touchCount))")
         endGestureLocally()
         session?.complete(at: loc)
     }
@@ -378,8 +382,16 @@ final class ChordEngine {
         }
     }
 
+    private func endLog(_ reason: String) {
+        let t = CACurrentMediaTime() - gestureStartedAt
+        let d = GestureMath.distance(gesturePin, Self.mouseLocation())
+        Diagnostics.log(String(format: "end   source=%@ reason=%@ held=%.2fs pointerDist=%.0f", "\(gestureSource)", reason, t, d))
+    }
+
     private func startGesture(source: Source, at location: CGPoint) {
         gestureSource = source
+        gesturePin = location
+        Diagnostics.log("begin source=\(source) at=(\(Int(location.x)),\(Int(location.y)))")
         touchRelease.reset()
         gestureActive = true
         armFailsafe()
@@ -388,6 +400,7 @@ final class ChordEngine {
 
     private func cancelActive() {
         guard gestureActive || (session?.isActive == true) else { return }
+        endLog("cancel (Escape or failsafe)")
         endGestureLocally()
         session?.cancel()
     }
@@ -398,6 +411,18 @@ final class ChordEngine {
     }
 
     // MARK: - Helpers
+
+    /// Modifier keys straight from the HID system. `NSEvent.modifierFlags` can be stale for a background app that
+    /// never becomes active, which would end a held-modifier gesture at the next tick.
+    private func hardwareModifiers() -> ModifierSet {
+        let f = CGEventSource.flagsState(.hidSystemState)
+        var s: ModifierSet = []
+        if f.contains(.maskControl) { s.insert(.control) }
+        if f.contains(.maskAlternate) { s.insert(.option) }
+        if f.contains(.maskShift) { s.insert(.shift) }
+        if f.contains(.maskCommand) { s.insert(.command) }
+        return s
+    }
 
     private func physicalHeld() -> Set<MouseButton> {
         var s = Set<MouseButton>()
@@ -424,9 +449,10 @@ final class ChordEngine {
                 guard let self, self.gestureActive else { return }
                 CursorGuard.shared.checkIn()
                 if self.gestureSource == .modifier,
-                   !FeelLabConfig.shared.modifierTrigger.shouldContinue(held: ModifierSet(NSEvent.modifierFlags)) {
+                   !FeelLabConfig.shared.modifierTrigger.shouldContinue(held: self.hardwareModifiers()) {
                     // A modifier-up event was missed. Trust the hardware state.
                     let loc = Self.mouseLocation()
+                    self.endLog("modifier ground-truth says released")
                     self.endGestureLocally()
                     self.session?.complete(at: loc)
                     return
