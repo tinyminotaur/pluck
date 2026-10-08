@@ -53,6 +53,7 @@ final class MetaballView: NSView {
     private var physicsRunning = false
     private var prevHead: CGPoint = .zero
     private var headVel: CGPoint = .zero
+    private var massFlow: DumbbellMass.Solution?
     private var smoothLight = CGPoint(x: -0.4, y: 0.75)
     private var time: CGFloat = 0
 
@@ -203,7 +204,7 @@ final class MetaballView: NSView {
         commitRole = nil
         commitFlash = 0
         stir = 0
-        headVel = .zero
+        headVel = .zero; massFlow = nil
         guard !physicsRunning else { return }
         physicsRunning = true
         lastTick = CACurrentMediaTime()
@@ -837,7 +838,16 @@ final class MetaballView: NSView {
         let latSpeed = headVel.x * nx + headVel.y * ny
         let tanSpeed = headVel.x * tx + headVel.y * ty
 
-        let profile = DumbbellMass.profile(cfg.dumbbell, length: chord * 1.04, samples: n)
+        // Mass flows like liquid: the bulb sizes follow the conserved-mass target with a short lag, so the pin
+        // visibly drains while the head moves away and refills as it comes back.
+        let target = DumbbellMass.solve(cfg.dumbbell, length: chord * 1.04)
+        var flow = massFlow ?? target
+        let kFlow = CGFloat(1 - exp(-Double(dt) / 0.045))
+        flow = .init(pin: flow.pin + (target.pin - flow.pin) * kFlow,
+                     head: flow.head + (target.head - flow.head) * kFlow,
+                     waist: target.waist)
+        massFlow = flow
+        let profile = DumbbellMass.profile(cfg.dumbbell, length: chord * 1.04, samples: n, using: flow)
         var baseRadii = profile.radii
         let waistK = max(0.25, profile.solution.waist / 8)   // ripples scale with the thread, so a thin thread stays calm
         let emergeScale = max(0.08, emerge)

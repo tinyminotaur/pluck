@@ -7,18 +7,47 @@ final class DumbbellMassTests: XCTestCase {
 
     func testAtRestIsOneRoundDrop() {
         let s = DumbbellMass.solve(p, length: 0)
-        XCTAssertEqual(s.pin, p.restRadius, accuracy: 0.01)
-        XCTAssertEqual(s.head, p.restRadius, accuracy: 0.01)
+        XCTAssertEqual(s.pin, p.restRadius, accuracy: 2)
+        XCTAssertLessThan(s.head, 0.3 * p.restRadius)   // the head is still hidden in the drop
     }
 
-    func testBulbsShrinkMonotonicallyAsItStretches() {
-        var lastPin = CGFloat.greatestFiniteMagnitude, lastHead = CGFloat.greatestFiniteMagnitude
-        for L in stride(from: CGFloat(0), through: 900, by: 10) {
-            let s = DumbbellMass.solve(p, length: L)
-            XCTAssertLessThanOrEqual(s.pin, lastPin + 1e-6, "pin at \(L)")
-            XCTAssertLessThanOrEqual(s.head, lastHead + 1e-6, "head at \(L)")
-            lastPin = s.pin; lastHead = s.head
+    func testPinShrinksAtEveryStepOutAndRegrowsComingBack() {
+        var last = CGFloat.greatestFiniteMagnitude
+        for L in stride(from: CGFloat(0), through: 1500, by: 5) {
+            let pin = DumbbellMass.solve(p, length: L).pin
+            XCTAssertLessThan(pin, last, "pin must be strictly smaller at \(L)")
+            last = pin
         }
+        // Coming back is the same curve in reverse: strictly growing.
+        var prev = DumbbellMass.solve(p, length: 1500).pin
+        for L in stride(from: CGFloat(1495), through: 0, by: -5) {
+            let pin = DumbbellMass.solve(p, length: L).pin
+            XCTAssertGreaterThan(pin, prev, "pin must grow back at \(L)")
+            prev = pin
+        }
+    }
+
+    func testMassIsConservedBetweenPinHeadAndThread() {
+        let M0 = CGFloat.pi * p.restRadius * p.restRadius
+        for L in stride(from: CGFloat(0), through: 700, by: 25) {
+            let s = DumbbellMass.solve(p, length: L)
+            let total = CGFloat.pi * (s.pin * s.pin + s.head * s.head) + 2 * s.waist * L
+            // Exact except for the tiny hidden-head floor near rest.
+            XCTAssertEqual(total, M0, accuracy: 0.03 * M0, "mass at \(L)")
+        }
+    }
+
+    func testThePinnedBodyStaysTheHeavierOne() {
+        for L in stride(from: CGFloat(60), through: 1500, by: 60) {
+            let s = DumbbellMass.solve(p, length: L)
+            XCTAssertGreaterThan(s.pin, s.head, "pin is the big mass at \(L)")
+        }
+    }
+
+    func testHeadGainsMassAsItLeavesThePin() {
+        let a = DumbbellMass.solve(p, length: 40).head
+        let b = DumbbellMass.solve(p, length: 200).head
+        XCTAssertGreaterThan(b, a)
     }
 
     func testWaistThinsButStaysVisible() {
@@ -29,19 +58,11 @@ final class DumbbellMassTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(c, DumbbellMass.minWaist)
     }
 
-    func testBulbsStaySubstantialAtAnyLength() {
-        // Barbell, not tadpole: even at a huge stretch each bulb is still a clear mass.
+    func testThreadStaysDelicateAtAnyLength() {
         for L in stride(from: CGFloat(150), through: 1500, by: 150) {
             let s = DumbbellMass.solve(p, length: L)
-            XCTAssertGreaterThan(s.pin, 0.5 * p.restRadius, "pin at \(L)")
-            XCTAssertGreaterThan(s.head, 0.5 * p.restRadius, "head at \(L)")
             XCTAssertLessThan(s.waist, 0.4 * s.pin, "thread stays delicate at \(L)")
         }
-    }
-
-    func testBulbsAreMatchedByDefaultSoItDoesNotReadAsHeadAndTail() {
-        let s = DumbbellMass.solve(p, length: 300)
-        XCTAssertEqual(s.pin, s.head, accuracy: 0.01)
     }
 
     func testProfileIsAWaistBetweenTwoBulbsWithConcaveFlares() {

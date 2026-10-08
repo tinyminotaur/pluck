@@ -40,7 +40,7 @@ vec4 facetCells(vec2 m,out vec2 toSeed){vec2 g=floor(m),f=fract(m);float d1=8.,d
  d1=sqrt(d1);d2=sqrt(d2);return vec4(d1,d2-d1,hash22(id+17.));}
 void main(){
  vec2 p=gl_FragCoord.xy; int n=min(nC,32); int sp=min(nS,n); float k=max(fillet,1.);
- vec2 wPin=n>=2?c[n-2].xy:vec2(0.); float wAmp=.9*k; float wScale=max(wAmp*6.5,24.);
+ vec2 wPin=n>=2?c[n-2].xy:vec2(0.); float wAmp=.2*k; float wScale=max(wAmp*6.5,24.);
  vec2 f00=blobField(p,n,sp,k); if(f00.x>wAmp+4.){outC=vec4(0);return;} float wAmpL=min(wAmp,.5*f00.y);
  vec2 f0=blobField(waterWarp(p,wPin,wAmpL,wScale,time),n,sp,k);
  vec4 cell=vec4(0,1,.5,.5); vec2 domeS=vec2(0);

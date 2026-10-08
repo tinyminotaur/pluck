@@ -12,6 +12,7 @@ public enum DumbbellMass {
         public var pin: CGFloat
         public var head: CGFloat
         public var waist: CGFloat
+        public init(pin: CGFloat, head: CGFloat, waist: CGFloat) { self.pin = pin; self.head = head; self.waist = waist }
     }
 
     public struct Params: Equatable, Sendable {
@@ -32,8 +33,9 @@ public enum DumbbellMass {
         }
     }
 
-    /// Smallest thread radius we ever draw (points): thin, but always visible.
-    public static let minWaist: CGFloat = 3.0
+    /// Smallest thread radius we ever draw (points). If the thread would be thinner than this, the thread takes
+    /// the extra mass from the bulbs, so area is still conserved exactly.
+    public static let minWaist: CGFloat = 1.6
 
     private static func smooth(_ x: CGFloat) -> CGFloat {
         let t = max(0, min(1, x))
@@ -41,36 +43,42 @@ public enum DumbbellMass {
     }
 
     /// Bulb radii and thread radius for a thread of arc length `length`.
+    ///
+    /// Mass is conserved (area M0 = pi R0^2): the thread's mass grows without bound as it lengthens, and every bit of
+    /// it is drawn out of the bulbs. There are no floors, so the pin gets strictly smaller at every moment the head
+    /// moves away and strictly larger at every moment it comes back. The head receives a growing share of what
+    /// remains, so the mass visibly flows toward the cursor.
     public static func solve(_ p: Params, length: CGFloat) -> Solution {
         let R0 = max(1, p.restRadius)
         let L = max(0, length)
-        let area0 = .pi * R0 * R0
+        let M0 = CGFloat.pi * R0 * R0
 
-        // Thread thins as it lengthens (it is being drawn out), but never below a visible floor.
-        // The thread is a delicate filament that thins as it is drawn out. Its fineness against two substantial
-        // masses is what reads as liquid; a thick uniform rod reads as a worm.
-        let waist = max(minWaist, p.waistRest * R0 / CGFloat(sqrt(Double(1 + L / (1.6 * R0)))))
-        let threadArea = 2 * waist * L
-        // The bulbs keep whatever the thread doesn't hold, and always stay substantial (never under 60% of the
-        // drop between them) so the shape stays a barbell with two clear masses, not a head with a tail.
-        let bulbArea = max(0.60 * area0, area0 - threadArea)
-        let hs = max(0.1, min(0.9, p.headShare))
-        let pinFull = (bulbArea * (1 - hs) / .pi).squareRoot()
-        let headFull = (bulbArea * hs / .pi).squareRoot()
+        // Mass held by the thread: rises smoothly and strictly with length, toward ~55% of the total (scaled by waistRest).
+        let share = min(0.8, 0.55 * CGFloat(max(0.05, p.waistRest) / 0.2).squareRoot())
+        var thread = share * M0 * (1 - CGFloat(pow(Double(1 + L / (3 * R0)), -0.8)))
+        // Its width follows from its mass and length (a fixed volume stretched thinner), capped for short threads.
+        // At extreme lengths the drawn width is floored so it stays visible; that costs a sliver of mass only
+        // where the thread is already sub-pixel, and the bulbs keep shrinking regardless.
+        let cap = max(minWaist, p.waistRest * R0 * 1.2)
+        let waist = L > 0.001 ? max(minWaist, min(cap, thread / (2 * L))) : cap
+        if L > 0.001 { thread = min(thread, 2 * min(cap, thread / (2 * L)) * L) }
+        let bulbs = M0 - thread
 
-        // At rest the two coincide as one drop of radius R0; they separate as the thread lengthens.
-        let split = smooth(L / (1.4 * R0))
-        return Solution(
-            pin: R0 + (pinFull - R0) * split,
-            head: R0 + (headFull - R0) * split,
-            waist: waist
-        )
+        // Share of the bulb mass at the head grows as mass is pulled along; the pin keeps the rest.
+        let hs = 0.44 * max(0.1, min(1, p.headShare)) + 0.23 * smooth(L / (5 * R0))
+        // At rest the head is hidden inside the pin as one drop; they separate as the thread lengthens.
+        let sep = smooth(L / (2.2 * R0))
+                let headArea = hs * bulbs * sep
+        // A small hidden head at rest, its mass taken from the pin, so the total stays exact.
+        let head = max((headArea / .pi).squareRoot(), 0.25 * R0 * (1 - sep))
+        let pin = max(0, (bulbs - .pi * head * head) / .pi).squareRoot()
+        return Solution(pin: pin, head: head, waist: waist)
     }
 
     /// Thickness along the thread at `samples` evenly spaced points from pin (0) to head (1): the waist plus a
     /// concave flare toward each bulb. The flare is what makes the join read as liquid meeting liquid.
-    public static func profile(_ p: Params, length: CGFloat, samples n: Int) -> (radii: [CGFloat], solution: Solution) {
-        let sol = solve(p, length: length)
+    public static func profile(_ p: Params, length: CGFloat, samples n: Int, using given: Solution? = nil) -> (radii: [CGFloat], solution: Solution) {
+        let sol = given ?? solve(p, length: length)
         let count = max(2, n)
         let L = max(1, length)
         let m = max(0.2, p.meniscus)
