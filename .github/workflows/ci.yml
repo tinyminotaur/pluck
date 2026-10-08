@@ -24,4 +24,15 @@ jobs:
           m = re.search(r'shaderSource = """\n(.*?)\n    """', src, re.S)
           pathlib.Path("/tmp/obsidian.metal").write_text(m.group(1))
           PY
-          xcrun -sdk macosx metal -c /tmp/obsidian.metal -o /tmp/obsidian.air || echo "::warning::metal CLI unavailable or shader failed to compile"
+          xcrun -sdk macosx metal -c /tmp/obsidian.metal -o /tmp/obsidian.air
+      - name: Render blob preview with real Metal (best effort)
+        continue-on-error: true
+        run: |
+          swift build -c release
+          "$(swift build -c release --show-bin-path)/Pluck" --render-preview preview.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blob-preview
+          path: preview.png
+          if-no-files-found: ignore
