@@ -612,6 +612,21 @@ final class MetaballView: NSView {
             let a = min(0.10, accMag * 3e-5)
             headTarget.x += a * cos(2 * psi); headTarget.y += a * sin(2 * psi)
         }
+        // Squash and stretch: a moving drop elongates along its velocity (the head), and the pin is drawn out
+        // toward the head while the head retreats. Both relax on the damped springs below.
+        let speed = hypot(headVel.x, headVel.y)
+        if speed > 20 {
+            let vpsi = atan2(headVel.y, headVel.x)
+            let a = min(0.14, speed * 1.5e-4)
+            headTarget.x += a * cos(2 * vpsi); headTarget.y += a * sin(2 * vpsi)
+        }
+        if chord > 1 {
+            let radial = (headVel.x * chordV.x + headVel.y * chordV.y) / chord
+            if radial > 0 {
+                let a = min(0.09, radial * 9e-5)
+                pinTarget.x += a * cos(2 * axis); pinTarget.y += a * sin(2 * axis)
+            }
+        }
         // Gravity flattens a drop: wider than tall.
         pinTarget.x += 0.045 * g; headTarget.x += 0.04 * g
         // Slow breathing.
