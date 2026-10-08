@@ -498,10 +498,14 @@ final class MetaballView: NSView {
             let sub = item.subtitle.map { NSAttributedString(string: $0, attributes: subAttrs) }
             let tSize = title.size()
             let sSize = sub?.size() ?? .zero
+            let glyphColor = armed ? NSColor(calibratedWhite: 0.08, alpha: 1) : NSColor(calibratedWhite: 0.95, alpha: 1)
+            let glyph = Self.glyph(for: item.role, color: glyphColor)
+            let glyphW: CGFloat = glyph == nil ? 0 : 20
             let size = CGSize(
-                width: max(tSize.width, sSize.width) + 26,
+                width: max(tSize.width, sSize.width) + 26 + glyphW,
                 height: sub == nil ? 28 : 28 + sSize.height + 2
             )
+            let textShift = glyphW / 2
 
             let scale = 1 + 0.16 * pop
             let dist = LabelLayout.distance + 7 * max(0, pop)
@@ -525,11 +529,14 @@ final class MetaballView: NSView {
             pill.lineWidth = 1
             pill.stroke()
 
+            if let glyph {
+                glyph.draw(in: CGRect(x: -size.width / 2 + 12, y: -7, width: 14, height: 14))
+            }
             if let sub {
-                title.draw(at: CGPoint(x: -tSize.width / 2, y: -tSize.height / 2 + sSize.height / 2 + 1))
-                sub.draw(at: CGPoint(x: -sSize.width / 2, y: -sSize.height / 2 - tSize.height / 2 + 2))
+                title.draw(at: CGPoint(x: textShift - tSize.width / 2, y: -tSize.height / 2 + sSize.height / 2 + 1))
+                sub.draw(at: CGPoint(x: textShift - sSize.width / 2, y: -sSize.height / 2 - tSize.height / 2 + 2))
             } else {
-                title.draw(at: CGPoint(x: -tSize.width / 2, y: -tSize.height / 2))
+                title.draw(at: CGPoint(x: textShift - tSize.width / 2, y: -tSize.height / 2))
             }
             ctx.restoreGState()
         }
@@ -645,6 +652,21 @@ final class MetaballView: NSView {
             let p = spine[i]
             ctx.fillEllipse(in: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
         }
+    }
+
+    /// SF Symbol per role, tinted with a palette colour. Nil if the symbol is unavailable.
+    private static func glyph(for role: CompassRole, color: NSColor) -> NSImage? {
+        let name: String
+        switch role {
+        case .north: name = "arrow.down.to.line"      // keep / save
+        case .east: name = "arrow.right"              // go
+        case .south: name = "square.and.arrow.up"     // give / share
+        case .west: name = "questionmark"             // ask
+        }
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
+        return NSImage(systemSymbolName: name, accessibilityDescription: role.accessibilityLabel)?
+            .withSymbolConfiguration(config)
     }
 
     private func smoothstep01(_ x: CGFloat) -> CGFloat {
