@@ -206,6 +206,29 @@ final class MetaballView: NSView {
         return (CACurrentMediaTime() - t0) * 1000
     }
 
+    /// Poses the view for `--render-compass`: runs the real physics until it settles with the pointer pulled to
+    /// `pointer`, optionally with a direction armed, so the integrated labels can be rendered headlessly.
+    func debugPose(pin: CGPoint, pointer: CGPoint, armed: CompassRole?, items: [CompassItem], seconds: CGFloat) {
+        self.pin = pin
+        head = pin
+        pointerTarget = pin
+        emerge = 1
+        bloom = 1
+        self.items = items
+        startPhysics(driveManually: true)
+        var t: CGFloat = 0
+        let dt: CGFloat = 1.0 / 120
+        while t < seconds {
+            let k = min(1, t / 0.3)
+            pointerTarget = CGPoint(x: pin.x + (pointer.x - pin.x) * k, y: pin.y + (pointer.y - pin.y) * k)
+            if t > 0.4 { captured = armed }
+            emerge = 1
+            bloom = 1
+            debugAdvance(dt: dt)
+            t += dt
+        }
+    }
+
     /// Read-only view of the simulation for `--sim-report`.
     var debugState: (head: CGPoint, spine: [CGPoint], radii: [CGFloat]) { (head, spine, radii) }
 
@@ -606,24 +629,65 @@ final class MetaballView: NSView {
 
     /// Cancel ring + one pill per available role. Slices are fixed (see `GestureMath`); only the
     /// labels move, to stay on screen near display edges.
+    /// One action bud: a liquid lobe on the pin that carries a label.
+    private struct Bud {
+        var item: CompassItem
+        var center: CGPoint
+        var radius: CGFloat
+        var pop: CGFloat
+        var armed: Bool
+        var glow: CGFloat
+    }
+
+    private static let budBaseRadius: CGFloat = 30
+
+    private var compassAlpha: CGFloat {
+        let committing = recoiling && commitRole != nil
+        return committing ? commitFlash : (reducedMotion ? bloom : labelAlpha)
+    }
+
+    /// Where each bud sits and how big it is. Shared by the field (so the bud is real liquid) and the label
+    /// drawing (so the text sits exactly inside it). Buds hug the pin as it shrinks under stretch, the armed one
+    /// swells and leans toward the head until it fuses with the stretched mass, and on commit only the chosen
+    /// one remains, swelling like a confirmation.
+    private func budGeometry(pinR: CGFloat) -> [Bud] {
+        let committing = recoiling && commitRole != nil
+        let alpha = compassAlpha
+        guard alpha > 0.01, !items.isEmpty else { return [] }
+        let base = Self.budBaseRadius * (cfg.meetingMode ? 0.8 : 1)
+        let headDist = hypot(head.x - lockedPin.x, head.y - lockedPin.y)
+        var out: [Bud] = []
+        for item in items {
+            if committing, item.role != commitRole { continue }
+            let armed = committing || captured == item.role
+            var pop = reducedMotion ? (armed ? 1 : 0) : (armedPos[item.role] ?? 0)
+            if committing { pop = 1 + 1.3 * (1 - commitFlash) }
+            let grow = alpha * alpha * (3 - 2 * alpha)   // ease-in-out as the labels fade in
+            let r = base * grow * (1 + 0.24 * max(0, pop))
+            if r < 1 { continue }
+            let dist = pinR + 0.62 * r + 6 * max(0, pop)
+            var c = LabelLayout.center(pin: lockedPin, role: item.role, distance: dist)
+            if armed, !committing {
+                // The armed bud leans toward the head and fuses into the stretched mass.
+                let f = smoothstep01((headDist - 0.35 * dist) / (0.65 * dist)) * min(1, max(0, pop))
+                c = CGPoint(x: c.x + (head.x - c.x) * 0.8 * f, y: c.y + (head.y - c.y) * 0.8 * f)
+            }
+            c = LabelLayout.clamped(center: c, size: CGSize(width: r * 2, height: r * 2), in: bounds, margin: 6)
+            let glow = committing ? 1 : 0.15 + 0.85 * min(1, max(0, pop))
+            out.append(Bud(item: item, center: c, radius: r, pop: pop, armed: armed, glow: glow))
+        }
+        return out
+    }
+
+    /// The cancel ring, then each label drawn inside its bud. Text is composited with a screen blend, tinted by
+    /// the theme, over a faint dark inset, so it reads as light held inside the glass rather than a sticker.
     private func drawCompass(_ ctx: CGContext) {
         let committing = recoiling && commitRole != nil
-        let alpha = committing ? commitFlash : (reducedMotion ? bloom : labelAlpha)
+        let alpha = compassAlpha
         guard alpha > 0.01, !items.isEmpty else { return }
         let c = lockedPin
-
-        // Selected direction: a soft arc sweeping the armed slice.
-        if !committing, let role = captured, !reducedMotion {
-            let pop = max(0, min(1.2, armedPos[role] ?? 0))
-            let d = LabelLayout.direction(of: role)
-            let mid = atan2(d.y, d.x) * 180 / .pi
-            let arc = NSBezierPath()
-            arc.appendArc(withCenter: c, radius: GestureMath.deadZone + 26, startAngle: mid - 38, endAngle: mid + 38)
-            arc.lineWidth = 3
-            arc.lineCapStyle = .round
-            NSColor(calibratedRed: 0.8, green: 0.9, blue: 1.0, alpha: 0.5 * alpha * pop).setStroke()
-            arc.stroke()
-        }
+        let theme = cfg.theme
+        let tint = NSColor(calibratedRed: CGFloat(theme.a.r), green: CGFloat(theme.a.g), blue: CGFloat(theme.a.b), alpha: 1)
 
         // Cancel zone: release inside the ring cancels.
         let ringR = GestureMath.deadZone
@@ -631,73 +695,46 @@ final class MetaballView: NSView {
         ring.lineWidth = 1
         ring.setLineDash([3, 4], count: 2, phase: 0)
         let inside = captured == nil
-        NSColor.white.withAlphaComponent(alpha * (inside ? 0.30 : 0.10)).setStroke()
+        tint.blended(withFraction: 0.5, of: .white)?.withAlphaComponent(alpha * (inside ? 0.32 : 0.10)).setStroke()
         ring.stroke()
 
+        let pinR = max(radii.first ?? 20, mass.restRadius * mass.pinMinFraction * 0.75 * emerge)
+        let buds = budGeometry(pinR: pinR)
         let anyArmed = captured != nil
-        for item in items {
-            // On commit only the chosen label stays: it swells and fades like a confirmation.
-            if committing, item.role != commitRole { continue }
-            let armed = committing || captured == item.role
-            var pop = reducedMotion ? (armed ? 1 : 0) : (armedPos[item.role] ?? 0)
-            if committing { pop = 1 + 1.3 * (1 - commitFlash) }
-            let titleAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-                .foregroundColor: armed ? NSColor(calibratedWhite: 0.06, alpha: 1) : NSColor(calibratedWhite: 0.97, alpha: 1),
-            ]
-            let subAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-                .foregroundColor: armed ? NSColor(calibratedWhite: 0.2, alpha: 1) : NSColor(calibratedWhite: 0.75, alpha: 1),
-            ]
-            let title = NSAttributedString(string: item.title, attributes: titleAttrs)
-            let sub = item.subtitle.map { NSAttributedString(string: $0, attributes: subAttrs) }
+        for bud in buds {
+            let fit = bud.radius / (Self.budBaseRadius * (cfg.meetingMode ? 0.8 : 1))
+            let textFade = smoothstep01((fit - 0.45) / 0.45)   // text appears once the bud is big enough to hold it
+            guard textFade > 0.01 else { continue }
+            let armed = bud.armed
+            let dim: CGFloat = (anyArmed && !armed && !committing) ? 0.62 : 1
+            let light = (armed ? NSColor.white : NSColor.white.blended(withFraction: 0.35, of: tint) ?? .white)
+            let titleFont = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
+            let attrs: (NSColor) -> [NSAttributedString.Key: Any] = { [.font: titleFont, .foregroundColor: $0] }
+            let title = NSAttributedString(string: bud.item.title, attributes: attrs(light))
+            let shadow = NSAttributedString(string: bud.item.title, attributes: attrs(NSColor(calibratedWhite: 0, alpha: 0.55)))
             let tSize = title.size()
-            let sSize = sub?.size() ?? .zero
-            let glyphColor = armed ? NSColor(calibratedWhite: 0.08, alpha: 1) : NSColor(calibratedWhite: 0.95, alpha: 1)
-            let glyph = Self.glyph(for: item.role, color: glyphColor)
-            let glyphW: CGFloat = glyph == nil ? 0 : 20
-            let size = CGSize(
-                width: max(tSize.width, sSize.width) + 26 + glyphW,
-                height: sub == nil ? 28 : 28 + sSize.height + 2
-            )
-            let textShift = glyphW / 2
-
-            let scale = 1 + 0.16 * pop
-            let dist = LabelLayout.distance + 7 * max(0, pop)
-            let raw = LabelLayout.center(pin: c, role: item.role, distance: dist)
-            let scaled = CGSize(width: size.width * scale, height: size.height * scale)
-            let center = LabelLayout.clamped(center: raw, size: scaled, in: bounds)
+            let glyph = Self.glyph(for: bud.item.role, color: light)
 
             ctx.saveGState()
-            ctx.setAlpha(alpha * ((anyArmed && !armed && !committing) ? 0.55 : 1))
-            ctx.translateBy(x: center.x, y: center.y)
-            ctx.scaleBy(x: scale, y: scale)
-
-            let pill = NSBezierPath(
-                roundedRect: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height),
-                xRadius: size.height / 2, yRadius: size.height / 2
-            )
-            (armed ? NSColor(calibratedRed: 0.86, green: 0.92, blue: 1.0, alpha: 0.96)
-                   : NSColor(calibratedRed: 0.05, green: 0.06, blue: 0.09, alpha: 0.78)).setFill()
-            pill.fill()
-            NSColor.white.withAlphaComponent(armed ? 0.0 : 0.20).setStroke()
-            pill.lineWidth = 1
-            pill.stroke()
-
+            ctx.translateBy(x: bud.center.x, y: bud.center.y)
+            let s = min(1.25, max(0.5, fit))
+            ctx.scaleBy(x: s, y: s)
+            let hasGlyph = glyph != nil
+            let blockH = (hasGlyph ? 15 : 0) + tSize.height
+            let top = blockH / 2
+            // Faint inset shadow first (normal blend), then the light itself (screen blend).
+            ctx.setAlpha(alpha * textFade * dim * 0.9)
+            shadow.draw(at: CGPoint(x: -tSize.width / 2, y: top - (hasGlyph ? 15 : 0) - tSize.height - 0.8))
+            ctx.setBlendMode(.screen)
+            ctx.setAlpha(alpha * textFade * dim * (armed ? 1 : 0.88))
             if let glyph {
-                glyph.draw(in: CGRect(x: -size.width / 2 + 12, y: -7, width: 14, height: 14))
+                glyph.draw(in: CGRect(x: -7, y: top - 14, width: 14, height: 14))
             }
-            if let sub {
-                title.draw(at: CGPoint(x: textShift - tSize.width / 2, y: -tSize.height / 2 + sSize.height / 2 + 1))
-                sub.draw(at: CGPoint(x: textShift - sSize.width / 2, y: -sSize.height / 2 - tSize.height / 2 + 2))
-            } else {
-                title.draw(at: CGPoint(x: textShift - tSize.width / 2, y: -tSize.height / 2))
-            }
+            title.draw(at: CGPoint(x: -tSize.width / 2, y: top - (hasGlyph ? 15 : 0) - tSize.height))
             ctx.restoreGState()
         }
     }
 
-    @discardableResult
     private func drawOptical(_ ctx: CGContext) -> Bool {
         guard let metal, let bbox = massBounds() else { return false }
 
@@ -738,15 +775,15 @@ final class MetaballView: NSView {
                 circles.append(.init(center: local(l.center), radius: Float(l.radius)))
             }
         }
+        // Action buds: each direction is a liquid bud on the pin, big enough to hold its label.
+        for bud in budGeometry(pinR: pinR) where circles.count < ObsidianBlobMetal.maxCircles - 2 {
+            circles.append(.init(center: local(bud.center), radius: Float(bud.radius), emphasis: Float(bud.glow)))
+        }
         circles.append(.init(center: local(anchor), radius: Float(pinR)))
         circles.append(.init(center: local(head), radius: Float(headR)))
 
-        let c = (tintColor.usingColorSpace(.deviceRGB) ?? tintColor)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        c.getRed(&r, green: &g, blue: &b, alpha: &a)
-
-        let glow = ObsidianPalette.glow(warmth: Float(cfg.coolTint))
-        let absorb = ObsidianPalette.absorb(depth: Float(cfg.absorption))
+        let theme = cfg.theme
+        let absorb = SIMD3<Float>(theme.absorb.r, theme.absorb.g, theme.absorb.b) * Float(cfg.absorption / 0.75)
 
         // Liquid at rest, obsidian under tension: facets sharpen as the tether stretches and
         // flash on release (recoil pulse).
@@ -762,17 +799,23 @@ final class MetaballView: NSView {
         let look = ObsidianBlobMetal.Look(
             lightDir: SIMD2(Float(smoothLight.x), Float(smoothLight.y)),
             time: Float(time),
-            shininess: Float(max(0.55, cfg.shininess)),
-            fresnel: Float(max(0.5, cfg.fresnel)),
-            transmission: Float(max(0.45, cfg.transmission)),
+            shininess: Float(max(0.3, cfg.shininess)),
+            fresnel: Float(max(0.3, cfg.fresnel)),
+            transmission: Float(max(0.1, cfg.transmission)),
             opacity: Float(cfg.glassOpacity * (cfg.meetingMode ? 0.8 : 1)),
             edgeSoft: Float(0.08 + (1 - cfg.gooThreshold) * 0.1),
-            baseColor: SIMD3(Float(max(r, 0.04)), Float(max(g, 0.045)), Float(max(b, 0.06))),
+            baseColor: SIMD3(theme.body.r, theme.body.g, theme.body.b),
             absorb: absorb,
-            glow: glow,
+            glow: SIMD3(theme.a.r, theme.a.g, theme.a.b),
             facet: cfg.facetsEnabled ? Float(min(1, facetEff)) : 0,
             facetSize: Float(cfg.facetSize),
-            ember: Float(cfg.ember * (cfg.meetingMode ? 0.5 : 1))
+            ember: Float(Double(theme.ember) * cfg.ember * (cfg.meetingMode ? 0.5 : 1)),
+            themeA: SIMD4(theme.a.r, theme.a.g, theme.a.b, theme.sheen),
+            themeB: SIMD4(theme.b.r, theme.b.g, theme.b.b, theme.rim),
+            themeC: SIMD4(theme.c.r, theme.c.g, theme.c.b, 0),
+            gradient: SIMD3(theme.gradientScale, theme.gradientSpeed, theme.iridescence),
+            fill: theme.fill,
+            chrome: theme.chrome
         )
 
         guard let image = metal.render(
@@ -808,6 +851,15 @@ final class MetaballView: NSView {
             maxX = max(maxX, p.x + r)
             minY = min(minY, p.y - r)
             maxY = max(maxY, p.y + r)
+        }
+        // The pin lobes and the action buds bulge past the strand: include them or they render cut off.
+        let pinR = max(radii.first ?? 20, mass.restRadius * mass.pinMinFraction * 0.75 * emerge)
+        let pinReach = max(pinR, radii.first ?? 0) * 1.35
+        minX = min(minX, anchor.x - pinReach); maxX = max(maxX, anchor.x + pinReach)
+        minY = min(minY, anchor.y - pinReach); maxY = max(maxY, anchor.y + pinReach)
+        for bud in budGeometry(pinR: pinR) {
+            minX = min(minX, bud.center.x - bud.radius); maxX = max(maxX, bud.center.x + bud.radius)
+            minY = min(minY, bud.center.y - bud.radius); maxY = max(maxY, bud.center.y + bud.radius)
         }
         let rect = CGRect(x: minX - pad, y: minY - pad, width: (maxX - minX) + pad * 2, height: (maxY - minY) + pad * 2)
         return rect.intersection(bounds.insetBy(dx: -pad, dy: -pad))

@@ -87,6 +87,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         haptics.target = self
         haptics.state = FeelLabConfig.shared.hapticsEnabled ? .on : .off
         menu.addItem(haptics)
+
+        let presetMenu = NSMenu()
+        for p in PresetLibrary.all {
+            let item = NSMenuItem(title: p.name, action: #selector(selectPreset(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = p.id
+            item.toolTip = p.tagline
+            item.state = FeelLabConfig.shared.presetID == p.id ? .on : .off
+            presetMenu.addItem(item)
+        }
+        let presetItem = NSMenuItem(title: "Feel Preset", action: nil, keyEquivalent: "")
+        presetItem.submenu = presetMenu
+        menu.addItem(presetItem)
+
+        let themeMenu = NSMenu()
+        for t in ThemeLibrary.all {
+            let item = NSMenuItem(title: t.name, action: #selector(selectTheme(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = t.id
+            item.toolTip = t.tagline
+            item.state = FeelLabConfig.shared.themeID == t.id ? .on : .off
+            themeMenu.addItem(item)
+        }
+        themeMenu.addItem(.separator())
+        let surprise = NSMenuItem(title: "Surprise Me (random colours)", action: #selector(surpriseTheme), keyEquivalent: "")
+        surprise.target = self
+        surprise.state = FeelLabConfig.shared.themeID == "custom" ? .on : .off
+        themeMenu.addItem(surprise)
+        let themeItem = NSMenuItem(title: "Colour Theme", action: nil, keyEquivalent: "")
+        themeItem.submenu = themeMenu
+        menu.addItem(themeItem)
         menu.addItem(.separator())
 
         let reset = NSMenuItem(title: "Reset Pointer / Gesture", action: #selector(resetHard), keyEquivalent: "")
@@ -120,6 +151,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleMeeting() {
         FeelLabConfig.shared.meetingMode.toggle()
     }
+
+    @objc private func selectPreset(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String, let p = PresetLibrary.preset(id: id) {
+            FeelLabConfig.shared.apply(preset: p)
+        }
+    }
+
+    @objc private func selectTheme(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String, let t = ThemeLibrary.theme(id: id) {
+            FeelLabConfig.shared.apply(theme: t)
+        }
+    }
+
+    @objc private func surpriseTheme() { FeelLabConfig.shared.surpriseMe() }
 
     @objc private func toggleHaptics() {
         FeelLabConfig.shared.hapticsEnabled.toggle()

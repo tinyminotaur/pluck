@@ -42,3 +42,15 @@ CAMetalLayer rewrite; tune feel numbers from real use; flick-commit + earlier ar
 
 ## Ground rules for the agent
 Keep it listen-only (no event tap, no synthesized input). Commit small, push, and check CI (`gh run list`/Actions). Do not open a PR unless asked. Don't rewrite history on this branch.
+
+## Update (local session): what changed since the cloud session
+- **Cursor:** all hide/show goes through `Safety/CursorGuard` (one balanced hide, background watchdog, signal/atexit hooks, private `SetsCursorInBackground` opt-in so hiding works for a background app).
+- **Triggers:** hold-⌥ (pointer still) or Hyper, move, release the modifier to commit (`PluckCore/ModifierTrigger`); three-finger rest-to-arm with scroll/landing filters (`TouchEligibility`) and a flicker-proof release (`TouchReleaseDebounce`); click-based hold trigger is off by default. Modifier state uses the HID state (`CGEventSource.flagsState`), not `NSEvent.modifierFlags`.
+- **Edge nudge:** the pin (and real cursor) is moved 72 pt inside the screen so every direction is reachable.
+- **Look:** one fixed environment (no light swing, no cursor-aligned texture), organic seeded lump clusters + water warp, wet-glass shading with dome normals, strand drawn as a Catmull-Rom spline with soft-unioned segments.
+- **Physics:** head is a magnet-pulled spring mass (`MagnetPull`), gravity droop + pooling, always-on wander; tether meanders.
+- **Reach:** the head can reach anywhere on screen (`GestureMath.reachHead`, screen-aware, no cap; knob "Reach gain").
+- **Themes and presets:** `PluckCore/LiquidTheme.swift` (8 themes + random "Surprise"), presets in the same file; picker in the Feel Lab guide and menu-bar submenus. Palette is a 3-stop gradient (A,B,C) with drift, iridescence, colour `fill` and `chrome`.
+- **Integrated labels:** each direction is a liquid bud in the field (extra circles with an `emphasis` value) with glyph + name drawn inside via a screen blend; armed bud swells and fuses toward the head.
+- **Diagnostics:** `~/Library/Logs/Pluck/gesture.log` (why gestures end), `Pluck --sim-report`, `--render-preview`, `--render-themes`, `--render-compass` (all headless, no input).
+- **Not verified live:** feel of the magnet/gravity physics, bud labels in the live view, cursor hiding with the private opt-in, three-finger on hardware.

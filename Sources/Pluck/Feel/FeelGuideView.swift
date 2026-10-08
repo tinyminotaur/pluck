@@ -1,4 +1,5 @@
 import AppKit
+import PluckCore
 import SwiftUI
 
 /// Always-on guide + live blob tuning for Feel Lab.
@@ -16,6 +17,8 @@ struct FeelGuideView: View {
                 safetyBox
                 resultRow
                 actionsRow
+
+                looksSection
 
                 Divider().padding(.vertical, 4)
 
@@ -188,6 +191,81 @@ struct FeelGuideView: View {
         }
     }
 
+    // MARK: - Looks & feels
+
+    private func swatch(_ t: LiquidTheme) -> LinearGradient {
+        func c(_ x: RGB) -> Color { Color(red: Double(min(1, x.r)), green: Double(min(1, x.g)), blue: Double(min(1, x.b))) }
+        return LinearGradient(colors: [c(t.a), c(t.b), c(t.c)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    private var looksSection: some View {
+        GroupBox("Looks & feels") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Feel presets: physics and colours together")
+                    .font(.caption.weight(.semibold))
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    ForEach(PresetLibrary.all) { p in presetCard(p) }
+                }
+
+                Text("Colour themes: keep the current feel, change the look")
+                    .font(.caption.weight(.semibold))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(ThemeLibrary.all) { t in themeChip(t) }
+                        if let custom = config.customTheme { themeChip(custom) }
+                        Button { config.surpriseMe() } label: {
+                            VStack(spacing: 3) {
+                                Image(systemName: "dice")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color.accentColor.opacity(0.18)))
+                                Text("Surprise").font(.system(size: 9))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("A random harmonious palette")
+                    }
+                    .padding(.vertical, 2)
+                }
+                Text("Now: \(config.theme.name)").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func presetCard(_ p: FeelPreset) -> some View {
+        let theme = ThemeLibrary.theme(id: p.themeID) ?? ThemeLibrary.obsidianEmber
+        let selected = config.presetID == p.id
+        return Button { config.apply(preset: p) } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(swatch(theme))
+                    .frame(height: 22)
+                    .overlay(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.35)).padding(.trailing, 28))
+                Text(p.name).font(.caption.weight(.semibold))
+                Text(p.tagline).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(selected ? Color.accentColor : Color.clear, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func themeChip(_ t: LiquidTheme) -> some View {
+        let selected = config.themeID == t.id
+        return Button { config.apply(theme: t) } label: {
+            VStack(spacing: 3) {
+                Circle().fill(swatch(t)).frame(width: 36, height: 36)
+                    .overlay(Circle().stroke(selected ? Color.accentColor : Color.primary.opacity(0.18), lineWidth: selected ? 2.5 : 1))
+                Text(t.name).font(.system(size: 9)).lineLimit(1).frame(width: 58)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(t.tagline)
+    }
+
     private var fidgetSection: some View {
         GroupBox("Fidget feel") {
             VStack(spacing: 10) {
@@ -230,8 +308,7 @@ struct FeelGuideView: View {
                 knob("Glass opacity", value: $config.glassOpacity, range: 0.4...1, format: "%.2f")
                 knob("Contact shadow", value: $config.shadowStrength, range: 0...1, format: "%.2f")
                 knob("Base lightness", value: $config.lightness, range: 0.02...0.25, format: "%.2f")
-                knob("Amber warmth", value: $config.coolTint, range: 0...1, format: "%.2f")
-                knob("Ember pulse glow", value: $config.ember, range: 0...1, format: "%.2f")
+                knob("Glow intensity (× theme)", value: $config.ember, range: 0...1.6, format: "%.2f")
                 Toggle("Obsidian facets (off while we tune the liquid)", isOn: $config.facetsEnabled)
                     .font(.caption)
                 knob("Facets (liquid → obsidian)", value: $config.facetAmount, range: 0...1, format: "%.2f")

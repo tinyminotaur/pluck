@@ -1,10 +1,24 @@
 import AppKit
+import PluckCore
 
 // `Pluck --render-preview out.png`: headless Metal render for CI / design review, then exit.
 if let i = CommandLine.arguments.firstIndex(of: "--render-preview") {
     let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "preview.png"
     let code = MainActor.assumeIsolated { PreviewRender.run(outputPath: path) }
     exit(code)
+}
+
+// `Pluck --render-compass out.png`: the real view with its integrated action labels (headless), then exit.
+if let i = CommandLine.arguments.firstIndex(of: "--render-compass") {
+    let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "compass.png"
+    exit(MainActor.assumeIsolated { PreviewRender.runCompass(outputPath: path) })
+}
+
+// `Pluck --render-themes out.png`: one row per theme (headless Metal), then exit.
+if let i = CommandLine.arguments.firstIndex(of: "--render-themes") {
+    let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "themes.png"
+    let all = ThemeLibrary.all + [ThemeLibrary.random(seed: 2026)]
+    exit(MainActor.assumeIsolated { PreviewRender.run(outputPath: path, themes: all) })
 }
 
 // `Pluck --sim-report`: headless physics diagnostic, then exit.

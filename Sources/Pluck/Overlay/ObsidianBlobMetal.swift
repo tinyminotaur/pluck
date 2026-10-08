@@ -65,6 +65,8 @@ final class ObsidianBlobMetal {
         /// Bbox-local AppKit coords (y-up, origin bottom-left). LOCKED.
         var center: SIMD2<Float>
         var radius: Float
+        /// 0...1: how strongly this circle (an action bud) glows with the theme colour. 0 for ordinary mass.
+        var emphasis: Float = 0
     }
 
     struct Look {
@@ -82,8 +84,17 @@ final class ObsidianBlobMetal {
         var facet: Float = 0
         /// Facet cell size across the blob, in points.
         var facetSize: Float = 22
-        /// 0…1 strength of the slow pulsing amber glow.
+        /// 0…1 strength of the slow pulsing glow.
         var ember: Float = 0.5
+        /// Theme palette: three stops that cycle across the surface (rgb), with sheen gain in A.w and rim gain in B.w.
+        var themeA = SIMD4<Float>(1.00, 0.50, 0.10, 1.0)
+        var themeB = SIMD4<Float>(0.85, 0.25, 0.04, 1.0)
+        var themeC = SIMD4<Float>(1.00, 0.68, 0.20, 0.0)
+        /// Gradient size in points per cycle, drift (cycles/s), tilt-driven iridescence.
+        var gradient = SIMD3<Float>(260, 0.02, 0)
+        /// Colour glow from within the glass, and chrome-like environment reflection (0...1).
+        var fill: Float = 0.1
+        var chrome: Float = 0
     }
 
     /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
@@ -133,7 +144,11 @@ final class ObsidianBlobMetal {
             fillet: Float(max(1, fillet * scale)),
             facet: min(1, max(0, look.facet)),
             facetSize: max(6, look.facetSize * Float(scale)),
-            ember: min(1, max(0, look.ember))
+            ember: min(1.5, max(0, look.ember)),
+            themeA: look.themeA,
+            themeB: look.themeB,
+            themeC: SIMD4(look.themeC.x, look.themeC.y, look.themeC.z, look.chrome),
+            grad: SIMD4(look.gradient.x * Float(scale), look.gradient.y, look.gradient.z, look.fill)
         )
         enc.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
 
@@ -142,7 +157,7 @@ final class ObsidianBlobMetal {
             guard i < circles.count else { return .zero }
             let c = circles[i]
             // LOCKED: scale AppKit-local centers into pixel space. No Y inversion.
-            return SIMD4(c.center.x * s, c.center.y * s, max(0.5, c.radius * s), 0)
+            return SIMD4(c.center.x * s, c.center.y * s, max(0.5, c.radius * s), c.emphasis)
         }
         enc.setFragmentBytes(&packed, length: MemoryLayout<SIMD4<Float>>.stride * Self.maxCircles, index: 1)
 
@@ -234,6 +249,10 @@ final class ObsidianBlobMetal {
         var facet: Float
         var facetSize: Float
         var ember: Float
+        var themeA: SIMD4<Float>
+        var themeB: SIMD4<Float>
+        var themeC: SIMD4<Float>
+        var grad: SIMD4<Float>
     }
 
     private static let shaderSource = """
@@ -258,6 +277,10 @@ final class ObsidianBlobMetal {
         float facet;
         float facetSize;
         float ember;
+        float4 themeA;
+        float4 themeB;
+        float4 themeC;
+        float4 grad;
     };
 
     struct VertexOut {
@@ -372,6 +395,15 @@ final class ObsidianBlobMetal {
         return float4(d1, d2 - d1, hash22(id + 17.0));
     }
 
+    // The theme's three colours cycle A -> B -> C -> A. `t` is in cycles.
+    float3 themePalette(float t, constant Uniforms &u) {
+        t = fract(t) * 3.0;
+        float3 a = u.themeA.xyz, b = u.themeB.xyz, c = u.themeC.xyz;
+        if (t < 1.0) return mix(a, b, smoothstep(0.0, 1.0, t));
+        if (t < 2.0) return mix(b, c, smoothstep(0.0, 1.0, t - 1.0));
+        return mix(c, a, smoothstep(0.0, 1.0, t - 2.0));
+    }
+
     fragment float4 obsidian_fragment(VertexOut in [[stage_in]],
                                       constant Uniforms &u [[buffer(0)]],
                                       constant float4 *circles [[buffer(1)]]) {
@@ -438,45 +470,78 @@ final class ObsidianBlobMetal {
         float3 L = normalize(float3(u.lightDir.x, u.lightDir.y, 0.85));
 
         float thick = saturate(h);
-        float3 dark = u.baseColor.xyz * 0.30 + float3(0.014, 0.011, 0.009);
-        float3 glow = u.glow.xyz;
+        // Theme palette in ONE fixed environment: a gradient across the screen (not tied to the cursor) that drifts
+        // slowly with time, and shifts with the surface tilt for oil-slick iridescence.
+        float gcoord = dot(p - wPin, float2(0.8, 0.6)) / max(u.grad.x, 1.0) + u.time * u.grad.y
+                     + u.grad.z * dot(N.xy, float2(0.7, 0.4));
+        float3 P = themePalette(gcoord, u);
+        float3 P2 = themePalette(gcoord + 0.5, u);
+        float3 P3 = themePalette(gcoord + 0.25, u);
+        float pulse = 0.65 * (0.5 + 0.5 * sin(u.time * 2.1)) + 0.35 * (0.5 + 0.5 * sin(u.time * 3.4 + 1.3));
+        float3 dark = u.baseColor.xyz * 0.55;
+        float3 glow = P;
         float tAmt = saturate(u.transmission) * (0.14 + 1.05 * pow(1.0 - thick, 1.9));
         float3 beer = exp(-u.absorb.xyz * thick * 1.7);
         float3 body = mix(dark, glow * beer, tAmt);
-        body += float3(0.012, 0.009, 0.007) * (0.35 + 0.65 * thick);
+        body += u.baseColor.xyz * 0.25 * (0.35 + 0.65 * thick);
 
         float ndl = saturate(dot(N, L));
         float wrap = saturate(dot(N, normalize(float3(-L.x, -L.y, 0.9))) * 0.5 + 0.5);
         body *= 0.55 + 0.55 * ndl + 0.25 * wrap;
+        // Action buds (circles carrying an emphasis value): glow with the theme colour so the label inside reads
+        // as light within the glass, and the armed bud lights up fully.
+        float budGlow = 0.0;
+        for (uint bi = sp; bi < n; bi++) {
+            float w = circles[bi].w;
+            if (w > 0.001) {
+                float dbi = length(p - circles[bi].xy) - circles[bi].z;
+                budGlow = max(budGlow, w * exp(-max(dbi, 0.0) * 0.07));
+            }
+        }
+        // Colour fill: the theme colour glowing from within the glass, strongest where it is thin, breathing with the pulse.
+        body += P * u.grad.w * (0.30 + 0.70 * pow(1.0 - thick, 1.2)) * (0.55 + 0.45 * ndl) * (0.85 + 0.15 * pulse);
+        body += P * budGlow * (0.16 + 0.34 * pow(1.0 - thick, 1.1)) * (0.8 + 0.2 * pulse);
 
         float fres = pow(1.0 - saturate(dot(N, V)), 2.2) * (0.55 + u.fresnel);
-        body += fres * float3(1.0, 0.72, 0.42) * 0.36;
+        body += fres * mix(P, float3(1.0), 0.2) * 0.40 * u.themeB.w;
 
         float3 H = normalize(L + V);
         float gloss = mix(24.0, 130.0, saturate(u.shininess));
         float spec = pow(saturate(dot(N, H)), gloss) * (0.45 + u.shininess);
-        body += spec * float3(1.0, 0.94, 0.86) * 1.1 * (1.0 - 0.45 * saturate(u.facet));
+        body += spec * mix(float3(1.0), P, 0.15) * 1.1 * (1.0 - 0.45 * saturate(u.facet));
         // Wet-glass sheen: a broad soft reflection of a window above-left, plus a faint cool-warm
         // bounce on the far side. This is what makes smooth black read as liquid, not paint.
         float sheen = pow(saturate(dot(N, normalize(float3(-0.35, 0.6, 0.72)))), 7.0);
-        body += sheen * (0.10 + 0.22 * u.shininess) * float3(1.0, 0.93, 0.84);
+        body += sheen * (0.10 + 0.22 * u.shininess) * u.themeA.w * mix(float3(1.0), P3, 0.25);
         float bounce = pow(saturate(dot(N, normalize(float3(0.5, -0.6, 0.62)))), 5.0);
-        body += bounce * 0.06 * float3(1.0, 0.55, 0.2);
+        body += bounce * 0.06 * P2;
 
         // Faint bright seams where planes meet, plus a per-facet glint that wakes up as the
         // light swings with the motion.
         float seam = 1.0 - smoothstep(0.0, 0.07, cell.y);
-        body += seam * u.facet * 0.12 * float3(1.0, 0.62, 0.22) * (0.4 + 0.6 * thick);
+        body += seam * u.facet * 0.12 * P * (0.4 + 0.6 * thick);
         // Sharp, snap-on glints: only facets whose plane lines up with the light flash, and
         // they flash hard rather than shimmer. Moving the light (i.e. the mouse) sweeps them.
         float glint = smoothstep(0.972, 0.996, dot(N, H)) * (0.35 + 0.65 * cell.w);
-        body += glint * u.facet * 0.9 * float3(1.0, 0.90, 0.74) * (1.0 - seam);
+        body += glint * u.facet * 0.9 * mix(float3(1.0), P, 0.3) * (1.0 - seam);
+
+        // Chrome: reflect a bright studio environment (sky, dark horizon, a softbox streak) for mirror-like themes.
+        if (u.themeC.w > 0.001) {
+            // Exaggerate the tilt for the mirror so the sky / horizon bands wrap visibly around a small blob.
+            float3 Nc = normalize(float3(N.xy * 2.6, N.z));
+            float3 R = reflect(-V, Nc);
+            float sky = smoothstep(-0.25, 0.30, R.y);
+            float box = smoothstep(0.80, 0.97, dot(R, normalize(float3(-0.4, 0.7, 0.6))));
+            float3 env = mix(float3(0.04, 0.05, 0.08), float3(0.92, 0.95, 1.0), sky) + box * 1.1;
+            env *= mix(float3(1.0), P, 0.25);
+            float frn = 0.35 + 0.65 * pow(1.0 - saturate(N.z), 1.5);
+            body = mix(body, env, saturate(u.themeC.w * (0.55 + 0.45 * frn)));
+        }
 
         // Ember: a slow, slightly irregular pulse (two out-of-step sines) of amber light from inside.
         // It pools in the thin edges and crackles faintly along the facet seams.
-        float pulse = 0.65 * (0.5 + 0.5 * sin(u.time * 2.1)) + 0.35 * (0.5 + 0.5 * sin(u.time * 3.4 + 1.3));
         float emberAmt = u.ember * (0.35 + 0.65 * pulse);
-        float3 emberCol = float3(1.0, 0.42, 0.07);
+        float3 emberCol = P * 1.1;
         body += emberCol * emberAmt * (0.30 * pow(1.0 - thick, 1.7) + 0.06 * thick * thick * thick);
         float crackle = 0.5 + 0.5 * sin(u.time * 1.7 + cell.z * 6.2831);
         body += emberCol * emberAmt * seam * saturate(u.facet) * (0.35 + 0.65 * crackle) * 0.9;

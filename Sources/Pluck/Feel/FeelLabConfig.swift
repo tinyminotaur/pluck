@@ -61,8 +61,12 @@ final class FeelLabConfig: ObservableObject {
     @Published var lightness: Double { didSet { save("lightness", lightness) } }
     /// Amber warmth (0 = deep red-amber, 1 = hot amber). Stored under the legacy key `coolTint`.
     @Published var coolTint: Double { didSet { save("coolTint", coolTint) } }
-    /// Strength of the slow pulsing amber glow.
-    @Published var ember: Double { didSet { save("ember", ember) } }
+    /// Glow intensity multiplier (the theme sets the base strength of its pulsing glow).
+    @Published var ember: Double { didSet { save("glowGain", ember) } }
+    /// Selected look and feel. `themeID == "custom"` uses `customTheme` (a "Surprise me" palette).
+    @Published var themeID: String { didSet { saveString("themeID", themeID) } }
+    @Published var presetID: String { didSet { saveString("presetID", presetID) } }
+    @Published private(set) var customTheme: LiquidTheme? { didSet { saveCustomTheme() } }
     /// Master switch for the chipped-obsidian facets. Off while the liquid itself is being tuned.
     @Published var facetsEnabled: Bool { didSet { saveBool("facetsEnabled", facetsEnabled) } }
     @Published var facetAmount: Double { didSet { save("facetAmount", facetAmount) } }
@@ -138,7 +142,10 @@ final class FeelLabConfig: ObservableObject {
         shadowStrength = Self.load("shadowStrength", 0.55)
         lightness = Self.load("lightness", 0.06)
         coolTint = Self.load("coolTint", 0.45)
-        ember = Self.load("ember", 0.55)
+        ember = Self.load("glowGain", 1.0)
+        themeID = UserDefaults.standard.string(forKey: "pluck.feel.themeID") ?? ThemeLibrary.obsidianEmber.id
+        presetID = UserDefaults.standard.string(forKey: "pluck.feel.presetID") ?? PresetLibrary.all[0].id
+        customTheme = UserDefaults.standard.data(forKey: "pluck.feel.customTheme").flatMap { try? JSONDecoder().decode(LiquidTheme.self, from: $0) }
         facetsEnabled = Self.loadBool("facetsEnabled", false)
         facetAmount = Self.load("facetAmount", 0.55)
         facetSize = Self.load("facetSize", 22)
@@ -188,7 +195,9 @@ final class FeelLabConfig: ObservableObject {
         shadowStrength = 0.55
         lightness = 0.06
         coolTint = 0.45
-        ember = 0.55
+        ember = 1.0
+        themeID = ThemeLibrary.obsidianEmber.id
+        presetID = PresetLibrary.all[0].id
         facetsEnabled = false
         facetAmount = 0.55
         facetSize = 22
@@ -249,6 +258,57 @@ final class FeelLabConfig: ObservableObject {
             blue: L * (1 - cool * 0.3),
             alpha: 1
         )
+    }
+
+    // MARK: Themes and presets
+
+    /// The active theme (a built-in, or the last "Surprise me" palette).
+    var theme: LiquidTheme {
+        if themeID == "custom", let customTheme { return customTheme }
+        return ThemeLibrary.theme(id: themeID) ?? ThemeLibrary.obsidianEmber
+    }
+
+    /// Knob name -> property, so presets can set knobs by name.
+    private static let knobPaths: [String: ReferenceWritableKeyPath<FeelLabConfig, Double>] = [
+        "restRadius": \.restRadius, "stretchPull": \.stretchPull, "neckFloor": \.neckFloor,
+        "pinMass": \.pinMass, "headMass": \.headMass, "pinMinFraction": \.pinMinFraction,
+        "headMinFraction": \.headMinFraction, "responsiveness": \.responsiveness, "damping": \.damping,
+        "sloshAmount": \.sloshAmount, "whipResponse": \.whipResponse, "particleCount": \.particleCount,
+        "shininess": \.shininess, "fresnel": \.fresnel, "transmission": \.transmission,
+        "absorption": \.absorption, "glassOpacity": \.glassOpacity, "rimStrength": \.rimStrength,
+        "shadowStrength": \.shadowStrength, "ember": \.ember, "recoilBounce": \.recoilBounce,
+        "crystallize": \.crystallize, "idleLife": \.idleLife, "flingMomentum": \.flingMomentum,
+        "reachGain": \.reachGain, "gravity": \.gravity, "magnetPull": \.magnetPull,
+        "magnetWeight": \.magnetWeight, "magnetStick": \.magnetStick,
+    ]
+
+    /// Apply a preset: every knob to the baseline, then the preset's own values, then its theme.
+    func apply(preset: FeelPreset) {
+        for (key, value) in PresetLibrary.resolvedValues(preset) {
+            if let path = Self.knobPaths[key] { self[keyPath: path] = value }
+        }
+        themeID = preset.themeID
+        presetID = preset.id
+    }
+
+    /// Change only the colours, keeping the current feel.
+    func apply(theme t: LiquidTheme) {
+        themeID = t.id
+    }
+
+    /// A one-off random palette.
+    func surpriseMe() {
+        customTheme = ThemeLibrary.random(seed: UInt64.random(in: 0...UInt64.max))
+        themeID = "custom"
+    }
+
+    private func saveCustomTheme() {
+        if let customTheme, let data = try? JSONEncoder().encode(customTheme) {
+            UserDefaults.standard.set(data, forKey: "pluck.feel.customTheme")
+        }
+    }
+    private func saveString(_ key: String, _ value: String) {
+        defaults.set(value, forKey: prefix + key)
     }
 
     private func save(_ key: String, _ value: Double) {

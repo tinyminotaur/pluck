@@ -7,7 +7,8 @@ import PluckCore
 /// Grid: rows = light direction, columns = rest / stretched / taut.
 @MainActor
 enum PreviewRender {
-    static func run(outputPath: String) -> Int32 {
+    /// `themes == nil`: the standard grid (rows = light directions, current theme). Otherwise one row per theme.
+    static func run(outputPath: String, themes: [LiquidTheme]? = nil) -> Int32 {
         guard let metal = ObsidianBlobMetal.shared else {
             FileHandle.standardError.write(Data("PreviewRender: no Metal device or shader failed to compile\n".utf8))
             return 2
@@ -21,7 +22,10 @@ enum PreviewRender {
             (CGPoint(x: 130, y: 150), CGPoint(x: 300, y: 120), 10),
             (CGPoint(x: 70, y: 170), CGPoint(x: 440, y: 90), -26),
         ]
-        let lights: [SIMD2<Float>] = [SIMD2(-0.45, 0.8), SIMD2(0.6, 0.6), SIMD2(-0.2, -0.7)]
+        let lightSet: [SIMD2<Float>] = [SIMD2(-0.45, 0.8), SIMD2(0.6, 0.6), SIMD2(-0.2, -0.7)]
+        let rows: [(light: SIMD2<Float>, theme: LiquidTheme)] = themes.map { ts in ts.map { (SIMD2<Float>(-0.45, 0.8), $0) } }
+            ?? lightSet.map { ($0, FeelLabConfig.shared.theme) }
+        let lights = rows.map(\.light)
 
         let W = Int(tile.width * scale) * scenes.count
         let H = Int(tile.height * scale) * lights.count
@@ -33,7 +37,9 @@ enum PreviewRender {
         ctx.setFillColor(CGColor(red: 0.79, green: 0.8, blue: 0.83, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
 
-        for (r, light) in lights.enumerated() {
+        for (r, row) in rows.enumerated() {
+            let light = row.light
+            let theme = row.theme
             for (c, s) in scenes.enumerated() {
                 let n = 16
                 let dx = s.head.x - s.pin.x, dy = s.head.y - s.pin.y
@@ -84,10 +90,16 @@ enum PreviewRender {
                 let look = ObsidianBlobMetal.Look(
                     lightDir: light, time: 1.3, shininess: 0.95, fresnel: 0.85, transmission: 0.7,
                     opacity: 0.92, edgeSoft: 0.1,
-                    baseColor: SIMD3(0.04, 0.034, 0.03),
-                    absorb: ObsidianPalette.absorb(depth: 0.75),
-                    glow: ObsidianPalette.glow(warmth: 0.45),
-                    facet: facet, facetSize: 22, ember: 0.55
+                    baseColor: SIMD3(theme.body.r, theme.body.g, theme.body.b),
+                    absorb: SIMD3(theme.absorb.r, theme.absorb.g, theme.absorb.b),
+                    glow: SIMD3(theme.a.r, theme.a.g, theme.a.b),
+                    facet: facet, facetSize: 22, ember: theme.ember,
+                    themeA: SIMD4(theme.a.r, theme.a.g, theme.a.b, theme.sheen),
+                    themeB: SIMD4(theme.b.r, theme.b.g, theme.b.b, theme.rim),
+                    themeC: SIMD4(theme.c.r, theme.c.g, theme.c.b, 0),
+                    gradient: SIMD3(theme.gradientScale, theme.gradientSpeed, theme.iridescence),
+                    fill: theme.fill,
+                    chrome: theme.chrome
                 )
                 guard let image = metal.render(
                     size: tile, scale: scale, circles: circles, spineCount: strandCount,
@@ -117,6 +129,52 @@ enum PreviewRender {
             FileHandle.standardError.write(Data("PreviewRender: \(error)\n".utf8))
             return 7
         }
+    }
+
+    /// `Pluck --render-compass out.png`: the real MetaballView drawn headlessly, with its integrated action labels.
+    /// Rows are themes; columns are rest, pulled east (Go armed), and pulled north (Keep armed).
+    static func runCompass(outputPath: String) -> Int32 {
+        let tile = CGSize(width: 520, height: 380)
+        let scale: CGFloat = 2
+        let themes = [ThemeLibrary.obsidianEmber, ThemeLibrary.oilSlick, ThemeLibrary.neonJelly]
+        let cols: [(pointer: CGPoint, armed: CompassRole?)] = [
+            (CGPoint(x: 170, y: 190), nil),
+            (CGPoint(x: 330, y: 200), .east),
+            (CGPoint(x: 175, y: 330), .north),
+        ]
+        let W = Int(tile.width * scale) * cols.count, H = Int(tile.height * scale) * themes.count
+        guard let ctx = CGContext(
+            data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return 3 }
+        ctx.setFillColor(CGColor(red: 0.16, green: 0.17, blue: 0.2, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        let saved = FeelLabConfig.shared.themeID
+        defer { FeelLabConfig.shared.themeID = saved }
+        let items = FeelLab.context.items
+        for (r, theme) in themes.enumerated() {
+            FeelLabConfig.shared.themeID = theme.id
+            for (c, col) in cols.enumerated() {
+                let view = MetaballView(frame: NSRect(origin: .zero, size: tile))
+                view.debugPose(pin: CGPoint(x: 170, y: 190), pointer: col.pointer, armed: col.armed, items: items, seconds: 1.6)
+                ctx.saveGState()
+                ctx.translateBy(x: CGFloat(c) * tile.width * scale, y: CGFloat(themes.count - 1 - r) * tile.height * scale)
+                ctx.scaleBy(x: scale, y: scale)
+                ctx.clip(to: CGRect(origin: .zero, size: tile))
+                let gc = NSGraphicsContext(cgContext: ctx, flipped: false)
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = gc
+                view.draw(CGRect(origin: .zero, size: tile))
+                NSGraphicsContext.restoreGraphicsState()
+                ctx.restoreGState()
+                view.stopPhysics()
+            }
+        }
+        guard let out = ctx.makeImage(),
+              let png = NSBitmapImageRep(cgImage: out).representation(using: .png, properties: [:]) else { return 5 }
+        do { try png.write(to: URL(fileURLWithPath: outputPath)); print("PreviewRender: wrote \(outputPath)"); return 0 }
+        catch { return 7 }
     }
 
     /// Coverage and brightness summary so a log reader can sanity-check a render without the PNG.
