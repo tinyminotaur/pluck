@@ -69,6 +69,8 @@ final class MetaballView: NSView {
     private var latchPulse: CGFloat = 0
     private var armedPos: [CompassRole: CGFloat] = [:]
     private var armedVel: [CompassRole: CGFloat] = [:]
+    private var commitRole: CompassRole?
+    private var commitFlash: CGFloat = 0
 
     private let metal = ObsidianBlobMetal.shared
 
@@ -107,6 +109,8 @@ final class MetaballView: NSView {
         latchPulse = 0
         armedPos = [:]
         armedVel = [:]
+        commitRole = nil
+        commitFlash = 0
         headVel = .zero
         guard !physicsRunning else { return }
         physicsRunning = true
@@ -165,6 +169,7 @@ final class MetaballView: NSView {
     private func updateCompassUI(dt: CGFloat) {
         gestureTime += dt
         latchPulse = max(0, latchPulse - dt / 0.35)
+        commitFlash = max(0, commitFlash - dt / 0.32)
 
         let speed = hypot(headVel.x, headVel.y)
         let lingering = gestureTime > 0.22 || (gestureTime > 0.10 && speed < 150)
@@ -221,8 +226,10 @@ final class MetaballView: NSView {
 
     /// Release: the head springs back to the pin with overshoot while the body sloshes, then
     /// the blob melts away. `done` fires once, after the blob has settled.
-    func beginRecoil(done: @escaping () -> Void) {
+    func beginRecoil(role: CompassRole? = nil, done: @escaping () -> Void) {
         guard !reducedMotion, physicsRunning, !recoiling else { done(); return }
+        commitRole = role
+        commitFlash = role == nil ? 0 : 1
         recoiling = true
         recoilElapsed = 0
         recoilSettled = false
@@ -445,9 +452,23 @@ final class MetaballView: NSView {
     /// Cancel ring + one pill per available role. Slices are fixed (see `GestureMath`); only the
     /// labels move, to stay on screen near display edges.
     private func drawCompass(_ ctx: CGContext) {
-        let alpha = reducedMotion ? bloom : labelAlpha
+        let committing = recoiling && commitRole != nil
+        let alpha = committing ? commitFlash : (reducedMotion ? bloom : labelAlpha)
         guard alpha > 0.01, !items.isEmpty else { return }
         let c = lockedPin
+
+        // Selected direction: a soft arc sweeping the armed slice.
+        if !committing, let role = captured, !reducedMotion {
+            let pop = max(0, min(1.2, armedPos[role] ?? 0))
+            let d = LabelLayout.direction(of: role)
+            let mid = atan2(d.y, d.x) * 180 / .pi
+            let arc = NSBezierPath()
+            arc.appendArc(withCenter: c, radius: GestureMath.deadZone + 26, startAngle: mid - 38, endAngle: mid + 38)
+            arc.lineWidth = 3
+            arc.lineCapStyle = .round
+            NSColor(calibratedRed: 0.8, green: 0.9, blue: 1.0, alpha: 0.5 * alpha * pop).setStroke()
+            arc.stroke()
+        }
 
         // Cancel zone: release inside the ring cancels.
         let ringR = GestureMath.deadZone
@@ -460,8 +481,11 @@ final class MetaballView: NSView {
 
         let anyArmed = captured != nil
         for item in items {
-            let armed = captured == item.role
-            let pop = reducedMotion ? (armed ? 1 : 0) : (armedPos[item.role] ?? 0)
+            // On commit only the chosen label stays: it swells and fades like a confirmation.
+            if committing, item.role != commitRole { continue }
+            let armed = committing || captured == item.role
+            var pop = reducedMotion ? (armed ? 1 : 0) : (armedPos[item.role] ?? 0)
+            if committing { pop = 1 + 1.3 * (1 - commitFlash) }
             let titleAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
                 .foregroundColor: armed ? NSColor(calibratedWhite: 0.06, alpha: 1) : NSColor(calibratedWhite: 0.97, alpha: 1),
@@ -486,7 +510,7 @@ final class MetaballView: NSView {
             let center = LabelLayout.clamped(center: raw, size: scaled, in: bounds)
 
             ctx.saveGState()
-            ctx.setAlpha(alpha * ((anyArmed && !armed) ? 0.55 : 1))
+            ctx.setAlpha(alpha * ((anyArmed && !armed && !committing) ? 0.55 : 1))
             ctx.translateBy(x: center.x, y: center.y)
             ctx.scaleBy(x: scale, y: scale)
 
@@ -556,7 +580,10 @@ final class MetaballView: NSView {
         let chordNow = hypot(head.x - anchor.x, head.y - anchor.y)
         let stretchT = smoothstep01((chordNow - 40) / 200)
         let cry = CGFloat(cfg.crystallize)
-        let facetEff = CGFloat(cfg.facetAmount) * ((1 - cry) + cry * (0.3 + 0.9 * stretchT)) + 0.35 * recoilPulse + 0.25 * latchPulse
+        let tension: CGFloat = (1 - cry) + cry * (0.3 + 0.9 * stretchT)
+        var facetEff: CGFloat = CGFloat(cfg.facetAmount) * tension
+        facetEff += 0.35 * recoilPulse
+        facetEff += 0.25 * latchPulse
 
         let look = ObsidianBlobMetal.Look(
             lightDir: SIMD2(Float(smoothLight.x), Float(smoothLight.y)),

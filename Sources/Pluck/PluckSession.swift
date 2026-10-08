@@ -126,6 +126,7 @@ final class PluckSession: ObservableObject {
         )
         let ctx = context
         let resultTitle = FeelLab.title(for: role)
+        if role != nil { Haptics.tick(.levelChange) }
 
         finishVisual(commitRole: role) {
             if FeelLab.enabled {

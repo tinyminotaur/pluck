@@ -101,7 +101,7 @@ final class OverlayController {
 
         // Snap back to the pin with a springy overshoot, then melt away. The cursor is already
         // visible at the release point, so the blob visibly recoils from under it.
-        view.beginRecoil { [weak self] in
+        view.beginRecoil(role: role) { [weak self] in
             finish()
             self?.hide()
         }
