@@ -8,6 +8,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case ferro
     case crystal
     case gravity
+    case pearls
+    case swarm
+    case tendrils
 
     public var name: String {
         switch self {
@@ -15,6 +18,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .ferro: return "Ferrofluid"
         case .crystal: return "Crystal"
         case .gravity: return "Gravity"
+        case .pearls: return "Pearls"
+        case .swarm: return "Fireflies"
+        case .tendrils: return "Tendrils"
         }
     }
 
@@ -24,6 +30,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .ferro: return "Spikes bristle toward the magnet; iron filings string the field"
         case .crystal: return "A crystal grows toward you, branching and evolving; it shatters on commit"
         case .gravity: return "Two bodies: the heavy pin pulls harder, grains orbit and stream between them"
+        case .pearls: return "A beaded necklace on rope physics: it sags, swings and flings its pearls"
+        case .swarm: return "A swarm of glowing fireflies hovers at the pin and streams toward you"
+        case .tendrils: return "Tentacles reach for the cursor, undulating and tapering to fine tips"
         }
     }
 }

@@ -175,7 +175,8 @@ enum PreviewRender {
         let chords: [CGFloat] = [0, 150, 330, 330]
         let rows: [(AnimationStyle, LiquidTheme)] = [
             (.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst), (.crystal, ThemeLibrary.frost),
-            (.gravity, ThemeLibrary.moltenGold),
+            (.gravity, ThemeLibrary.moltenGold), (.pearls, ThemeLibrary.mercury), (.swarm, ThemeLibrary.aurora),
+            (.tendrils, ThemeLibrary.neonJelly),
         ]
         let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
         guard let ctx = CGContext(
@@ -201,6 +202,23 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
+                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils {
+                    let head = { (k: CGFloat) in CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))) }
+                    var t: CGFloat = 0
+                    switch row.0 {
+                    case .pearls:
+                        var a = PearlSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        prims = a.primitives(emerge: 1, headGlow: armed)
+                    case .swarm:
+                        var a = SwarmSim(); a.params.bodyRadius = 26; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        prims = a.primitives(emerge: 1, headGlow: armed)
+                    default:
+                        var a = TendrilSim(); a.params.bodyRadius = 28; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        prims = a.primitives(emerge: 1, headGlow: armed)
+                    }
                 } else if row.0 == .gravity {
                     var a = AstroSim()
                     a.params.bodyRadius = 30

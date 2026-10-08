@@ -309,6 +309,21 @@ public enum PresetLibrary {
                     "restRadius": 54, "magnetPull": 70, "magnetWeight": 0.88, "magnetStick": 0.25, "reachGain": 2.0,
                     "idleLife": 0.5, "glassOpacity": 0.96, "shadowStrength": 0.3,
                    ], style: .gravity),
+        FeelPreset(id: "pearl-necklace", name: "Pearl Necklace", tagline: "A string of glossy pearls that sags and swings",
+                   themeID: "mercury", values: [
+                    "restRadius": 48, "magnetPull": 60, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
+                    "idleLife": 0.4, "glassOpacity": 0.97, "shadowStrength": 0.4,
+                   ], style: .pearls),
+        FeelPreset(id: "fireflies", name: "Fireflies", tagline: "A glowing swarm that follows your hand through the dark",
+                   themeID: "aurora", values: [
+                    "restRadius": 44, "magnetPull": 90, "magnetWeight": 0.7, "magnetStick": 0.25, "reachGain": 2.2,
+                    "idleLife": 0.6, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .swarm),
+        FeelPreset(id: "anemone", name: "Anemone", tagline: "Soft tentacles reach for the cursor and sway",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 55, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
+                    "idleLife": 0.6, "glassOpacity": 0.95, "shadowStrength": 0.3,
+                   ], style: .tendrils),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.

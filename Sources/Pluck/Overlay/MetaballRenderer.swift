@@ -75,6 +75,9 @@ final class MetaballView: NSView {
     private var ferro = FerroSim()
     private var crystal = CrystalSim()
     private var astro = AstroSim()
+    private var pearls = PearlSim()
+    private var swarm = SwarmSim()
+    private var tendrils = TendrilSim()
     /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
     private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
@@ -195,6 +198,9 @@ final class MetaballView: NSView {
         astro = AstroSim()
         astro.params.bodyRadius = radius * 0.72
         astro.reset(pin: lockedPin)
+        pearls = PearlSim(); pearls.params.bodyRadius = radius * 0.72; pearls.reset(pin: lockedPin)
+        swarm = SwarmSim(); swarm.params.bodyRadius = radius * 0.62; swarm.reset(pin: lockedPin)
+        tendrils = TendrilSim(); tendrils.params.bodyRadius = radius * 0.66; tendrils.reset(pin: lockedPin)
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -319,6 +325,9 @@ final class MetaballView: NSView {
             case .ferro: ferro.step(dt: h, pin: lockedPin, head: head)
             case .crystal: crystal.step(dt: h, pin: lockedPin, head: head)
             case .gravity: astro.step(dt: h, pin: lockedPin, head: head)
+            case .pearls: pearls.step(dt: h, pin: lockedPin, head: head)
+            case .swarm: swarm.step(dt: h, pin: lockedPin, head: head)
+            case .tendrils: tendrils.step(dt: h, pin: lockedPin, head: head)
             case .liquid: break
             }
         }
@@ -330,6 +339,9 @@ final class MetaballView: NSView {
         case .ferro: return ferro.isFinished
         case .crystal: return crystal.isFinished
         case .gravity: return astro.isFinished
+        case .pearls: return pearls.isFinished
+        case .swarm: return swarm.isFinished
+        case .tendrils: return tendrils.isFinished
         }
     }
 
@@ -378,6 +390,9 @@ final class MetaballView: NSView {
         case .ferro: return ferro.primitives(emerge: emerge, headGlow: glow)
         case .crystal: return crystal.primitives(emerge: emerge, headGlow: glow)
         case .gravity: return astro.primitives(emerge: emerge, headGlow: glow)
+        case .pearls: return pearls.primitives(emerge: emerge, headGlow: glow)
+        case .swarm: return swarm.primitives(emerge: emerge, headGlow: glow)
+        case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
         case .liquid: return []
         }
     }
@@ -419,7 +434,7 @@ final class MetaballView: NSView {
         look.roleShift = Float(roleShift)
         look.shadow = Float(cfg.shadowStrength)
         look.shininess = Float(max(0.3, cfg.shininess))
-        look.smoothK = Float(activeStyle == .ferro ? 10 : (activeStyle == .gravity ? 8 : 6))
+        look.smoothK = Float(activeStyle == .ferro ? 10 : (activeStyle == .tendrils ? 9 : (activeStyle == .gravity ? 8 : 6)))
         guard let drawable = metalLayer.nextDrawable(), let cmd = shapes.makeCommandBuffer() else { return }
         shapes.encode(into: drawable.texture, commandBuffer: cmd, origin: rect.origin, scale: scale, prims: prims, look: look)
         cmd.commit()
@@ -695,6 +710,12 @@ final class MetaballView: NSView {
             if role != nil { crystal.shatter(direction: actionDirection()) } else { crystal.retract() }
         case .gravity:
             astro.release(commit: role != nil ? actionDirection() : nil)
+        case .pearls:
+            pearls.release(commit: role != nil ? actionDirection() : nil)
+        case .swarm:
+            swarm.release(commit: role != nil ? actionDirection() : nil)
+        case .tendrils:
+            tendrils.release(commit: role != nil ? actionDirection() : nil)
         }
     }
 

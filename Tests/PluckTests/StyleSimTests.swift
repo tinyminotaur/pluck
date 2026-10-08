@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 4)
+        XCTAssertEqual(AnimationStyle.allCases.count, 7)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -183,5 +183,46 @@ final class AstroSimTests: XCTestCase {
         a.release(commit: CGPoint(x: 1, y: 0))
         for _ in 0..<100 { a.step(dt: 1.0 / 120, pin: CGPoint(x: 500, y: 500), head: CGPoint(x: 800, y: 500)) }
         XCTAssertTrue(a.isFinished)
+    }
+}
+
+final class DelightSimTests: XCTestCase {
+    private let pin = CGPoint(x: 400, y: 400)
+    private func head(_ k: CGFloat, _ chord: CGFloat) -> CGPoint { CGPoint(x: pin.x + chord * k, y: pin.y + 10 * k) }
+
+    func testPearlsHangBetweenTheEndsAndNeverOverstretch() {
+        var p = PearlSim(); p.reset(pin: pin)
+        for i in 0..<400 { p.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 100), 500)) }
+        let prims = p.primitives(emerge: 1)
+        XCTAssertEqual(prims.count, p.beadCount)          // pearls + the two ends
+        for q in prims { XCTAssertTrue(q.a.x.isFinite && q.a.y.isFinite && q.ra > 0) }
+    }
+
+    func testSwarmStreamsTowardTheHead() {
+        var s = SwarmSim(); s.reset(pin: pin)
+        for i in 0..<600 { s.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 100), 600)) }
+        let xs = s.primitives(emerge: 1).dropFirst(2).map { $0.a.x }
+        XCTAssertGreaterThan(xs.max()!, pin.x + 350)
+        XCTAssertEqual(xs.count > 20, true)
+    }
+
+    func testTendrilsReachTowardTheHeadAndTaper() {
+        var t = TendrilSim(); t.reset(pin: pin)
+        for i in 0..<500 { t.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 100), 400)) }
+        let cones = t.primitives(emerge: 1).filter { $0.kind == .cone }
+        XCTAssertGreaterThan(cones.map { $0.b.x }.max()!, pin.x + 150)
+        XCTAssertTrue(cones.allSatisfy { $0.ra >= $0.rb - 1e-6 })
+    }
+
+    func testAllReleaseToFinished() {
+        var p = PearlSim(); p.reset(pin: pin)
+        var s = SwarmSim(); s.reset(pin: pin)
+        var t = TendrilSim(); t.reset(pin: pin)
+        p.release(commit: CGPoint(x: 1, y: 0)); s.release(commit: CGPoint(x: 1, y: 0)); t.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<100 {
+            p.step(dt: 1 / 120, pin: pin, head: head(1, 300)); s.step(dt: 1 / 120, pin: pin, head: head(1, 300))
+            t.step(dt: 1 / 120, pin: pin, head: head(1, 300))
+        }
+        XCTAssertTrue(p.isFinished && s.isFinished && t.isFinished)
     }
 }
