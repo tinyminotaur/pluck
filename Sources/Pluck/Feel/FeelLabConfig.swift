@@ -40,6 +40,15 @@ final class FeelLabConfig: ObservableObject {
     @Published var facetAmount: Double { didSet { save("facetAmount", facetAmount) } }
     @Published var facetSize: Double { didSet { save("facetSize", facetSize) } }
 
+    // MARK: Fidget
+    /// How wobbly the release snap-back is (0 tight … 1 very bouncy).
+    @Published var recoilBounce: Double { didSet { save("recoilBounce", recoilBounce) } }
+    /// How much the facets sharpen with stretch (0 = constant, 1 = liquid at rest → obsidian when taut).
+    @Published var crystallize: Double { didSet { save("crystallize", crystallize) } }
+    /// Idle breathing while held still.
+    @Published var idleLife: Double { didSet { save("idleLife", idleLife) } }
+    @Published var hapticsEnabled: Bool { didSet { saveBool("hapticsEnabled", hapticsEnabled) } }
+
     // MARK: Field (metaball iso)
     @Published var gooBlur: Double { didSet { save("gooBlur", gooBlur) } }
     @Published var gooThreshold: Double { didSet { save("gooThreshold", gooThreshold) } }
@@ -71,6 +80,10 @@ final class FeelLabConfig: ObservableObject {
         coolTint = Self.load("coolTint", 0.45)
         facetAmount = Self.load("facetAmount", 0.55)
         facetSize = Self.load("facetSize", 22)
+        recoilBounce = Self.load("recoilBounce", 0.6)
+        crystallize = Self.load("crystallize", 0.7)
+        idleLife = Self.load("idleLife", 0.5)
+        hapticsEnabled = Self.loadBool("hapticsEnabled", true)
 
         gooBlur = Self.load("gooBlur", 16)
         gooThreshold = Self.load("gooThreshold", 0.5)
@@ -101,6 +114,10 @@ final class FeelLabConfig: ObservableObject {
         coolTint = 0.45
         facetAmount = 0.55
         facetSize = 22
+        recoilBounce = 0.6
+        crystallize = 0.7
+        idleLife = 0.5
+        hapticsEnabled = true
         gooBlur = 16
         gooThreshold = 0.5
         useGooFilter = true

@@ -29,23 +29,23 @@ vec2 blobField(vec2 p,int n,int sp,float k){float d=1e5,r=1.;
  return vec2(d,max(r,1.));}
 float pillow(vec2 f){float u=clamp(-f.x/(f.y*.95),0.,1.);float v=1.-u;return sqrt(max(0.,1.-v*v));}
 vec2 hash22(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453);}
-vec4 facetCells(vec2 m){vec2 g=floor(m),f=fract(m);float d1=8.,d2=8.;vec2 id=vec2(0);
+vec4 facetCells(vec2 m,out vec2 toSeed){vec2 g=floor(m),f=fract(m);float d1=8.,d2=8.;vec2 id=vec2(0);toSeed=vec2(0);
  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j));vec2 r=o+hash22(g+o)*.8+.1-f;float d=dot(r,r);
-  if(d<d1){d2=d1;d1=d;id=g+o;}else if(d<d2){d2=d;}}
+  if(d<d1){d2=d1;d1=d;id=g+o;toSeed=r;}else if(d<d2){d2=d;}}
  d1=sqrt(d1);d2=sqrt(d2);return vec4(d1,d2-d1,hash22(id+17.));}
 void main(){
  vec2 p=gl_FragCoord.xy; int n=min(nC,32); int sp=min(nS,n); float k=max(fillet,1.);
  vec2 f0=blobField(p,n,sp,k);
- vec4 cell=vec4(0,1,.5,.5);
+ vec4 cell=vec4(0,1,.5,.5); vec2 domeS=vec2(0);
  if(facet>.001 && n>=sp+2){vec2 a=c[n-2].xy,ab=c[n-1].xy-a;float len=length(ab);vec2 dir=len>1.?ab/len:vec2(1,0);vec2 rel=p-a;
   float cellAlong=max(len*.25,facetSize);vec2 m=vec2(dot(rel,dir)/cellAlong,dot(rel,vec2(-dir.y,dir.x))/facetSize);
-  cell=facetCells(m); f0.x+=facet*facetSize*.09*(cell.z-.5)*2.;}
+  vec2 toSeed; cell=facetCells(m,toSeed); vec2 outw=-toSeed; domeS=outw.x*dir+outw.y*vec2(-dir.y,dir.x); f0.x+=facet*facetSize*.09*(cell.z-.5)*2.;}
  float alpha=clamp(.5-f0.x/1.5,0.,1.);
  if(alpha<.02){outC=vec4(0);return;}
  float h=pillow(f0);float e=1.5;
  float hx=pillow(blobField(p+vec2(e,0),n,sp,k))-h; float hy=pillow(blobField(p+vec2(0,e),n,sp,k))-h;
  vec3 N=normalize(vec3(-hx*4.8,-hy*4.8,1.));
- vec2 tilt=(cell.zw-.5)*2.; vec3 Nf=normalize(vec3(N.xy*.45+tilt*.55,N.z)); N=normalize(mix(N,Nf,clamp(facet,0.,1.)));
+ vec2 tilt=(cell.zw-.5)*2.; float ripple=sin(cell.x*38.+cell.z*6.2831)*.035; vec3 Nf=normalize(vec3(N.xy*.45+tilt*.45+domeS*.30+domeS*ripple,N.z)); N=normalize(mix(N,Nf,clamp(facet,0.,1.)));
  vec3 V=vec3(0,0,1); vec3 L=normalize(vec3(lightDir,.85));
  float thick=clamp(h,0.,1.);
  vec3 dark=baseC*.35+vec3(.02,.025,.04); float tAmt=clamp(trans,0.,1.)*(.55+.9*pow(1.-thick,1.35));
@@ -55,7 +55,8 @@ void main(){
  float fr=pow(1.-clamp(dot(N,V),0.,1.),2.2)*(.55+fres_); body+=fr*vec3(.85,.9,1.)*.85;
  vec3 H=normalize(L+V); float gloss=mix(12.,48.,clamp(shin,0.,1.)); float spec=pow(clamp(dot(N,H),0.,1.),gloss)*(.45+shin); body+=spec*1.1*(1.-.45*clamp(facet,0.,1.));
  float seam=1.-smoothstep(0.,.07,cell.y); body+=seam*facet*.12*vec3(.75,.85,1.)*(.35+.65*thick);
- body*=1.+facet*.12*(cell.w-.5)*sin(time*2.+cell.z*6.2831);
+ float glint=smoothstep(.972,.996,dot(N,H))*(.35+.65*cell.w); body+=glint*facet*.9*vec3(1.,.97,.92)*(1.-seam);
+ float ign=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715)))); body+=(ign-.5)*(1.4/255.);
  float a=clamp(alpha*opac,0.,1.); outC=vec4(body*a,a);}`;
 const VS=`#version 300 es
 in vec2 q;void main(){gl_Position=vec4(q,0,1);}`;

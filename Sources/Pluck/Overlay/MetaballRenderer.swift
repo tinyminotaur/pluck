@@ -44,6 +44,20 @@ final class MetaballView: NSView {
     private var smoothLight = CGPoint(x: -0.4, y: 0.75)
     private var time: CGFloat = 0
 
+    private static let fixedStep: CGFloat = 1.0 / 240.0
+    private static let maxSubsteps = 4
+    /// Soft ceiling (px/s) on the pointer speed fed into whip / slosh / lighting.
+    private static let maxDriveSpeed: CGFloat = 3500
+    private var accumulator: CGFloat = 0
+    private var frameStartHead: CGPoint = .zero
+
+    private var recoiling = false
+    private var recoilSettled = false
+    private var recoilElapsed: CGFloat = 0
+    private var recoilVel: CGPoint = .zero
+    private var recoilPulse: CGFloat = 0
+    private var recoilDone: (() -> Void)?
+
     private let metal = ObsidianBlobMetal.shared
 
     private var cfg: FeelLabConfig { FeelLabConfig.shared }
@@ -71,6 +85,11 @@ final class MetaballView: NSView {
         }
         resetSpineStraight()
         prevHead = head
+        frameStartHead = head
+        accumulator = 0
+        recoiling = false
+        recoilDone = nil
+        recoilPulse = 0
         headVel = .zero
         guard !physicsRunning else { return }
         physicsRunning = true
@@ -100,6 +119,8 @@ final class MetaballView: NSView {
 
     func stopPhysics() {
         physicsRunning = false
+        recoiling = false
+        recoilDone = nil
         pinLocked = false
         if let displayLink {
             CVDisplayLinkStop(displayLink)
@@ -111,17 +132,93 @@ final class MetaballView: NSView {
 
     private func tick() {
         guard physicsRunning || emerge > 0.01 else { return }
-        // Keep system cursor suppressed for the whole gesture.
-        NSCursor.hide()
-
         let now = CACurrentMediaTime()
         var dt = now - lastTick
         lastTick = now
         dt = min(1.0 / 30.0, max(1.0 / 240.0, dt))
         time += CGFloat(dt)
         tintColor = cfg.tintColor
-        stepPhysics(dt: CGFloat(dt))
+        tickFixed(frameDt: CGFloat(dt))
         needsDisplay = true
+    }
+
+    /// Fixed-timestep accumulator: physics always advances in fixed (`fixedStep`) so damping,
+    /// spring feel and whip are identical on 60 Hz, 120 Hz and jittery frame pacing.
+    private func tickFixed(frameDt: CGFloat) {
+        let h = Self.fixedStep
+        updateHeadMotion(dt: frameDt)
+
+        accumulator += frameDt
+        var steps = Int(accumulator / h)
+        if steps > Self.maxSubsteps {
+            steps = Self.maxSubsteps
+            accumulator = 0
+        } else {
+            accumulator -= CGFloat(steps) * h
+        }
+        guard steps > 0 else { return }
+
+        if recoiling { integrateRecoil(steps: steps, h: h, frameDt: frameDt) }
+        let start = frameStartHead
+        let end = head
+        for k in 1...steps {
+            let t = CGFloat(k) / CGFloat(steps)
+            stepPhysics(dt: h, head: lerp(start, end, t))
+        }
+        frameStartHead = end
+        if recoiling { finishRecoilIfSettled(frameDt: frameDt) }
+    }
+
+    // MARK: Recoil (the satisfying snap-back on release)
+
+    /// Release: the head springs back to the pin with overshoot while the body sloshes, then
+    /// the blob melts away. `done` fires once, after the blob has settled.
+    func beginRecoil(done: @escaping () -> Void) {
+        guard !reducedMotion, physicsRunning, !recoiling else { done(); return }
+        recoiling = true
+        recoilElapsed = 0
+        recoilSettled = false
+        recoilDone = done
+        // Keep a fraction of the release momentum so a flick overshoots past the pin.
+        recoilVel = CGPoint(x: headVel.x * 0.5, y: headVel.y * 0.5)
+        recoilPulse = 1
+    }
+
+    private func integrateRecoil(steps: Int, h: CGFloat, frameDt: CGFloat) {
+        // Underdamped spring toward the pin. Bounce knob: 0 = tight, 1 = very wobbly.
+        let bounce = CGFloat(cfg.recoilBounce)
+        let zeta = 0.72 - 0.5 * bounce
+        let omega: CGFloat = 2 * .pi / 0.30
+        var x = CGPoint(x: head.x - lockedPin.x, y: head.y - lockedPin.y)
+        var v = recoilVel
+        for _ in 0..<steps {
+            let ax = -omega * omega * x.x - 2 * zeta * omega * v.x
+            let ay = -omega * omega * x.y - 2 * zeta * omega * v.y
+            v.x += ax * h
+            v.y += ay * h
+            x.x += v.x * h
+            x.y += v.y * h
+        }
+        recoilVel = v
+        head = CGPoint(x: lockedPin.x + x.x, y: lockedPin.y + x.y)
+        recoilElapsed += frameDt
+        recoilPulse = max(0, recoilPulse - frameDt / 0.45)
+        let off = hypot(x.x, x.y)
+        let speed = hypot(v.x, v.y)
+        if recoilElapsed > 0.22, off < 2, speed < 40 { recoilSettled = true }
+        if recoilElapsed > 0.8 { recoilSettled = true }
+    }
+
+    private func finishRecoilIfSettled(frameDt: CGFloat) {
+        guard recoilSettled else { return }
+        emerge = max(0, emerge - frameDt / 0.14)
+        if emerge <= 0.001 {
+            emerge = 0
+            recoiling = false
+            let done = recoilDone
+            recoilDone = nil
+            done?()
+        }
     }
 
     private func resetSpineStraight() {
@@ -138,12 +235,8 @@ final class MetaballView: NSView {
         prevSlosh = slosh
     }
 
-    private func stepPhysics(dt: CGFloat) {
-        let n = particleCount
-        let params = mass
-        let anchor = lockedPin
-        if spine.count != n { resetSpineStraight(); return }
-
+    /// Once per display frame: head velocity (soft-clamped) and the light that follows motion.
+    private func updateHeadMotion(dt: CGFloat) {
         let rawVel = CGPoint(
             x: (head.x - prevHead.x) / max(dt, 1.0 / 240.0),
             y: (head.y - prevHead.y) / max(dt, 1.0 / 240.0)
@@ -155,6 +248,14 @@ final class MetaballView: NSView {
         )
         prevHead = head
 
+        // Soft-limit the speed that drives whip and slosh so one coalesced mouse event
+        // (or a 5000 px/s flick) can't blow the chain up.
+        let rawSpeed = hypot(headVel.x, headVel.y)
+        if rawSpeed > 1 {
+            let limited = Self.maxDriveSpeed * tanh(rawSpeed / Self.maxDriveSpeed)
+            headVel = CGPoint(x: headVel.x * limited / rawSpeed, y: headVel.y * limited / rawSpeed)
+        }
+
         let speed = hypot(headVel.x, headVel.y)
         if speed > 8 {
             let target = CGPoint(x: -headVel.x / speed, y: headVel.y / speed * 0.35 + 0.65)
@@ -164,6 +265,15 @@ final class MetaballView: NSView {
             smoothLight.x += (-0.4 - smoothLight.x) * min(1, dt * 2)
             smoothLight.y += (0.75 - smoothLight.y) * min(1, dt * 2)
         }
+
+    }
+
+    /// One fixed physics step. `head` is the (possibly interpolated) head position for this step.
+    private func stepPhysics(dt: CGFloat, head: CGPoint) {
+        let n = particleCount
+        let params = mass
+        let anchor = lockedPin
+        if spine.count != n { resetSpineStraight(); return }
 
         let dx = head.x - anchor.x
         let dy = head.y - anchor.y
@@ -188,7 +298,12 @@ final class MetaballView: NSView {
         let spring = cfg.springConstant
         let whip = CGFloat(cfg.whipResponse)
         let sloshAmp = CGFloat(cfg.sloshAmount)
-        let ideal = max(0.5, chord / CGFloat(n - 1))
+        // A little slack lets the liquid bow, sag and whip instead of staying a rigid line.
+        let speedNow = hypot(headVel.x, headVel.y)
+        let slack = 1 + 0.03 + 0.09 * min(1, speedNow / 900) * min(1.2, whip)
+        let ideal = max(0.5, chord / CGFloat(n - 1) * slack)
+        let idle = CGFloat(cfg.idleLife)
+        let curSpeed = speedNow
 
         for i in 1..<(n - 1) {
             let cur = spine[i]
@@ -214,8 +329,12 @@ final class MetaballView: NSView {
         for i in 0..<n {
             let t = CGFloat(i) / CGFloat(n - 1)
             let mid = sin(.pi * t)
+            // Breathing while held still, so the blob always feels alive under your fingers.
+            let stillness: CGFloat = 1 - min(1, curSpeed / 500)
+            let breathing: CGFloat = sin(time * 2.3 + t * 4.0) * 1.1 * idle * (0.35 + 0.65 * mid) * stillness
             let drive = (-tanSpeed * 0.0045 * (t - 0.3) + latSpeed * 0.004 * mid) * sloshAmp
                 + sin(time * 8.5 + t * 5.5) * min(1, hypot(headVel.x, headVel.y) / 700) * 2.8 * mid * sloshAmp
+                + breathing
             let prev = slosh[i]
             let prv = prevSlosh[i]
             var v = (prev - prv) * GestureMath.damping(0.9, dt: dt)
@@ -229,7 +348,7 @@ final class MetaballView: NSView {
             .map { $0 * emergeScale }
         BlobMass.applyEndFloors(radii: &radii, emerge: emergeScale, params: params)
 
-        for _ in 0..<5 {
+        for _ in 0..<3 {
             spine[0] = anchor
             spine[n - 1] = head
             for i in 0..<(n - 1) {
@@ -314,6 +433,13 @@ final class MetaballView: NSView {
             Float(0.45 + cfg.absorption * 0.35)
         )
 
+        // Liquid at rest, obsidian under tension: facets sharpen as the tether stretches and
+        // flash on release (recoil pulse).
+        let chordNow = hypot(head.x - anchor.x, head.y - anchor.y)
+        let stretchT = smoothstep01((chordNow - 40) / 200)
+        let cry = CGFloat(cfg.crystallize)
+        let facetEff = CGFloat(cfg.facetAmount) * ((1 - cry) + cry * (0.3 + 0.9 * stretchT)) + 0.35 * recoilPulse
+
         let look = ObsidianBlobMetal.Look(
             lightDir: SIMD2(Float(smoothLight.x), Float(smoothLight.y)),
             time: Float(time),
@@ -325,7 +451,7 @@ final class MetaballView: NSView {
             baseColor: SIMD3(Float(max(r, 0.04)), Float(max(g, 0.045)), Float(max(b, 0.06))),
             absorb: absorb,
             glow: glow,
-            facet: Float(cfg.facetAmount),
+            facet: Float(min(1, facetEff)),
             facetSize: Float(cfg.facetSize)
         )
 
@@ -374,6 +500,11 @@ final class MetaballView: NSView {
             let p = spine[i]
             ctx.fillEllipse(in: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
         }
+    }
+
+    private func smoothstep01(_ x: CGFloat) -> CGFloat {
+        let t = min(1, max(0, x))
+        return t * t * (3 - 2 * t)
     }
 
     private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {

@@ -321,17 +321,18 @@ final class ObsidianBlobMetal {
 
     // Voronoi cells: x = distance to nearest seed, y = gap to second nearest (≈0 on a
     // cell edge), zw = per-cell random pair.
-    float4 facetCells(float2 m) {
+    float4 facetCells(float2 m, thread float2 &toSeed) {
         float2 g = floor(m);
         float2 f = fract(m);
         float d1 = 8.0, d2 = 8.0;
         float2 id = float2(0.0);
+        toSeed = float2(0.0);
         for (int j = -1; j <= 1; j++) {
             for (int i = -1; i <= 1; i++) {
                 float2 o = float2(float(i), float(j));
                 float2 r = o + hash22(g + o) * 0.8 + 0.1 - f;
                 float d = dot(r, r);
-                if (d < d1) { d2 = d1; d1 = d; id = g + o; }
+                if (d < d1) { d2 = d1; d1 = d; id = g + o; toSeed = r; }
                 else if (d < d2) { d2 = d; }
             }
         }
@@ -352,6 +353,8 @@ final class ObsidianBlobMetal {
         // Obsidian facets live in the blob's own material space (along the pin→head axis and
         // across it), so they stretch, shear and re-catch the light as the liquid moves.
         float4 cell = float4(0.0, 1.0, 0.5, 0.5);
+        float2 fdir = float2(1.0, 0.0);
+        float2 domeS = float2(0.0);
         if (u.facet > 0.001 && n >= sp + 2u) {
             float2 a = circles[n - 2].xy;
             float2 ab = circles[n - 1].xy - a;
@@ -360,7 +363,13 @@ final class ObsidianBlobMetal {
             float2 rel = p - a;
             float cellAlong = max(len * 0.25, u.facetSize);
             float2 m = float2(dot(rel, dir) / cellAlong, dot(rel, float2(-dir.y, dir.x)) / u.facetSize);
-            cell = facetCells(m);
+            float2 toSeed;
+            cell = facetCells(m, toSeed);
+            fdir = dir;
+            // Cell-space offset from the facet's seed, turned into a screen-space direction:
+            // each plane bulges slightly outward (conchoidal) instead of being dead flat.
+            float2 outward = -toSeed;
+            domeS = outward.x * dir + outward.y * float2(-dir.y, dir.x);
             // Chipped, slightly angular silhouette.
             f0.x += u.facet * u.facetSize * 0.09 * (cell.z - 0.5) * 2.0;
         }
@@ -379,7 +388,8 @@ final class ObsidianBlobMetal {
         float3 N = normalize(float3(-hx * 4.8, -hy * 4.8, 1.0));
         // Flat conchoidal planes: each cell tilts the surface its own way.
         float2 tilt = (cell.zw - 0.5) * 2.0;
-        float3 Nf = normalize(float3(N.xy * 0.45 + tilt * 0.55, N.z));
+        float ripple = sin(cell.x * 38.0 + cell.z * 6.2831) * 0.035;
+        float3 Nf = normalize(float3(N.xy * 0.45 + tilt * 0.45 + domeS * 0.30 + domeS * ripple, N.z));
         N = normalize(mix(N, Nf, saturate(u.facet)));
         float3 V = float3(0.0, 0.0, 1.0);
         float3 L = normalize(float3(u.lightDir.x, u.lightDir.y, 0.85));
@@ -408,7 +418,14 @@ final class ObsidianBlobMetal {
         // light swings with the motion.
         float seam = 1.0 - smoothstep(0.0, 0.07, cell.y);
         body += seam * u.facet * 0.12 * float3(0.75, 0.85, 1.0) * (0.4 + 0.6 * thick);
-        body *= 1.0 + u.facet * 0.12 * (cell.w - 0.5) * sin(u.time * 2.0 + cell.z * 6.2831);
+        // Sharp, snap-on glints: only facets whose plane lines up with the light flash, and
+        // they flash hard rather than shimmer. Moving the light (i.e. the mouse) sweeps them.
+        float glint = smoothstep(0.972, 0.996, dot(N, H)) * (0.35 + 0.65 * cell.w);
+        body += glint * u.facet * 0.9 * float3(1.0, 0.97, 0.92) * (1.0 - seam);
+
+        // Interleaved-gradient-noise dither: near-black gradients band badly at 8 bits.
+        float ign = fract(52.9829189 * fract(dot(in.position.xy, float2(0.06711056, 0.00583715))));
+        body += (ign - 0.5) * (1.4 / 255.0);
 
         float a = saturate(alpha * u.opacity);
         return float4(body * a, a);

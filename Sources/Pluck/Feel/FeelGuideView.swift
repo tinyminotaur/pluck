@@ -28,6 +28,7 @@ struct FeelGuideView: View {
 
                 massSection
                 distributionSection
+                fidgetSection
                 physicsSection
                 lookSection
                 gooSection
@@ -140,6 +141,18 @@ struct FeelGuideView: View {
                 knob("Cursor mass bias", value: $config.headMass, range: 0.1...1.5, format: "%.2f")
                 knob("Pin minimum (× rest)", value: $config.pinMinFraction, range: 0.25...1.1, format: "%.2f")
                 knob("Cursor minimum (× rest)", value: $config.headMinFraction, range: 0.15...0.9, format: "%.2f")
+            }
+        }
+    }
+
+    private var fidgetSection: some View {
+        GroupBox("Fidget feel") {
+            VStack(spacing: 10) {
+                knob("Release bounce (snap-back wobble)", value: $config.recoilBounce, range: 0...1, format: "%.2f")
+                knob("Crystallize with stretch", value: $config.crystallize, range: 0...1, format: "%.2f")
+                knob("Idle breathing", value: $config.idleLife, range: 0...1.5, format: "%.2f")
+                Toggle("Trackpad haptic ticks (direction + stretch detents)", isOn: $config.hapticsEnabled)
+                    .font(.caption)
             }
         }
     }

@@ -22,6 +22,7 @@ final class PluckSession: ObservableObject {
     private var cursorHidden = false
     private var finishing = false
     private var animStart: Date?
+    private var lastRing = 0
 
     private var reducedMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -46,7 +47,15 @@ final class PluckSession: ObservableObject {
     }
 
     func begin(at location: CGPoint) {
-        guard !isActive, !finishing else { return }
+        guard !isActive else { return }
+        // Fidget re-grab: cut a recoil in progress and start the new gesture straight away.
+        // (Deliberately not forceReset(): that would also end the engine's new gesture.)
+        if finishing {
+            finishing = false
+            overlay.hide()
+            context = nil
+            capturedRole = nil
+        }
         isActive = true
         openedAt = CACurrentMediaTime()
         pin = location
@@ -54,6 +63,7 @@ final class PluckSession: ObservableObject {
         capturedRole = nil
         emergeProgress = 0
         bloomProgress = 0
+        lastRing = 0
 
         // Hide system cursor FIRST so the blob is the only pointer you see.
         hideCursor()
@@ -76,7 +86,15 @@ final class PluckSession: ObservableObject {
         guard isActive, !finishing else { return }
         pointer = location
         let available = context?.items.map(\.role) ?? CompassRole.allCases
+        let previous = capturedRole
         capturedRole = GestureMath.capture(pin: pin, pointer: pointer, available: available, current: capturedRole)
+        // Fidget detents: a tick when a direction latches, and a ratchet click every ~56 pt of stretch.
+        if capturedRole != previous, capturedRole != nil { Haptics.tick(.alignment) }
+        let ring = Int(max(0, GestureMath.distance(pin, pointer) - GestureMath.deadZone) / 56)
+        if ring != lastRing {
+            lastRing = ring
+            Haptics.tick(.generic)
+        }
         pushOverlay()
     }
 
@@ -134,22 +152,23 @@ final class PluckSession: ObservableObject {
         isActive = false
         engine.gestureDidEnd()
 
-        // Do NOT warp the cursor — leave it exactly where the user released.
+        // Do NOT warp the cursor — leave it exactly where the user released. Show it right
+        // away; the blob recoils from under it instead of hiding the pointer for the animation.
+        showCursor()
         overlay.commit(role: commitRole, pin: pin) { [weak self] in
             guard let self else { return }
-            self.showCursor()
             self.overlay.hide()
             self.context = nil
             self.capturedRole = nil
             self.finishing = false
-            after?()
         }
+        // Act immediately; the recoil is purely visual.
+        after?()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        // Safety net: if the recoil callback never fires, reset anyway.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             guard let self, self.finishing else { return }
-            let pending = after
             self.forceReset()
-            pending?()
         }
     }
 

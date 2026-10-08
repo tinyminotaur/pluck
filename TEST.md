@@ -28,6 +28,15 @@ Input Monitoring is **not required** and is **not automated**.
 3. Move — one connected stretch; lobes highlight by direction
 4. Release — guide shows North/East/South/West or Canceled
 
+## Fidget feel (check these too)
+
+5. Release a long pull — the blob should snap back to the pin with an overshoot wobble, then melt
+6. Hold still — the blob should gently breathe
+7. Stretch far — facets should sharpen; move the mouse — glints should sweep across the planes
+8. Re-grab immediately after a release — no cooldown, the old recoil is cut
+9. On a trackpad: haptic tick when a direction latches and a ratchet click every ~56 pt of stretch
+10. Your next click right after release must go to the app underneath (the overlay must not eat it)
+
 ## If anything feels wrong
 
 - Escape, or wait 20s

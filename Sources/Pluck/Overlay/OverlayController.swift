@@ -84,15 +84,33 @@ final class OverlayController {
             completion()
         }
 
-        // Collapse mass back to the pin — cursor stays where the user released.
-        view.head = view.pin
-        view.emerge = 0
+        // The gesture is over: never let the (invisible) overlay eat the user's next click.
+        panel?.ignoresMouseEvents = true
         view.bloom = 0
-        view.needsDisplay = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+
+        if reducedMotion {
+            view.head = view.pin
+            view.emerge = 0
+            view.needsDisplay = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                finish()
+                self?.hide()
+            }
+            return
+        }
+
+        // Snap back to the pin with a springy overshoot, then melt away. The cursor is already
+        // visible at the release point, so the blob visibly recoils from under it.
+        view.beginRecoil { [weak self] in
             finish()
             self?.hide()
         }
+        let fallback = DispatchWorkItem { [weak self] in
+            finish()
+            self?.hide()
+        }
+        commitWork = fallback
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.95, execute: fallback)
     }
 
     func hide() {
