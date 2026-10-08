@@ -629,7 +629,7 @@ final class MetaballView: NSView {
 
     /// Cancel ring + one pill per available role. Slices are fixed (see `GestureMath`); only the
     /// labels move, to stay on screen near display edges.
-    /// One action bud: a liquid lobe on the pin that carries a label.
+    /// The armed action: the head of the liquid swells into a bud that carries the label.
     private struct Bud {
         var item: CompassItem
         var center: CGPoint
@@ -641,73 +641,51 @@ final class MetaballView: NSView {
 
     private static let budBaseRadius: CGFloat = 30
 
-    private var compassAlpha: CGFloat {
-        let committing = recoiling && commitRole != nil
-        return committing ? commitFlash : (reducedMotion ? bloom : labelAlpha)
-    }
-
-    /// Where each bud sits and how big it is. Shared by the field (so the bud is real liquid) and the label
-    /// drawing (so the text sits exactly inside it). Buds hug the pin as it shrinks under stretch, the armed one
-    /// swells and leans toward the head until it fuses with the stretched mass, and on commit only the chosen
-    /// one remains, swelling like a confirmation.
+    /// Nothing shows at rest. Once you move into a direction and it latches, that one action grows out of the
+    /// head of the liquid (glyph and name inside it, lit by the theme). It stays quiet during very fast flicks,
+    /// so expert marking never sees labels, and on commit the chosen one swells like a confirmation.
     private func budGeometry(pinR: CGFloat) -> [Bud] {
         let committing = recoiling && commitRole != nil
-        let alpha = compassAlpha
-        guard alpha > 0.01, !items.isEmpty else { return [] }
+        let role: CompassRole? = committing ? commitRole : captured
+        guard let role, let item = items.first(where: { $0.role == role }) else { return [] }
+        var pop = reducedMotion ? 1 : (armedPos[role] ?? 0)
+        if committing { pop = 1 + 1.3 * (1 - commitFlash) }
+        let speed = hypot(headVel.x, headVel.y)
+        let gate = committing ? 1 : 1 - smoothstep01((speed - 1300) / 900)
+        let appear = min(1, max(0, pop)) * gate
+        guard appear > 0.02 else { return [] }
         let base = Self.budBaseRadius * (cfg.meetingMode ? 0.8 : 1)
-        let headDist = hypot(head.x - lockedPin.x, head.y - lockedPin.y)
-        var out: [Bud] = []
-        for item in items {
-            if committing, item.role != commitRole { continue }
-            let armed = committing || captured == item.role
-            var pop = reducedMotion ? (armed ? 1 : 0) : (armedPos[item.role] ?? 0)
-            if committing { pop = 1 + 1.3 * (1 - commitFlash) }
-            let grow = alpha * alpha * (3 - 2 * alpha)   // ease-in-out as the labels fade in
-            let r = base * grow * (1 + 0.24 * max(0, pop))
-            if r < 1 { continue }
-            let dist = pinR + 0.62 * r + 6 * max(0, pop)
-            var c = LabelLayout.center(pin: lockedPin, role: item.role, distance: dist)
-            if armed, !committing {
-                // The armed bud leans toward the head and fuses into the stretched mass.
-                let f = smoothstep01((headDist - 0.35 * dist) / (0.65 * dist)) * min(1, max(0, pop))
-                c = CGPoint(x: c.x + (head.x - c.x) * 0.8 * f, y: c.y + (head.y - c.y) * 0.8 * f)
-            }
-            c = LabelLayout.clamped(center: c, size: CGSize(width: r * 2, height: r * 2), in: bounds, margin: 6)
-            let glow = committing ? 1 : 0.15 + 0.85 * min(1, max(0, pop))
-            out.append(Bud(item: item, center: c, radius: r, pop: pop, armed: armed, glow: glow))
-        }
-        return out
+        let ease = appear * appear * (3 - 2 * appear)
+        let r = base * ease * (1 + 0.18 * max(0, pop - 1))
+        let glow = committing ? 1 : 0.35 + 0.65 * appear
+        return [Bud(item: item, center: head, radius: r, pop: pop, armed: true, glow: glow)]
     }
 
-    /// The cancel ring, then each label drawn inside its bud. Text is composited with a screen blend, tinted by
-    /// the theme, over a faint dark inset, so it reads as light held inside the glass rather than a sticker.
+    /// The cancel ring (only while a direction is armed), then the armed action's label drawn inside the head.
+    /// Text is composited with a screen blend, tinted by the theme, over a faint dark inset, so it reads as light
+    /// held inside the glass rather than a sticker.
     private func drawCompass(_ ctx: CGContext) {
         let committing = recoiling && commitRole != nil
-        let alpha = compassAlpha
-        guard alpha > 0.01, !items.isEmpty else { return }
-        let c = lockedPin
+        guard !items.isEmpty, captured != nil || committing else { return }
         let theme = cfg.theme
         let tint = NSColor(calibratedRed: CGFloat(theme.a.r), green: CGFloat(theme.a.g), blue: CGFloat(theme.a.b), alpha: 1)
 
-        // Cancel zone: release inside the ring cancels.
-        let ringR = GestureMath.deadZone
-        let ring = NSBezierPath(ovalIn: CGRect(x: c.x - ringR, y: c.y - ringR, width: ringR * 2, height: ringR * 2))
-        ring.lineWidth = 1
-        ring.setLineDash([3, 4], count: 2, phase: 0)
-        let inside = captured == nil
-        tint.blended(withFraction: 0.5, of: .white)?.withAlphaComponent(alpha * (inside ? 0.32 : 0.10)).setStroke()
-        ring.stroke()
+        if !committing {
+            let c = lockedPin
+            let ringR = GestureMath.deadZone
+            let ring = NSBezierPath(ovalIn: CGRect(x: c.x - ringR, y: c.y - ringR, width: ringR * 2, height: ringR * 2))
+            ring.lineWidth = 1
+            ring.setLineDash([3, 4], count: 2, phase: 0)
+            tint.blended(withFraction: 0.5, of: .white)?.withAlphaComponent(0.16).setStroke()
+            ring.stroke()
+        }
 
         let pinR = max(radii.first ?? 20, mass.restRadius * mass.pinMinFraction * 0.75 * emerge)
-        let buds = budGeometry(pinR: pinR)
-        let anyArmed = captured != nil
-        for bud in buds {
+        for bud in budGeometry(pinR: pinR) {
             let fit = bud.radius / (Self.budBaseRadius * (cfg.meetingMode ? 0.8 : 1))
-            let textFade = smoothstep01((fit - 0.45) / 0.45)   // text appears once the bud is big enough to hold it
+            let textFade = smoothstep01((fit - 0.4) / 0.5)   // text appears once the bud is big enough to hold it
             guard textFade > 0.01 else { continue }
-            let armed = bud.armed
-            let dim: CGFloat = (anyArmed && !armed && !committing) ? 0.62 : 1
-            let light = (armed ? NSColor.white : NSColor.white.blended(withFraction: 0.35, of: tint) ?? .white)
+            let light = NSColor.white
             let titleFont = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
             let attrs: (NSColor) -> [NSAttributedString.Key: Any] = { [.font: titleFont, .foregroundColor: $0] }
             let title = NSAttributedString(string: bud.item.title, attributes: attrs(light))
@@ -720,16 +698,13 @@ final class MetaballView: NSView {
             let s = min(1.25, max(0.5, fit))
             ctx.scaleBy(x: s, y: s)
             let hasGlyph = glyph != nil
-            let blockH = (hasGlyph ? 15 : 0) + tSize.height
-            let top = blockH / 2
+            let top = ((hasGlyph ? 15 : 0) + tSize.height) / 2
             // Faint inset shadow first (normal blend), then the light itself (screen blend).
-            ctx.setAlpha(alpha * textFade * dim * 0.9)
+            ctx.setAlpha(textFade * 0.9)
             shadow.draw(at: CGPoint(x: -tSize.width / 2, y: top - (hasGlyph ? 15 : 0) - tSize.height - 0.8))
             ctx.setBlendMode(.screen)
-            ctx.setAlpha(alpha * textFade * dim * (armed ? 1 : 0.88))
-            if let glyph {
-                glyph.draw(in: CGRect(x: -7, y: top - 14, width: 14, height: 14))
-            }
+            ctx.setAlpha(textFade)
+            if let glyph { glyph.draw(in: CGRect(x: -7, y: top - 14, width: 14, height: 14)) }
             title.draw(at: CGPoint(x: -tSize.width / 2, y: top - (hasGlyph ? 15 : 0) - tSize.height))
             ctx.restoreGState()
         }

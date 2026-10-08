@@ -45,12 +45,13 @@ Keep it listen-only (no event tap, no synthesized input). Commit small, push, an
 
 ## Update (local session): what changed since the cloud session
 - **Cursor:** all hide/show goes through `Safety/CursorGuard` (one balanced hide, background watchdog, signal/atexit hooks, private `SetsCursorInBackground` opt-in so hiding works for a background app).
+- **Gotcha fixed:** polling modifier state (HID or `NSEvent.modifierFlags`) reports *released* for a held Hyper/remapped key; it ended every modifier gesture at the 1 s tick. Modifier state now comes only from `flagsChanged` events. `gesture.log` made this findable.
 - **Triggers:** hold-⌥ (pointer still) or Hyper, move, release the modifier to commit (`PluckCore/ModifierTrigger`); three-finger rest-to-arm with scroll/landing filters (`TouchEligibility`) and a flicker-proof release (`TouchReleaseDebounce`); click-based hold trigger is off by default. Modifier state uses the HID state (`CGEventSource.flagsState`), not `NSEvent.modifierFlags`.
 - **Edge nudge:** the pin (and real cursor) is moved 72 pt inside the screen so every direction is reachable.
 - **Look:** one fixed environment (no light swing, no cursor-aligned texture), organic seeded lump clusters + water warp, wet-glass shading with dome normals, strand drawn as a Catmull-Rom spline with soft-unioned segments.
 - **Physics:** head is a magnet-pulled spring mass (`MagnetPull`), gravity droop + pooling, always-on wander; tether meanders.
 - **Reach:** the head can reach anywhere on screen (`GestureMath.reachHead`, screen-aware, no cap; knob "Reach gain").
 - **Themes and presets:** `PluckCore/LiquidTheme.swift` (8 themes + random "Surprise"), presets in the same file; picker in the Feel Lab guide and menu-bar submenus. Palette is a 3-stop gradient (A,B,C) with drift, iridescence, colour `fill` and `chrome`.
-- **Integrated labels:** each direction is a liquid bud in the field (extra circles with an `emphasis` value) with glyph + name drawn inside via a screen blend; armed bud swells and fuses toward the head.
+- **Integrated label:** nothing shows at rest. Once a direction latches, that one action's glyph + name appears *inside the head of the liquid* (the head swells into a bud: a field circle with an `emphasis` value, text drawn with a screen blend tinted by the theme). Quiet during fast flicks; on commit the chosen one swells. (An earlier version showed four permanent buds around the pin; rejected as ugly.)
 - **Diagnostics:** `~/Library/Logs/Pluck/gesture.log` (why gestures end), `Pluck --sim-report`, `--render-preview`, `--render-themes`, `--render-compass` (all headless, no input).
 - **Not verified live:** feel of the magnet/gravity physics, bud labels in the live view, cursor hiding with the private opt-in, three-finger on hardware.
