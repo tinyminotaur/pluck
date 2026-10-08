@@ -98,6 +98,8 @@ final class ObsidianBlobMetal {
         /// Damped oval/triangular wobble of the pin and head bulbs: (cos2, sin2, cos3, sin3) amplitudes, as a fraction of radius.
         var pinMode = SIMD4<Float>(repeating: 0)
         var headMode = SIMD4<Float>(repeating: 0)
+        /// Rotates the palette (in cycles) so each armed direction has its own hue.
+        var roleShift: Float = 0
     }
 
     /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
@@ -149,6 +151,7 @@ final class ObsidianBlobMetal {
             facetSize: max(6, look.facetSize * Float(scale)),
             ember: min(1.5, max(0, look.ember)),
             scalePx: Float(scale),
+            roleShift: look.roleShift,
             themeA: look.themeA,
             themeB: look.themeB,
             themeC: SIMD4(look.themeC.x, look.themeC.y, look.themeC.z, look.chrome),
@@ -256,6 +259,7 @@ final class ObsidianBlobMetal {
         var facetSize: Float
         var ember: Float
         var scalePx: Float
+        var roleShift: Float
         var themeA: SIMD4<Float>
         var themeB: SIMD4<Float>
         var themeC: SIMD4<Float>
@@ -287,6 +291,7 @@ final class ObsidianBlobMetal {
         float facetSize;
         float ember;
         float scalePx;
+        float roleShift;
         float4 themeA;
         float4 themeB;
         float4 themeC;
@@ -517,7 +522,7 @@ final class ObsidianBlobMetal {
         float thick = saturate(h);
         // Theme palette in ONE fixed environment: a gradient across the screen (not tied to the cursor) that drifts
         // slowly with time, and shifts with the surface tilt for oil-slick iridescence.
-        float gcoord = dot(p - wPin, float2(0.8, 0.6)) / max(u.grad.x, 1.0) + u.time * u.grad.y
+        float gcoord = dot(p - wPin, float2(0.8, 0.6)) / max(u.grad.x, 1.0) + u.time * u.grad.y + u.roleShift
                      + u.grad.z * dot(N.xy, float2(0.7, 0.4));
         float3 P = themePalette(gcoord, u);
         float3 P2 = themePalette(gcoord + 0.5, u);

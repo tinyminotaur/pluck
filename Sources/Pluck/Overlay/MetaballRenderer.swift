@@ -67,6 +67,8 @@ final class MetaballView: NSView {
     // inertia and gravity. Plus slow swelling along the tether. Nothing is ever a perfect disc.
     /// Radii of the two round bulbs (pin, head) from the volume-conserving dumbbell model, already scaled by emergence.
     private var bulbPin: CGFloat = 0
+    /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
+    private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
     private struct Drop { var p: CGPoint; var v: CGPoint; var r: CGFloat; var decay: CGFloat; var isMain: Bool }
     private var drops: [Drop] = []
@@ -252,6 +254,16 @@ final class MetaballView: NSView {
     private func updateCompassUI(dt: CGFloat) {
         gestureTime += dt
         latchPulse = max(0, latchPulse - dt / 0.35)
+        // Each direction gets its own hue from the theme palette; it glides as you sweep between them.
+        let roleTarget: CGFloat
+        switch captured {
+        case .north: roleTarget = 0.12
+        case .east: roleTarget = 0.32
+        case .south: roleTarget = 0.52
+        case .west: roleTarget = 0.72
+        case nil: roleTarget = 0
+        }
+        roleShift += (roleTarget - roleShift) * GestureMath.smoothingAlpha(retain: 0.80, dt: dt)
         commitFlash = max(0, commitFlash - dt / 0.32)
 
         let speed = hypot(headVel.x, headVel.y)
@@ -875,7 +887,8 @@ final class MetaballView: NSView {
             fill: theme.fill,
             chrome: theme.chrome,
             pinMode: SIMD4(Float(pinM2.x), Float(pinM2.y), Float(pinM3.x), Float(pinM3.y)),
-            headMode: SIMD4(Float(headM2.x), Float(headM2.y), Float(headM3.x), Float(headM3.y))
+            headMode: SIMD4(Float(headM2.x), Float(headM2.y), Float(headM3.x), Float(headM3.y)),
+            roleShift: Float(roleShift)
         )
 
         guard let image = metal.render(
