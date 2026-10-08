@@ -346,7 +346,7 @@ final class MetaballView: NSView {
         let pull = min(1, chord / 220)
 
         // Elongation along the tether (pin toward the head, head toward the pin) grows with the pull.
-        let tetherA = 0.085 * pull
+        let tetherA = 0.03 * pull
         var pinTarget = CGPoint(x: tetherA * cos(2 * axis), y: tetherA * sin(2 * axis))
         var headTarget = CGPoint(x: 0.6 * tetherA * cos(2 * axis), y: 0.6 * tetherA * sin(2 * axis))
         // The head also lurches along its own acceleration.
@@ -600,7 +600,7 @@ final class MetaballView: NSView {
             // ruled line. Zero at both ends, scaled to the length.
             let ph0 = swellPhase.count > 30 ? swellPhase[30] : 0
             let ph1 = swellPhase.count > 31 ? swellPhase[31] : 0
-            let swayAmp = min(3.2, 0.009 * chord + 0.6)
+            let swayAmp = min(1.6, 0.004 * chord + 0.3)
             let sway = sin(time * 0.6 + t * 3.0 + ph0 + 0.0 * ph1) * swayAmp * mid
             let target = CGPoint(x: lerp(anchor, head, t).x + nx * sway, y: lerp(anchor, head, t).y + ny * sway)
             let k = spring * (0.4 + 0.6 * (1 - mid)) * step

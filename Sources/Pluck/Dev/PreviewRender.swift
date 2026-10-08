@@ -129,7 +129,7 @@ enum PreviewRender {
         let themes = [ThemeLibrary.obsidianEmber, ThemeLibrary.oilSlick, ThemeLibrary.neonJelly]
         let cols: [(pointer: CGPoint, armed: CompassRole?)] = [
             (CGPoint(x: 170, y: 190), nil),
-            (CGPoint(x: 330, y: 200), .east),
+            (CGPoint(x: 430, y: 200), .east),
             (CGPoint(x: 175, y: 330), .north),
         ]
         let W = Int(tile.width * scale) * cols.count, H = Int(tile.height * scale) * themes.count

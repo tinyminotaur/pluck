@@ -29,18 +29,19 @@ final class DumbbellMassTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(c, DumbbellMass.minWaist)
     }
 
-    func testVolumeIsRoughlyConservedOnceSeparated() {
-        let area0 = CGFloat.pi * p.restRadius * p.restRadius
-        for L in [150, 250, 400, 600] as [CGFloat] {
+    func testBulbsStaySubstantialAtAnyLength() {
+        // Barbell, not tadpole: even at a huge stretch each bulb is still a clear mass.
+        for L in stride(from: CGFloat(150), through: 1500, by: 150) {
             let s = DumbbellMass.solve(p, length: L)
-            let total = CGFloat.pi * (s.pin * s.pin + s.head * s.head) + 2 * s.waist * L
-            XCTAssertEqual(total, area0, accuracy: area0 * 0.25, "L=\(L)")
+            XCTAssertGreaterThan(s.pin, 0.5 * p.restRadius, "pin at \(L)")
+            XCTAssertGreaterThan(s.head, 0.5 * p.restRadius, "head at \(L)")
+            XCTAssertLessThan(s.waist, 0.4 * s.pin, "thread stays delicate at \(L)")
         }
     }
 
-    func testPinKeepsMoreMassThanHead() {
+    func testBulbsAreMatchedByDefaultSoItDoesNotReadAsHeadAndTail() {
         let s = DumbbellMass.solve(p, length: 300)
-        XCTAssertGreaterThan(s.pin, s.head)
+        XCTAssertEqual(s.pin, s.head, accuracy: 0.01)
     }
 
     func testProfileIsAWaistBetweenTwoBulbsWithConcaveFlares() {

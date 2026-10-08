@@ -131,8 +131,8 @@ final class FeelLabConfig: ObservableObject {
         headMinFraction = Self.load("headMinFraction", 0.40)
         neckFloor = Self.load("neckFloor", 6.5)
         waistRest = Self.load("waistRest", 0.20)
-        headShare = Self.load("headShare", 0.40)
-        meniscus = Self.load("meniscus", 0.85)
+        headShare = Self.load("headShare", 0.50)
+        meniscus = Self.load("meniscus", 1.0)
 
         responsiveness = Self.load("responsiveness", 0.45)
         damping = Self.load("damping", 0.93)
@@ -189,8 +189,8 @@ final class FeelLabConfig: ObservableObject {
         headMinFraction = 0.40
         neckFloor = 6.5
         waistRest = 0.20
-        headShare = 0.40
-        meniscus = 0.85
+        headShare = 0.50
+        meniscus = 1.0
         responsiveness = 0.45
         damping = 0.93
         sloshAmount = 0.7

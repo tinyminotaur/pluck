@@ -24,7 +24,7 @@ public enum DumbbellMass {
         /// How far the concave blend reaches along the thread, as a fraction of the bulb radius.
         public var meniscus: CGFloat
 
-        public init(restRadius: CGFloat = 56, waistRest: CGFloat = 0.20, headShare: CGFloat = 0.40, meniscus: CGFloat = 0.85) {
+        public init(restRadius: CGFloat = 42, waistRest: CGFloat = 0.20, headShare: CGFloat = 0.50, meniscus: CGFloat = 1.0) {
             self.restRadius = restRadius
             self.waistRest = waistRest
             self.headShare = headShare
@@ -47,10 +47,13 @@ public enum DumbbellMass {
         let area0 = .pi * R0 * R0
 
         // Thread thins as it lengthens (it is being drawn out), but never below a visible floor.
+        // The thread is a delicate filament that thins as it is drawn out. Its fineness against two substantial
+        // masses is what reads as liquid; a thick uniform rod reads as a worm.
         let waist = max(minWaist, p.waistRest * R0 / CGFloat(sqrt(Double(1 + L / (1.6 * R0)))))
         let threadArea = 2 * waist * L
-        // The bulbs keep whatever the thread doesn't hold, never less than 18% of the whole.
-        let bulbArea = max(0.18 * area0, area0 - threadArea)
+        // The bulbs keep whatever the thread doesn't hold, and always stay substantial (never under 60% of the
+        // drop between them) so the shape stays a barbell with two clear masses, not a head with a tail.
+        let bulbArea = max(0.60 * area0, area0 - threadArea)
         let hs = max(0.1, min(0.9, p.headShare))
         let pinFull = (bulbArea * (1 - hs) / .pi).squareRoot()
         let headFull = (bulbArea * hs / .pi).squareRoot()
@@ -74,7 +77,7 @@ public enum DumbbellMass {
         func flare(_ u: CGFloat, _ bulb: CGFloat) -> CGFloat {
             let x = u / max(1, bulb * m)
             let q = 1 + x * x
-            return 1 / (q * q)    // 1 at the bulb, falling smoothly: a concave, hyperbola-like blend
+            return 1 / (q * q)    // 1 at the bulb, falling smoothly: a compact concave fillet
         }
         var radii = [CGFloat]()
         radii.reserveCapacity(count)
