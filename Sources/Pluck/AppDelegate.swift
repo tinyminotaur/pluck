@@ -78,6 +78,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listen.target = self
         menu.addItem(listen)
 
+        menu.addItem(.separator())
+        let meeting = NSMenuItem(title: "Meeting Mode (small, dim)", action: #selector(toggleMeeting), keyEquivalent: "m")
+        meeting.target = self
+        meeting.state = FeelLabConfig.shared.meetingMode ? .on : .off
+        menu.addItem(meeting)
+        let haptics = NSMenuItem(title: "Trackpad Haptics", action: #selector(toggleHaptics), keyEquivalent: "")
+        haptics.target = self
+        haptics.state = FeelLabConfig.shared.hapticsEnabled ? .on : .off
+        menu.addItem(haptics)
+        menu.addItem(.separator())
+
         let reset = NSMenuItem(title: "Reset Pointer / Gesture", action: #selector(resetHard), keyEquivalent: "")
         reset.target = self
         menu.addItem(reset)
@@ -104,6 +115,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleListening() {
         if listening { stopListening() } else { startListening() }
+    }
+
+    @objc private func toggleMeeting() {
+        FeelLabConfig.shared.meetingMode.toggle()
+    }
+
+    @objc private func toggleHaptics() {
+        FeelLabConfig.shared.hapticsEnabled.toggle()
     }
 
     @objc private func resetHard() {
