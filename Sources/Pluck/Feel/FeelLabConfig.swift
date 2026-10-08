@@ -3,6 +3,29 @@ import Combine
 import Foundation
 import PluckCore
 
+/// Modifier used by the trackpad trigger (modifier + press-and-hold).
+enum TriggerModifier: Int, CaseIterable, Identifiable {
+    case option, control, command, shift
+
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .option: return "⌥ Option"
+        case .control: return "⌃ Control"
+        case .command: return "⌘ Command"
+        case .shift: return "⇧ Shift"
+        }
+    }
+    var flag: NSEvent.ModifierFlags {
+        switch self {
+        case .option: return .option
+        case .control: return .control
+        case .command: return .command
+        case .shift: return .shift
+        }
+    }
+}
+
 /// Live-tunable Feel Lab knobs. Persisted in UserDefaults; blob reads them every frame.
 @MainActor
 final class FeelLabConfig: ObservableObject {
@@ -53,6 +76,16 @@ final class FeelLabConfig: ObservableObject {
     /// Smaller and dimmer, for fidgeting without drawing attention on a shared screen.
     @Published var meetingMode: Bool { didSet { saveBool("meetingMode", meetingMode) } }
 
+    // MARK: Trackpad triggers (the two-button mouse chord always works too)
+    /// Modifier + press-and-hold (without moving) starts a gesture.
+    @Published var trackpadTriggerEnabled: Bool { didSet { saveBool("trackpadTriggerEnabled", trackpadTriggerEnabled) } }
+    @Published var trackpadModifierRaw: Int { didSet { save("trackpadModifierRaw", Double(trackpadModifierRaw)) } }
+    @Published var trackpadHoldMs: Double { didSet { save("trackpadHoldMs", trackpadHoldMs) } }
+    /// EXPERIMENTAL (private MultitouchSupport): three fingers down starts a gesture.
+    @Published var threeFingerEnabled: Bool { didSet { saveBool("threeFingerEnabled", threeFingerEnabled) } }
+
+    var trackpadModifier: TriggerModifier { TriggerModifier(rawValue: trackpadModifierRaw) ?? .option }
+
     // MARK: Field (metaball iso)
     @Published var gooBlur: Double { didSet { save("gooBlur", gooBlur) } }
     @Published var gooThreshold: Double { didSet { save("gooThreshold", gooThreshold) } }
@@ -90,6 +123,10 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         flingMomentum = Self.load("flingMomentum", 0.5)
         meetingMode = Self.loadBool("meetingMode", false)
+        trackpadTriggerEnabled = Self.loadBool("trackpadTriggerEnabled", true)
+        trackpadModifierRaw = Int(Self.load("trackpadModifierRaw", 0))
+        trackpadHoldMs = Self.load("trackpadHoldMs", 220)
+        threeFingerEnabled = Self.loadBool("threeFingerEnabled", false)
 
         gooBlur = Self.load("gooBlur", 16)
         gooThreshold = Self.load("gooThreshold", 0.5)
@@ -126,6 +163,10 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = true
         flingMomentum = 0.5
         meetingMode = false
+        trackpadTriggerEnabled = true
+        trackpadModifierRaw = 0
+        trackpadHoldMs = 220
+        threeFingerEnabled = false
         gooBlur = 16
         gooThreshold = 0.5
         useGooFilter = true

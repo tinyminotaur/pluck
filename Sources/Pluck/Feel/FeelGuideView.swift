@@ -28,6 +28,7 @@ struct FeelGuideView: View {
 
                 massSection
                 distributionSection
+                triggerSection
                 fidgetSection
                 physicsSection
                 lookSection
@@ -141,6 +142,32 @@ struct FeelGuideView: View {
                 knob("Cursor mass bias", value: $config.headMass, range: 0.1...1.5, format: "%.2f")
                 knob("Pin minimum (× rest)", value: $config.pinMinFraction, range: 0.25...1.1, format: "%.2f")
                 knob("Cursor minimum (× rest)", value: $config.headMinFraction, range: 0.15...0.9, format: "%.2f")
+            }
+        }
+    }
+
+    private var triggerSection: some View {
+        GroupBox("Trackpad triggers") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("The two-mouse-button chord always works. On a trackpad, use one of these:")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Toggle("Modifier + press-and-hold, then drag", isOn: $config.trackpadTriggerEnabled)
+                    .font(.caption)
+                Picker("Modifier", selection: $config.trackpadModifierRaw) {
+                    ForEach(TriggerModifier.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!config.trackpadTriggerEnabled)
+                knob("Hold time before it arms", value: $config.trackpadHoldMs, range: 120...500, format: "%.0f ms")
+                Text("Pluck only listens, so the click/drag also reaches the app underneath (⌥ is the least intrusive).")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Toggle("Three fingers down (experimental, private API)", isOn: $config.threeFingerEnabled)
+                    .font(.caption)
+                Text("Best with System Settings ▸ Accessibility ▸ Pointer Control ▸ Trackpad Options ▸ Dragging style: Three Finger Drag, and the three-finger Mission Control / Spaces swipes turned off.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }

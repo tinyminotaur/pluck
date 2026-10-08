@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import Combine
 import PluckCore
 
 /// SAFE chord detection — listen only.
@@ -28,6 +29,13 @@ final class ChordEngine {
     private static let idleSeconds: TimeInterval = 12
     /// Absolute cap — after this, gesture ends and cursor is restored. No exceptions.
     private static let hardCapSeconds: TimeInterval = 30 * 60
+    private enum Source { case chord, hold, touch }
+    private var gestureSource: Source = .chord
+    private var holdArm = HoldArm()
+    private var holdTimer: Timer?
+    private var touchCount = 0
+    private var touchTimer: Timer?
+    private var configSub: AnyCancellable?
     private var gestureStartedAt: CFTimeInterval = 0
     private var lastActivityAt: CFTimeInterval = 0
     private static let moveHz: CFTimeInterval = 1.0 / 90.0
@@ -46,10 +54,16 @@ final class ChordEngine {
         held = physicalHeld()
         installNSEvent()
         installPanicHotkey()
+        configSub = FeelLabConfig.shared.$threeFingerEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] on in self?.setThreeFinger(on) }
         NSLog("Pluck: SAFE listen-only NSEvent driver (no event tap)")
     }
 
     func stop() {
+        configSub = nil
+        setThreeFinger(false)
+        cancelHold()
         endGestureLocally()
         removeNSEvent()
         removePanicHotkey()
@@ -121,7 +135,7 @@ final class ChordEngine {
 
         switch event.type {
         case .leftMouseDown:
-            handleDown(.left, at: loc)
+            handleDown(.left, at: loc, modifiers: event.modifierFlags)
         case .rightMouseDown:
             handleDown(.right, at: loc)
         case .leftMouseUp:
@@ -141,19 +155,26 @@ final class ChordEngine {
 
     // MARK: - State machine
 
-    private func handleDown(_ button: MouseButton, at location: CGPoint) {
+    private func handleDown(_ button: MouseButton, at location: CGPoint, modifiers: NSEvent.ModifierFlags = []) {
         if frontmostExcluded() {
             held.insert(button)
             return
         }
 
+        // Trackpad trigger: modifier + press and hold (without moving). A normal quick click or
+        // drag never matures, so ordinary use is unaffected.
+        let cfg = FeelLabConfig.shared
+        if button == .left, !gestureActive, cfg.trackpadTriggerEnabled,
+           modifiers.contains(cfg.trackpadModifier.flag), !isDown(.right) {
+            beginHoldWatch(at: location, holdSeconds: cfg.trackpadHoldMs / 1000)
+        }
+
         let other = button.other
         if !gestureActive, held.contains(other) || isDown(other) {
             held = [.left, .right]
-            gestureActive = true
-            armFailsafe()
+            cancelHold()
             // Do NOT synthesize mouse-ups. That can desync apps and feel like a lockout.
-            session?.begin(at: location)
+            startGesture(source: .chord, at: location)
             return
         }
 
@@ -162,6 +183,7 @@ final class ChordEngine {
 
     private func handleUp(_ button: MouseButton, at location: CGPoint) {
         held.remove(button)
+        cancelHold()
         guard gestureActive else { return }
 
         // End as soon as either button is released (safer than waiting for both).
@@ -171,12 +193,89 @@ final class ChordEngine {
     }
 
     private func handleMove(at location: CGPoint) {
+        if holdArm.isPressed { holdArm.move(to: location) }
         guard gestureActive else { return }
         let now = CACurrentMediaTime()
         lastActivityAt = now
         guard now - lastMoveAt >= Self.moveHz else { return }
         lastMoveAt = now
         session?.pointerMoved(to: location)
+    }
+
+    // MARK: - Trackpad triggers
+
+    private func beginHoldWatch(at location: CGPoint, holdSeconds: Double) {
+        cancelHold()
+        holdArm = HoldArm(holdSeconds: holdSeconds, moveTolerance: 8)
+        holdArm.press(at: location, time: CACurrentMediaTime())
+        holdTimer = Timer.scheduledTimer(withTimeInterval: holdSeconds + 0.01, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.holdMatured() }
+        }
+    }
+
+    private func holdMatured() {
+        holdTimer = nil
+        let cfg = FeelLabConfig.shared
+        guard holdArm.isReady(at: CACurrentMediaTime()),
+              !gestureActive,
+              isDown(.left),
+              NSEvent.modifierFlags.contains(cfg.trackpadModifier.flag) else {
+            holdArm.release()
+            return
+        }
+        holdArm.release()
+        held = [.left]
+        startGesture(source: .hold, at: Self.mouseLocation())
+    }
+
+    private func cancelHold() {
+        holdTimer?.invalidate()
+        holdTimer = nil
+        holdArm.release()
+    }
+
+    private func setThreeFinger(_ on: Bool) {
+        if on {
+            MultitouchMonitor.shared.start { [weak self] count in
+                DispatchQueue.main.async { self?.touchCountChanged(count) }
+            }
+        } else {
+            MultitouchMonitor.shared.stop()
+            touchTimer?.invalidate()
+            touchTimer = nil
+            touchCount = 0
+        }
+    }
+
+    private func touchCountChanged(_ count: Int) {
+        touchCount = count
+        if count >= 3 {
+            guard !gestureActive, touchTimer == nil else { return }
+            // Small delay so a brief brush of three fingers doesn't fire it.
+            touchTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.touchTimer = nil
+                    guard self.touchCount >= 3, !self.gestureActive, !self.frontmostExcluded() else { return }
+                    self.startGesture(source: .touch, at: Self.mouseLocation())
+                }
+            }
+        } else {
+            touchTimer?.invalidate()
+            touchTimer = nil
+            if gestureActive, gestureSource == .touch {
+                let loc = Self.mouseLocation()
+                endGestureLocally()
+                session?.complete(at: loc)
+            }
+        }
+    }
+
+    private func startGesture(source: Source, at location: CGPoint) {
+        gestureSource = source
+        gestureActive = true
+        armFailsafe()
+        session?.begin(at: location)
     }
 
     private func cancelActive() {
