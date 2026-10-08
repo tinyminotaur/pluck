@@ -69,6 +69,8 @@ final class MetaballView: NSView {
     private var latchPulse: CGFloat = 0
     private var armedPos: [CompassRole: CGFloat] = [:]
     private var armedVel: [CompassRole: CGFloat] = [:]
+    /// 0…1 "stir" energy: builds while the pointer circles the pin, decays slowly after.
+    private var stir: CGFloat = 0
     private var commitRole: CompassRole?
     private var commitFlash: CGFloat = 0
 
@@ -111,6 +113,7 @@ final class MetaballView: NSView {
         armedVel = [:]
         commitRole = nil
         commitFlash = 0
+        stir = 0
         headVel = .zero
         guard !physicsRunning else { return }
         physicsRunning = true
@@ -307,6 +310,19 @@ final class MetaballView: NSView {
             headVel = CGPoint(x: headVel.x * limited / rawSpeed, y: headVel.y * limited / rawSpeed)
         }
 
+        // Stir: angular speed of the head around the pin. Circling builds energy that outlasts
+        // the motion, so the liquid keeps sloshing after you stop.
+        let rx = head.x - lockedPin.x
+        let ry = head.y - lockedPin.y
+        let r2 = rx * rx + ry * ry
+        var stirTarget: CGFloat = 0
+        if r2 > 1600 {
+            let omega = (rx * headVel.y - ry * headVel.x) / r2   // rad/s
+            stirTarget = min(1, abs(omega) / 7)
+        }
+        let stirRetain: CGFloat = stirTarget > stir ? 0.90 : 0.985
+        stir += (stirTarget - stir) * GestureMath.smoothingAlpha(retain: stirRetain, dt: dt)
+
         let speed = hypot(headVel.x, headVel.y)
         if speed > 8 {
             let target = CGPoint(x: -headVel.x / speed, y: headVel.y / speed * 0.35 + 0.65)
@@ -348,7 +364,7 @@ final class MetaballView: NSView {
         let step = dt * dt * 60
         let spring = cfg.springConstant
         let whip = CGFloat(cfg.whipResponse)
-        let sloshAmp = CGFloat(cfg.sloshAmount)
+        let sloshAmp = CGFloat(cfg.sloshAmount) * (1 + 1.1 * stir)
         // A little slack lets the liquid bow, sag and whip instead of staying a rigid line.
         let speedNow = hypot(headVel.x, headVel.y)
         let slack = 1 + 0.03 + 0.09 * min(1, speedNow / 900) * min(1.2, whip)
@@ -591,6 +607,7 @@ final class MetaballView: NSView {
         var facetEff: CGFloat = CGFloat(cfg.facetAmount) * tension
         facetEff += 0.35 * recoilPulse
         facetEff += 0.25 * latchPulse
+        facetEff += 0.15 * stir
 
         let look = ObsidianBlobMetal.Look(
             lightDir: SIMD2(Float(smoothLight.x), Float(smoothLight.y)),
