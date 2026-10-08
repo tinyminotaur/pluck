@@ -54,8 +54,10 @@ public enum DumbbellMass {
         let M0 = CGFloat.pi * R0 * R0
 
         // Mass held by the thread: rises smoothly and strictly with length, toward ~55% of the total (scaled by waistRest).
-        let share = min(0.8, 0.55 * CGFloat(max(0.05, p.waistRest) / 0.2).squareRoot())
-        var thread = share * M0 * (1 - CGFloat(pow(Double(1 + L / (3 * R0)), -0.8)))
+        // The thread keeps drawing mass from the bulbs across the whole screen (no early plateau): the share
+        // rises steadily toward ~90% (scaled by waistRest), so the pin keeps visibly draining as you pull on.
+        let share = min(0.94, 0.9 * CGFloat(max(0.05, p.waistRest) / 0.2).squareRoot())
+        var thread = share * M0 * (1 - CGFloat(pow(Double(1 + L / (14 * R0)), -0.7)))
         // Its width follows from its mass and length (a fixed volume stretched thinner), capped for short threads.
         // At extreme lengths the drawn width is floored so it stays visible; that costs a sliver of mass only
         // where the thread is already sub-pixel, and the bulbs keep shrinking regardless.
@@ -69,9 +71,10 @@ public enum DumbbellMass {
         // At rest the head is hidden inside the pin as one drop; they separate as the thread lengthens.
         let sep = smooth(L / (2.2 * R0))
                 let headArea = hs * bulbs * sep
-        // A small hidden head at rest, its mass taken from the pin, so the total stays exact.
+        // The head's drawn radius has a small floor while it is still hidden inside the pin; that sliver is not
+        // charged to the pin, so the pin strictly shrinks from the very first pixel.
         let head = max((headArea / .pi).squareRoot(), 0.25 * R0 * (1 - sep))
-        let pin = max(0, (bulbs - .pi * head * head) / .pi).squareRoot()
+        let pin = max(0, (bulbs - headArea) / .pi).squareRoot()
         return Solution(pin: pin, head: head, waist: waist)
     }
 

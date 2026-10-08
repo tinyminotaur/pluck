@@ -127,7 +127,7 @@ final class FeelLabConfig: ObservableObject {
     @Published var useGooFilter: Bool { didSet { saveBool("useGooFilter", useGooFilter) } }
 
     private init() {
-        restRadius = Self.load("restRadius", 42)
+        restRadius = Self.load("restRadius", 57)
         pinMass = Self.load("pinMass", 0.72)
         headMass = Self.load("headMass", 0.45)
         stretchPull = Self.load("stretchPull", 0.78)
@@ -187,7 +187,7 @@ final class FeelLabConfig: ObservableObject {
     }
 
     func resetToDefaults() {
-        restRadius = 42
+        restRadius = 57
         pinMass = 0.72
         headMass = 0.45
         stretchPull = 0.78

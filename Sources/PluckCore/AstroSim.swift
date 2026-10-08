@@ -23,6 +23,7 @@ public struct AstroSim: Sendable {
         var size: CGFloat
         var seed: CGFloat
         var heat: CGFloat   // 0...1 glow after a close pass
+        var home: Int = 0   // 0 orbits the pin, 1 orbits the head, 2 circulates between them
     }
 
     public var params: Params
@@ -35,6 +36,7 @@ public struct AstroSim: Sendable {
     private var releaseT: CGFloat = -1
     private var releaseDir = CGPoint(x: 1, y: 0)
     private var respawnCount = 0
+    private var headVel = CGPoint.zero
 
     public init(params: Params = Params()) { self.params = params }
 
@@ -51,7 +53,7 @@ public struct AstroSim: Sendable {
         let mRest = R * R
         let scale = gmRest / mRest
         // A floor keeps the swarm bound while the pin is drained; the pin still always out-pulls the head.
-        return (scale * max(sol.pin * sol.pin, 0.55 * R * R), scale * headRadius * headRadius)
+        return (scale * max(sol.pin * sol.pin, 0.55 * R * R), scale * max(headRadius * headRadius, 0.28 * R * R))
     }
 
     public mutating func reset(pin: CGPoint) {
@@ -63,27 +65,52 @@ public struct AstroSim: Sendable {
         grains = (0..<max(0, params.grains)).map { i in spawn(index: i, around: pin) }
     }
 
-    private func spawn(index i: Int, around c: CGPoint) -> Grain {
-        let R = params.bodyRadius
-        let a = 2 * .pi * StyleHash.unit(i, 11 &+ respawnCount)
-        let r = R * (1.45 + 1.7 * StyleHash.unit(i, 12 &+ respawnCount))
-        let p = CGPoint(x: c.x + cos(a) * r, y: c.y + sin(a) * r)
-        let (gm, _) = gravityAtRest()
-        let vc = (gm / max(1, r)).squareRoot() * (0.85 + 0.2 * StyleHash.unit(i, 13 &+ respawnCount))
-        let dir: CGFloat = StyleHash.unit(i, 14) > 0.12 ? 1 : -1      // a few retrograde grains
-        return Grain(p: p, v: CGPoint(x: -sin(a) * vc * dir, y: cos(a) * vc * dir),
-                     size: 2.0 + 3.2 * StyleHash.unit(i, 15), seed: StyleHash.unit(i, 16), heat: 0)
+    /// Which body a grain belongs to: most orbit the heavy pin, some the light head, a few circulate between them.
+    private func home(of i: Int) -> Int {
+        let u = StyleHash.unit(i, 31)
+        return u < 0.55 ? 0 : (u < 0.82 ? 1 : 2)
     }
 
-    private func gravityAtRest() -> (CGFloat, CGFloat) {
+    private func spawn(index i: Int, around c: CGPoint) -> Grain {
         let R = params.bodyRadius
-        return (params.orbitSpeed * params.orbitSpeed * 2 * R, 0)
+        let h = home(of: i)
+        let (gmPin, gmHead) = gravity()
+        let a = 2 * .pi * StyleHash.unit(i, 11 &+ respawnCount)
+        let dir: CGFloat = StyleHash.unit(i, 14) > 0.12 ? 1 : -1      // a few retrograde grains
+        let size = 2.0 + 3.2 * StyleHash.unit(i, 15)
+        switch h {
+        case 1:
+            let r = max(headRadius * 1.5, R * 0.34) * (1 + 1.6 * StyleHash.unit(i, 12 &+ respawnCount))
+            let vc = (gmHead / max(1, r)).squareRoot() * (0.9 + 0.15 * StyleHash.unit(i, 13 &+ respawnCount))
+            return Grain(p: CGPoint(x: head.x + cos(a) * r, y: head.y + sin(a) * r),
+                         v: CGPoint(x: headVel.x - sin(a) * vc * dir, y: headVel.y + cos(a) * vc * dir),
+                         size: size * 0.8, seed: StyleHash.unit(i, 16), heat: 0, home: 1)
+        case 2:
+            // Between the bodies: released near the midpoint with a sideways push, so it swings around both.
+            let t = 0.25 + 0.5 * StyleHash.unit(i, 12 &+ respawnCount)
+            let mx = pin.x + (head.x - pin.x) * t, my = pin.y + (head.y - pin.y) * t
+            let dx = head.x - pin.x, dy = head.y - pin.y
+            let l = max(1, hypot(dx, dy))
+            let side: CGFloat = StyleHash.unit(i, 17 &+ respawnCount) > 0.5 ? 1 : -1
+            let sp = (gmPin / max(40, l * t)).squareRoot() * 0.8
+            return Grain(p: CGPoint(x: mx - dy / l * side * R * 0.6, y: my + dx / l * side * R * 0.6),
+                         v: CGPoint(x: -dy / l * -side * 0 + dx / l * sp * side * 0.6 + headVel.x * t,
+                                    y: dy / l * sp * side * 0.6 + headVel.y * t),
+                         size: size, seed: StyleHash.unit(i, 16), heat: 0, home: 2)
+        default:
+            let r = R * (1.45 + 1.7 * StyleHash.unit(i, 12 &+ respawnCount))
+            let vc = (gmPin / max(1, r)).squareRoot() * (0.85 + 0.2 * StyleHash.unit(i, 13 &+ respawnCount))
+            return Grain(p: CGPoint(x: c.x + cos(a) * r, y: c.y + sin(a) * r),
+                         v: CGPoint(x: -sin(a) * vc * dir, y: cos(a) * vc * dir),
+                         size: size, seed: StyleHash.unit(i, 16), heat: 0, home: 0)
+        }
     }
 
     public mutating func step(dt: CGFloat, pin newPin: CGPoint, head newHead: CGPoint) {
         guard dt > 0 else { return }
         time += dt
         let pinShift = CGPoint(x: newPin.x - pin.x, y: newPin.y - pin.y)
+        headVel = CGPoint(x: (newHead.x - head.x) / dt, y: (newHead.y - head.y) / dt)
         pin = newPin
         head = newHead
         _ = pinShift
@@ -130,7 +157,6 @@ public struct AstroSim: Sendable {
                 // Accreted by a body (or flung away): the matter returns to orbit the heavy one.
                 respawnCount &+= 1
                 g = spawn(index: i &+ respawnCount, around: pin)
-                g.p.x += (pin.x - g.p.x) * 0.0
             }
             grains[i] = g
         }

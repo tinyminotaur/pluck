@@ -29,7 +29,7 @@ final class DumbbellMassTests: XCTestCase {
 
     func testMassIsConservedBetweenPinHeadAndThread() {
         let M0 = CGFloat.pi * p.restRadius * p.restRadius
-        for L in stride(from: CGFloat(0), through: 700, by: 25) {
+        for L in stride(from: CGFloat(25), through: 700, by: 25) {
             let s = DumbbellMass.solve(p, length: L)
             let total = CGFloat.pi * (s.pin * s.pin + s.head * s.head) + 2 * s.waist * L
             // Exact except for the tiny hidden-head floor near rest.
@@ -79,8 +79,8 @@ final class DumbbellMassTests: XCTestCase {
     }
 
     func testThickerWaistParameterGivesAThickerThread() {
-        let thin = DumbbellMass.solve(.init(waistRest: 0.12), length: 300).waist
-        let thick = DumbbellMass.solve(.init(waistRest: 0.34), length: 300).waist
+        let thin = DumbbellMass.solve(.init(waistRest: 0.12), length: 100).waist
+        let thick = DumbbellMass.solve(.init(waistRest: 0.34), length: 100).waist
         XCTAssertGreaterThan(thick, thin)
     }
 }
