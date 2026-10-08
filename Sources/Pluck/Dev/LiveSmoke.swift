@@ -9,7 +9,15 @@ import UniformTypeIdentifiers
 /// window server actually composited. No input hooks, no cursor changes, no permissions.
 @MainActor
 enum LiveSmoke {
-    static func run(outputPath: String) -> Never {
+    static func run(outputPath: String, style: String = "liquid") -> Never {
+        let savedStyle = FeelLabConfig.shared.styleID, savedTheme = FeelLabConfig.shared.themeID
+        FeelLabConfig.shared.styleID = style
+        switch style {
+        case "ferro": FeelLabConfig.shared.themeID = ThemeLibrary.ferrofluid.id
+        case "crystal": FeelLabConfig.shared.themeID = ThemeLibrary.amethyst.id
+        default: break
+        }
+        defer { FeelLabConfig.shared.styleID = savedStyle; FeelLabConfig.shared.themeID = savedTheme }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let size = CGSize(width: 1000, height: 560)
@@ -75,6 +83,8 @@ enum LiveSmoke {
                                      iv.count, avg * 1000, 1 / avg, p50 * 1000, p95 * 1000, mx * 1000, slow))
                     }
                     view.stopPhysics()
+                    FeelLabConfig.shared.styleID = savedStyle
+                    FeelLabConfig.shared.themeID = savedTheme
                     exit(0)
                 }
             }

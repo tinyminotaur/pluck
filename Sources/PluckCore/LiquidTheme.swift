@@ -119,8 +119,31 @@ public enum ThemeLibrary {
         fill: 0.42, chrome: 0.22
     )
 
+    public static let ferrofluid = LiquidTheme(
+        id: "ferrofluid", name: "Ferrofluid", tagline: "Mirror-black with cold electric-blue highlights",
+        a: RGB(0.45, 0.70, 1.00), b: RGB(0.80, 0.90, 1.00), c: RGB(0.35, 0.45, 0.85),
+        body: RGB(0.008, 0.010, 0.016), absorb: RGB(3.0, 3.0, 3.0),
+        ember: 0.0, sheen: 2.0, rim: 1.2, gradientScale: 420, gradientSpeed: 0.01, iridescence: 0.2,
+        fill: 0.0, chrome: 0.9
+    )
+    public static let amethyst = LiquidTheme(
+        id: "amethyst", name: "Amethyst", tagline: "Violet and rose crystal with bright glints",
+        a: RGB(0.65, 0.35, 0.95), b: RGB(0.95, 0.55, 0.95), c: RGB(0.45, 0.30, 0.85),
+        body: RGB(0.030, 0.020, 0.050), absorb: RGB(1.0, 2.0, 1.0),
+        ember: 0.3, sheen: 1.4, rim: 1.2, gradientScale: 200, gradientSpeed: 0.03, iridescence: 0.5,
+        fill: 0.35, chrome: 0
+    )
+    public static let frost = LiquidTheme(
+        id: "frost", name: "Frost", tagline: "Ice-blue and white, cold and sharp",
+        a: RGB(0.65, 0.88, 1.00), b: RGB(0.92, 0.98, 1.00), c: RGB(0.45, 0.75, 0.95),
+        body: RGB(0.050, 0.080, 0.120), absorb: RGB(2.0, 1.0, 0.6),
+        ember: 0.1, sheen: 1.6, rim: 1.4, gradientScale: 260, gradientSpeed: 0.02, iridescence: 0.3,
+        fill: 0.40, chrome: 0
+    )
+
     public static let all: [LiquidTheme] = [
         obsidianEmber, mist, oilSlick, aurora, moltenGold, mercury, neonJelly, deepSea, sunsetLava,
+        ferrofluid, amethyst, frost,
     ]
 
     public static func theme(id: String) -> LiquidTheme? { all.first { $0.id == id } }
@@ -178,6 +201,7 @@ public struct FeelPreset: Identifiable, Sendable {
     public let tagline: String
     public let themeID: String
     public let values: [String: Double]
+    public var style: AnimationStyle = .liquid
 }
 
 public enum PresetLibrary {
@@ -253,7 +277,34 @@ public enum PresetLibrary {
                    ]),
     ]
 
-    public static func preset(id: String) -> FeelPreset? { all.first { $0.id == id } }
+    /// Presets in the non-liquid styles. They reuse the same knobs (size, magnet pull, gravity, ...) where they apply.
+    public static let styled: [FeelPreset] = [
+        FeelPreset(id: "ferrofluid", name: "Ferrofluid", tagline: "Black chrome that bristles toward the magnet; filings string the field",
+                   themeID: "ferrofluid", values: [
+                    "restRadius": 44, "magnetPull": 90, "magnetWeight": 0.78, "magnetStick": 0.5, "reachGain": 1.9,
+                    "idleLife": 0.4, "glassOpacity": 0.97, "shadowStrength": 0.55, "shininess": 1.2,
+                   ], style: .ferro),
+        FeelPreset(id: "iron-filings", name: "Iron Filings", tagline: "Ferrofluid in silver, snappier and sparser",
+                   themeID: "mercury", values: [
+                    "restRadius": 38, "magnetPull": 110, "magnetWeight": 0.85, "magnetStick": 0.3, "reachGain": 2.2,
+                    "idleLife": 0.3, "glassOpacity": 0.97, "shininess": 1.1,
+                   ], style: .ferro),
+        FeelPreset(id: "amethyst-crystal", name: "Amethyst Crystal", tagline: "A violet crystal grows toward you, branching as you move",
+                   themeID: "amethyst", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.9, "magnetStick": 0.2, "reachGain": 2.0,
+                    "idleLife": 0.5, "glassOpacity": 0.96, "shadowStrength": 0.4,
+                   ], style: .crystal),
+        FeelPreset(id: "frost", name: "Frost", tagline: "Ice crystals spread along your path, cold and sharp",
+                   themeID: "frost", values: [
+                    "restRadius": 42, "magnetPull": 80, "magnetWeight": 0.92, "magnetStick": 0.15, "reachGain": 2.3,
+                    "idleLife": 0.4, "glassOpacity": 0.96, "shadowStrength": 0.35,
+                   ], style: .crystal),
+    ]
+
+    /// Every preset: the liquid ones, then ferrofluid and crystal.
+    public static var everything: [FeelPreset] { all + styled }
+
+    public static func preset(id: String) -> FeelPreset? { (all + styled).first { $0.id == id } }
 
     /// Knob values for a preset: baseline overlaid with the preset's own.
     public static func resolvedValues(_ p: FeelPreset) -> [String: Double] {

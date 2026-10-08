@@ -69,6 +69,10 @@ final class MetaballView: NSView {
     // inertia and gravity. Plus slow swelling along the tether. Nothing is ever a perfect disc.
     /// Radii of the two round bulbs (pin, head) from the volume-conserving dumbbell model, already scaled by emergence.
     private var bulbPin: CGFloat = 0
+    /// Which animation style this gesture uses (read from the config when the gesture starts).
+    private(set) var activeStyle: AnimationStyle = .liquid
+    private var ferro = FerroSim()
+    private var crystal = CrystalSim()
     /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
     private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
@@ -177,6 +181,14 @@ final class MetaballView: NSView {
         pinM2 = .zero; pinM2v = .zero; pinM3 = .zero; pinM3v = .zero
         headM2 = .zero; headM2v = .zero; headM3 = .zero; headM3v = .zero
         drops = []; pinching = false; pinchTime = 0
+        activeStyle = cfg.style
+        let radius = CGFloat(cfg.restRadius) * (cfg.meetingMode ? 0.65 : 1)
+        ferro = FerroSim()
+        ferro.params.bodyRadius = radius * 0.72
+        ferro.reset(pin: lockedPin)
+        crystal = CrystalSim()
+        crystal.params.coreRadius = radius * 0.62
+        crystal.reset(pin: lockedPin, seed: UInt64.random(in: 1...UInt64.max))
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -287,11 +299,36 @@ final class MetaballView: NSView {
         tintColor = cfg.tintColor
         tickFixed(frameDt: dt)
         updateCompassUI(dt: dt)
+        stepStyle(dt: dt)
+    }
+
+    /// Advance the ferrofluid / crystal simulation. The head comes from the shared magnet-pull physics, so every
+    /// style feels the same under your hand; only what is drawn around it differs.
+    private func stepStyle(dt: CGFloat) {
+        guard activeStyle != .liquid else { return }
+        let steps = max(1, Int((dt / (1.0 / 120)).rounded(.up)))
+        let h = dt / CGFloat(steps)
+        for _ in 0..<steps {
+            switch activeStyle {
+            case .ferro: ferro.step(dt: h, pin: lockedPin, head: head)
+            case .crystal: crystal.step(dt: h, pin: lockedPin, head: head)
+            case .liquid: break
+            }
+        }
+    }
+
+    private var styleFinished: Bool {
+        switch activeStyle {
+        case .liquid: return true
+        case .ferro: return ferro.isFinished
+        case .crystal: return crystal.isFinished
+        }
     }
 
     /// Render the liquid straight into the Metal layer: size the layer to the (grid-snapped) bounds of the
     /// liquid, encode, and present with the layer's transaction so frame and contents change together.
     private func presentMetal() {
+        if activeStyle != .liquid { presentStyle(); return }
         guard let metal, emerge > 0.01, let raw = massBounds() else {
             metalLayer.isHidden = true
             return
@@ -326,6 +363,61 @@ final class MetaballView: NSView {
         drawable.present()
     }
 
+    /// The current shapes for the ferrofluid / crystal styles.
+    private func stylePrims() -> [ShapePrim] {
+        let glow: CGFloat = captured != nil ? min(1, max(0, armedPos[captured ?? .north] ?? 0)) : 0
+        switch activeStyle {
+        case .ferro: return ferro.primitives(emerge: emerge, headGlow: glow)
+        case .crystal: return crystal.primitives(emerge: emerge, headGlow: glow)
+        case .liquid: return []
+        }
+    }
+
+    /// For headless previews.
+    func debugStylePrims() -> [ShapePrim] { stylePrims() }
+
+    /// Ferrofluid / crystal: the same Metal-layer presentation, with the shape-list shader.
+    private func presentStyle() {
+        guard let shapes = ShapeListMetal.shared, emerge > 0.01, metalLayer.device != nil else {
+            metalLayer.isHidden = true
+            return
+        }
+        let prims = stylePrims()
+        guard var raw = prims.first?.bounds else { metalLayer.isHidden = true; return }
+        for p in prims.dropFirst() { raw = raw.union(p.bounds) }
+        raw = raw.insetBy(dx: -46, dy: -46)   // room for the contact shadow
+        let q: CGFloat = 32
+        let x0 = floor(raw.minX / q) * q, y0 = floor(raw.minY / q) * q
+        var rect = CGRect(x: x0, y: y0, width: ceil((raw.maxX - x0) / q) * q, height: ceil((raw.maxY - y0) / q) * q)
+        rect = rect.intersection(bounds.insetBy(dx: -64, dy: -64))
+        guard rect.width >= 2, rect.height >= 2 else { metalLayer.isHidden = true; return }
+        let scale = min(2.0, window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
+        let px = CGSize(width: ceil(rect.width * scale), height: ceil(rect.height * scale))
+        guard px.width < 8192, px.height < 8192 else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        metalLayer.frame = rect
+        metalLayer.contentsScale = scale
+        if metalDrawableSize != px {
+            metalLayer.drawableSize = px
+            metalDrawableSize = px
+        }
+        metalLayer.isHidden = false
+        CATransaction.commit()
+
+        var look = ShapeListMetal.look(mode: activeStyle == .ferro ? .ferro : .crystal, theme: cfg.theme, time: Float(time))
+        look.roleShift = Float(roleShift)
+        look.shadow = Float(cfg.shadowStrength)
+        look.shininess = Float(max(0.3, cfg.shininess))
+        look.smoothK = Float(activeStyle == .ferro ? 10 : 6)
+        guard let drawable = metalLayer.nextDrawable(), let cmd = shapes.makeCommandBuffer() else { return }
+        shapes.encode(into: drawable.texture, commandBuffer: cmd, origin: rect.origin, scale: scale, prims: prims, look: look)
+        cmd.commit()
+        cmd.waitUntilScheduled()
+        drawable.present()
+    }
+
     /// Repaint only where the ring and label were and are now.
     private func updateCompassOverlay() {
         let now = compassDirtyRect()
@@ -354,6 +446,7 @@ final class MetaballView: NSView {
         time += dt
         tickFixed(frameDt: dt)
         updateCompassUI(dt: dt)
+        stepStyle(dt: dt)
     }
 
     /// Times one real optical draw (Metal render + CPU readback + composite) in milliseconds, for `--sim-report`.
@@ -569,7 +662,21 @@ final class MetaballView: NSView {
         let fling = CGFloat(cfg.flingMomentum)
         recoilVel = CGPoint(x: headVel.x * fling, y: headVel.y * fling)
         recoilPulse = 1
-        if role != nil { startPinchOff() }
+        switch activeStyle {
+        case .liquid:
+            if role != nil { startPinchOff() }
+        case .ferro:
+            ferro.release(commit: role != nil ? actionDirection() : nil)
+        case .crystal:
+            if role != nil { crystal.shatter(direction: actionDirection()) } else { crystal.retract() }
+        }
+    }
+
+    /// Unit vector from the pin toward the head (the direction the action was pulled).
+    private func actionDirection() -> CGPoint {
+        let dx = head.x - lockedPin.x, dy = head.y - lockedPin.y
+        let l = hypot(dx, dy)
+        return l > 1 ? CGPoint(x: dx / l, y: dy / l) : CGPoint(x: 1, y: 0)
     }
 
     /// The thread snaps at about 62% of its length. The head bulb leaves as a droplet along the pull direction with
@@ -629,7 +736,7 @@ final class MetaballView: NSView {
     }
 
     private func finishRecoilIfSettled(frameDt: CGFloat) {
-        guard recoilSettled, drops.isEmpty else { return }
+        guard recoilSettled, drops.isEmpty, styleFinished else { return }
         emerge = max(0, emerge - frameDt / 0.14)
         if emerge <= 0.001 {
             emerge = 0
@@ -950,6 +1057,14 @@ final class MetaballView: NSView {
             let tSize = title.size()
             let glyph = Self.glyph(for: bud.item.role, color: light)
 
+            if activeStyle != .liquid {
+                // The head is spiky or faceted in these styles: give the text a quiet dark disc to sit on.
+                ctx.saveGState()
+                ctx.setFillColor(NSColor(calibratedWhite: 0.02, alpha: 0.62 * textFade).cgColor)
+                let r = bud.radius * 0.95
+                ctx.fillEllipse(in: CGRect(x: bud.center.x - r, y: bud.center.y - r, width: r * 2, height: r * 2))
+                ctx.restoreGState()
+            }
             ctx.saveGState()
             ctx.translateBy(x: bud.center.x, y: bud.center.y)
             let s = min(1.25, max(0.5, fit))

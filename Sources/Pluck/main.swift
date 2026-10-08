@@ -17,7 +17,20 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-compass") {
 // `Pluck --live-smoke out.png`: the real Metal-layer view in a brief click-through window; prints frame pacing.
 if let i = CommandLine.arguments.firstIndex(of: "--live-smoke") {
     let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "live.png"
-    MainActor.assumeIsolated { LiveSmoke.run(outputPath: path) }
+    let style = CommandLine.arguments.indices.contains(i + 2) ? CommandLine.arguments[i + 2] : "liquid"
+    MainActor.assumeIsolated { LiveSmoke.run(outputPath: path, style: style) }
+}
+
+// `Pluck --render-style-commit out.png`: the real view committing in each non-liquid style (headless), then exit.
+if let i = CommandLine.arguments.firstIndex(of: "--render-style-commit") {
+    let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "style-commit.png"
+    exit(MainActor.assumeIsolated { PreviewRender.runStyleCommit(outputPath: path) })
+}
+
+// `Pluck --render-styles out.png`: the ferrofluid and crystal styles (headless), then exit.
+if let i = CommandLine.arguments.firstIndex(of: "--render-styles") {
+    let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "styles.png"
+    exit(MainActor.assumeIsolated { PreviewRender.runStyles(outputPath: path) })
 }
 
 // `Pluck --render-pinch out.png`: the commit pinch-off over time (headless), then exit.

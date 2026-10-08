@@ -36,6 +36,18 @@ final class ThemeLibraryTests: XCTestCase {
         }
     }
 
+    func testStyledPresetsAreRealAndUseTheirStyle() {
+        XCTAssertEqual(Set(PresetLibrary.everything.map(\.id)).count, PresetLibrary.everything.count)
+        for p in PresetLibrary.styled {
+            XCTAssertNotEqual(p.style, .liquid, p.id)
+            XCTAssertNotNil(ThemeLibrary.theme(id: p.themeID), p.id)
+            for k in p.values.keys { XCTAssertNotNil(PresetLibrary.baseline[k], "\(p.id) unknown knob \(k)") }
+        }
+        XCTAssertTrue(PresetLibrary.styled.contains { $0.style == .ferro })
+        XCTAssertTrue(PresetLibrary.styled.contains { $0.style == .crystal })
+        XCTAssertNotNil(PresetLibrary.preset(id: "frost"))
+    }
+
     func testPresetsAreMeaningfullyDifferent() {
         // Each preset (besides the default) changes several knobs and feels different from the others.
         for p in PresetLibrary.all where p.id != "obsidian-ember" {

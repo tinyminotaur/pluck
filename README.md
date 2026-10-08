@@ -29,10 +29,21 @@ Pluck is **listen-only** (no event tap, it never synthesizes input), so it can n
 
 Escape cancels. **⌃⌥⌘P** quits Pluck. A gesture also ends after 12 s without movement.
 
+## Animation styles
+
+Beyond the liquid, two completely different styles respond to your movement (pick one in the Feel Lab guide or the
+menu bar under **Animation Style**, or choose a preset that sets it):
+
+- **Ferrofluid**: mirror-black chrome that bristles into a fan of spikes aimed at the cursor (the magnet), a
+  smaller mass at the cursor that bristles back, and iron filings strung along curved field lines. The fan swings
+  around with lag and overshoot as you move.
+- **Crystal**: a crystal rosette grows a faceted needle toward the cursor; the distance you travel seeds branches,
+  which sprout sub-branches, so the formation keeps evolving while you hold. Commit shatters it; cancel retracts it.
+
 ## Looks and feels
 
-The Feel Lab window (menu bar drop → Show Feel Lab Guide) has 10 feel presets (physics and colours together) and
-9 colour themes with gradient palettes, plus a "Surprise me" random palette. The menu bar has the same under
+The Feel Lab window (menu bar drop → Show Feel Lab Guide) has 14 feel presets (physics and colours together) and
+12 colour themes with gradient palettes, plus a "Surprise me" random palette. The menu bar has the same under
 **Feel Preset** and **Colour Theme**. Hundreds of live knobs are underneath, saved between launches.
 
 ## Requirements
@@ -52,6 +63,9 @@ Headless tools (no input, no cursor, no permissions):
 .build/release/Pluck --render-compass out.png   # the live view with its action label
 .build/release/Pluck --render-pinch out.png     # the commit pinch-off over time
 .build/release/Pluck --render-themes out.png    # every theme
+.build/release/Pluck --render-styles out.png    # ferrofluid and crystal
+.build/release/Pluck --render-style-commit out.png   # their commit animations
+.build/release/Pluck --live-smoke out.png ferro     # real display link: frame pacing + capture (liquid|ferro|crystal)
 .build/release/Pluck --render-preview out.png   # the standard look grid
 .build/release/Pluck --sim-report               # physics extent and draw cost
 ```

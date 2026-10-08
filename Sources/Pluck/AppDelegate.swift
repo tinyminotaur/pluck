@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(sounds)
 
         let presetMenu = NSMenu()
-        for p in PresetLibrary.all {
+        for p in PresetLibrary.everything {
             let item = NSMenuItem(title: p.name, action: #selector(selectPreset(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = p.id
@@ -106,6 +106,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let presetItem = NSMenuItem(title: "Feel Preset", action: nil, keyEquivalent: "")
         presetItem.submenu = presetMenu
         menu.addItem(presetItem)
+
+        let styleMenu = NSMenu()
+        for st in AnimationStyle.allCases {
+            let item = NSMenuItem(title: st.name, action: #selector(selectStyle(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = st.rawValue
+            item.toolTip = st.tagline
+            item.state = FeelLabConfig.shared.styleID == st.rawValue ? .on : .off
+            styleMenu.addItem(item)
+        }
+        let styleItem = NSMenuItem(title: "Animation Style", action: nil, keyEquivalent: "")
+        styleItem.submenu = styleMenu
+        menu.addItem(styleItem)
 
         let themeMenu = NSMenu()
         for t in ThemeLibrary.all {
@@ -162,6 +175,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let id = sender.representedObject as? String, let p = PresetLibrary.preset(id: id) {
             FeelLabConfig.shared.apply(preset: p)
         }
+    }
+
+    @objc private func selectStyle(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { FeelLabConfig.shared.styleID = id }
     }
 
     @objc private func selectTheme(_ sender: NSMenuItem) {

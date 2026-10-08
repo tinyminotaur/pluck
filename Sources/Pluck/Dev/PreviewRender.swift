@@ -167,6 +167,105 @@ enum PreviewRender {
         catch { return 7 }
     }
 
+    /// `Pluck --render-styles out.png`: the ferrofluid and crystal styles (headless Metal) at rest, pulled, far, and armed.
+    static func runStyles(outputPath: String) -> Int32 {
+        guard let shapes = ShapeListMetal.shared else { return 2 }
+        let tile = CGSize(width: 560, height: 340)
+        let scale: CGFloat = 2
+        let chords: [CGFloat] = [0, 150, 330, 330]
+        let rows: [(AnimationStyle, LiquidTheme)] = [
+            (.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst), (.crystal, ThemeLibrary.frost),
+        ]
+        let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
+        guard let ctx = CGContext(
+            data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return 3 }
+        ctx.setFillColor(CGColor(red: 0.13, green: 0.14, blue: 0.17, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        let pin = CGPoint(x: 120, y: 170)
+        for (r, row) in rows.enumerated() {
+            for (c, chord) in chords.enumerated() {
+                let armed: CGFloat = c == 3 ? 1 : 0
+                var prims: [ShapePrim] = []
+                let dt: CGFloat = 1.0 / 120
+                if row.0 == .ferro {
+                    var f = FerroSim()
+                    f.reset(pin: pin)
+                    var t: CGFloat = 0
+                    while t < 1.6 {
+                        let k = min(1, t / 0.35)
+                        f.step(dt: dt, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))))
+                        t += dt
+                    }
+                    prims = f.primitives(emerge: 1, headGlow: armed)
+                } else {
+                    var cr = CrystalSim()
+                    cr.reset(pin: pin, seed: UInt64(11 + r))
+                    var t: CGFloat = 0
+                    while t < (chord == 0 ? 2.4 : 3.2) {
+                        let k = min(1, t / 0.9)
+                        cr.step(dt: dt, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y + 40 * k * CGFloat(sin(Double(k * 4)))))
+                        t += dt
+                    }
+                    prims = cr.primitives(emerge: 1, headGlow: armed)
+                }
+                let look = ShapeListMetal.look(mode: row.0 == .ferro ? .ferro : .crystal, theme: row.1, time: 1.3)
+                guard let img = shapes.render(size: tile, scale: scale, prims: prims, look: look) else { return 4 }
+                ctx.draw(img, in: CGRect(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale,
+                                         width: tile.width * scale, height: tile.height * scale))
+            }
+        }
+        guard let out = ctx.makeImage(),
+              let png = NSBitmapImageRep(cgImage: out).representation(using: .png, properties: [:]) else { return 5 }
+        do { try png.write(to: URL(fileURLWithPath: outputPath)); print("PreviewRender: wrote \(outputPath)"); return 0 }
+        catch { return 7 }
+    }
+
+    /// `Pluck --render-style-commit out.png`: the real view driving each style through a pull, then a commit.
+    static func runStyleCommit(outputPath: String) -> Int32 {
+        guard let shapes = ShapeListMetal.shared else { return 2 }
+        let tile = CGSize(width: 620, height: 300)
+        let scale: CGFloat = 2
+        let times: [CGFloat] = [0, 0.05, 0.12, 0.25, 0.45]
+        let combos: [(AnimationStyle, LiquidTheme)] = [(.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst)]
+        let W = Int(tile.width * scale) * times.count, H = Int(tile.height * scale) * combos.count
+        guard let ctx = CGContext(
+            data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return 3 }
+        ctx.setFillColor(CGColor(red: 0.13, green: 0.14, blue: 0.17, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        let savedStyle = FeelLabConfig.shared.styleID, savedTheme = FeelLabConfig.shared.themeID
+        defer { FeelLabConfig.shared.styleID = savedStyle; FeelLabConfig.shared.themeID = savedTheme }
+        for (r, combo) in combos.enumerated() {
+            FeelLabConfig.shared.styleID = combo.0.rawValue
+            FeelLabConfig.shared.themeID = combo.1.id
+            let view = MetaballView(frame: NSRect(origin: .zero, size: tile))
+            view.debugPose(pin: CGPoint(x: 110, y: 150), pointer: CGPoint(x: 440, y: 160), armed: .east,
+                           items: FeelLab.context.items, seconds: 2.2)
+            let pre = view.debugStylePrims()
+            print("style \(combo.0.rawValue): before commit \(pre.count) prims | circles \(pre.filter { $0.kind == .circle }.count) (tight \(pre.filter { $0.blend == .tight }.count)) cones \(pre.filter { $0.kind == .cone }.count) shards \(pre.filter { $0.kind == .shard }.count)")
+            view.debugCommit(role: .east)
+            var t: CGFloat = 0
+            for (c, target) in times.enumerated() {
+                while t < target - 1e-5 { view.debugAdvance(dt: 1.0 / 240); t += 1.0 / 240 }
+                let look = ShapeListMetal.look(mode: combo.0 == .ferro ? .ferro : .crystal, theme: combo.1, time: 1.3)
+                if let img = shapes.render(size: tile, scale: scale, prims: view.debugStylePrims(), look: look) {
+                    ctx.draw(img, in: CGRect(x: CGFloat(c) * tile.width * scale, y: CGFloat(combos.count - 1 - r) * tile.height * scale,
+                                             width: tile.width * scale, height: tile.height * scale))
+                }
+            }
+            view.stopPhysics()
+        }
+        guard let out = ctx.makeImage(),
+              let png = NSBitmapImageRep(cgImage: out).representation(using: .png, properties: [:]) else { return 5 }
+        do { try png.write(to: URL(fileURLWithPath: outputPath)); print("PreviewRender: wrote \(outputPath)"); return 0 }
+        catch { return 7 }
+    }
+
     /// `Pluck --render-pinch out.png`: pull east, commit, and show the pinch-off over the next 420 ms.
     static func runPinch(outputPath: String) -> Int32 {
         let tile = CGSize(width: 560, height: 260)

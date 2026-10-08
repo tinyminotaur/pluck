@@ -70,6 +70,8 @@ final class FeelLabConfig: ObservableObject {
     /// Selected look and feel. `themeID == "custom"` uses `customTheme` (a "Surprise me" palette).
     @Published var themeID: String { didSet { saveString("themeID", themeID) } }
     @Published var presetID: String { didSet { saveString("presetID", presetID) } }
+    /// How the gesture is drawn: liquid, ferrofluid or crystal.
+    @Published var styleID: String { didSet { saveString("styleID", styleID) } }
     @Published private(set) var customTheme: LiquidTheme? { didSet { saveCustomTheme() } }
     /// Master switch for the chipped-obsidian facets. Off while the liquid itself is being tuned.
     @Published var facetsEnabled: Bool { didSet { saveBool("facetsEnabled", facetsEnabled) } }
@@ -154,6 +156,7 @@ final class FeelLabConfig: ObservableObject {
         ember = Self.load("glowGain", 1.0)
         themeID = UserDefaults.standard.string(forKey: "pluck.feel.themeID") ?? ThemeLibrary.obsidianEmber.id
         presetID = UserDefaults.standard.string(forKey: "pluck.feel.presetID") ?? PresetLibrary.all[0].id
+        styleID = UserDefaults.standard.string(forKey: "pluck.feel.styleID") ?? AnimationStyle.liquid.rawValue
         customTheme = UserDefaults.standard.data(forKey: "pluck.feel.customTheme").flatMap { try? JSONDecoder().decode(LiquidTheme.self, from: $0) }
         facetsEnabled = Self.loadBool("facetsEnabled", false)
         facetAmount = Self.load("facetAmount", 0.55)
@@ -211,6 +214,7 @@ final class FeelLabConfig: ObservableObject {
         ember = 1.0
         themeID = ThemeLibrary.obsidianEmber.id
         presetID = PresetLibrary.all[0].id
+        styleID = AnimationStyle.liquid.rawValue
         facetsEnabled = false
         facetAmount = 0.55
         facetSize = 22
@@ -286,6 +290,8 @@ final class FeelLabConfig: ObservableObject {
 
     // MARK: Themes and presets
 
+    var style: AnimationStyle { AnimationStyle(rawValue: styleID) ?? .liquid }
+
     /// The active theme (a built-in, or the last "Surprise me" palette).
     var theme: LiquidTheme {
         if themeID == "custom", let customTheme { return customTheme }
@@ -313,6 +319,7 @@ final class FeelLabConfig: ObservableObject {
             if let path = Self.knobPaths[key] { self[keyPath: path] = value }
         }
         themeID = preset.themeID
+        styleID = preset.style.rawValue
         presetID = preset.id
     }
 

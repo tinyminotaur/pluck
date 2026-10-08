@@ -201,10 +201,19 @@ struct FeelGuideView: View {
     private var looksSection: some View {
         GroupBox("Looks & feels") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Feel presets: physics and colours together")
+                Text("Animation style")
+                    .font(.caption.weight(.semibold))
+                Picker("Animation style", selection: $config.styleID) {
+                    ForEach(AnimationStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(config.style.tagline).font(.caption2).foregroundStyle(.secondary)
+
+                Text("Feel presets: style, physics and colours together")
                     .font(.caption.weight(.semibold))
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    ForEach(PresetLibrary.all) { p in presetCard(p) }
+                    ForEach(PresetLibrary.everything) { p in presetCard(p) }
                 }
 
                 Text("Colour themes: keep the current feel, change the look")
@@ -241,7 +250,14 @@ struct FeelGuideView: View {
                     .fill(swatch(theme))
                     .frame(height: 22)
                     .overlay(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.35)).padding(.trailing, 28))
-                Text(p.name).font(.caption.weight(.semibold))
+                HStack(spacing: 5) {
+                    Text(p.name).font(.caption.weight(.semibold))
+                    if p.style != .liquid {
+                        Text(p.style.name).font(.system(size: 8, weight: .semibold))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.22)))
+                    }
+                }
                 Text(p.tagline).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

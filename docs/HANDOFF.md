@@ -63,3 +63,8 @@ Keep it listen-only (no event tap, no synthesized input). Commit small, push, an
 - **Looks:** default is dark obsidian + amber. New "Mist" theme and "Minimal & Elegant" preset for the calm clear-glass direction. Oil Slick bands are wider/softer.
 - **Headless previews (no input, no permissions):** `--render-compass`, `--render-pinch` (commit frames), `--render-themes`, `--render-preview`, `--sim-report`.
 - **Not verified live:** how the modes/pinch feel in motion; the Mist look on real desktops (light and dark).
+
+## Update: animation styles (ferrofluid and crystal) and the jitter fix
+- **Presentation:** the live view renders into a `CAMetalLayer` on a `CADisplayLink` (no CPU readback). The CPU path remains for headless previews and Reduce Motion. The physics uses equal substeps that exactly cover each frame (a fixed step with a remainder aliased against 120 Hz) and the cursor is sampled once per frame (`pointerProvider`).
+- **Styles:** `AnimationStyle` (liquid/ferro/crystal) is chosen by `FeelLabConfig.styleID` (presets can set it). `PluckCore/FerroSim` and `CrystalSim` are pure, tested simulations producing `ShapePrim`s; `ShapeListMetal` renders them (ferro: chrome ridges on cones; crystal: faceted hexagonal prisms). The head comes from the shared magnet-pull physics so every style feels the same under the hand. Commit: ferro flings the filings and collapses the spikes; crystal shatters; cancel retracts it.
+- **Not verified live:** the new styles on the real display link. `--live-smoke <out.png> <style>` does that (needs an unlocked screen; display links correctly do not tick for occluded windows). Headless checks passed: tests, `--render-styles`, `--render-style-commit`.
