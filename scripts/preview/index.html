@@ -48,11 +48,11 @@ void main(){
  vec2 tilt=(cell.zw-.5)*2.; float ripple=sin(cell.x*38.+cell.z*6.2831)*.035; vec3 Nf=normalize(vec3(N.xy*.45+tilt*.45+domeS*.30+domeS*ripple,N.z)); N=normalize(mix(N,Nf,clamp(facet,0.,1.)));
  vec3 V=vec3(0,0,1); vec3 L=normalize(vec3(lightDir,.85));
  float thick=clamp(h,0.,1.);
- vec3 dark=baseC*.35+vec3(.02,.025,.04); float tAmt=clamp(trans,0.,1.)*(.55+.9*pow(1.-thick,1.35));
- vec3 beer=exp(-absorb*thick*1.1); vec3 body=mix(dark,glowC*beer,tAmt); body+=vec3(.04,.045,.06)*(.35+.65*thick);
+ vec3 dark=baseC*.35+vec3(.02,.025,.04); float tAmt=clamp(trans,0.,1.)*(.38+1.0*pow(1.-thick,1.6));
+ vec3 beer=exp(-absorb*thick*1.7); vec3 body=mix(dark,glowC*beer,tAmt); body+=vec3(.018,.02,.028)*(.35+.65*thick);
  float ndl=clamp(dot(N,L),0.,1.); float wrap=clamp(dot(N,normalize(vec3(-L.x,-L.y,.9)))*.5+.5,0.,1.);
  body*=.55+.55*ndl+.25*wrap;
- float fr=pow(1.-clamp(dot(N,V),0.,1.),2.2)*(.55+fres_); body+=fr*vec3(.85,.9,1.)*.85;
+ float fr=pow(1.-clamp(dot(N,V),0.,1.),2.2)*(.55+fres_); body+=fr*vec3(.85,.9,1.)*.6;
  vec3 H=normalize(L+V); float gloss=mix(12.,48.,clamp(shin,0.,1.)); float spec=pow(clamp(dot(N,H),0.,1.),gloss)*(.45+shin); body+=spec*1.1*(1.-.45*clamp(facet,0.,1.));
  float seam=1.-smoothstep(0.,.07,cell.y); body+=seam*facet*.12*vec3(.75,.85,1.)*(.35+.65*thick);
  float glint=smoothstep(.972,.996,dot(N,H))*(.35+.65*cell.w); body+=glint*facet*.9*vec3(1.,.97,.92)*(1.-seam);

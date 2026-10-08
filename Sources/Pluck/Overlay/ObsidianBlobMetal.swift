@@ -397,17 +397,17 @@ final class ObsidianBlobMetal {
         float thick = saturate(h);
         float3 dark = u.baseColor.xyz * 0.35 + float3(0.02, 0.025, 0.04);
         float3 glow = u.glow.xyz;
-        float tAmt = saturate(u.transmission) * (0.55 + 0.9 * pow(1.0 - thick, 1.35));
-        float3 beer = exp(-u.absorb.xyz * thick * 1.1);
+        float tAmt = saturate(u.transmission) * (0.38 + 1.0 * pow(1.0 - thick, 1.6));
+        float3 beer = exp(-u.absorb.xyz * thick * 1.7);
         float3 body = mix(dark, glow * beer, tAmt);
-        body += float3(0.04, 0.045, 0.06) * (0.35 + 0.65 * thick);
+        body += float3(0.018, 0.02, 0.028) * (0.35 + 0.65 * thick);
 
         float ndl = saturate(dot(N, L));
         float wrap = saturate(dot(N, normalize(float3(-L.x, -L.y, 0.9))) * 0.5 + 0.5);
         body *= 0.55 + 0.55 * ndl + 0.25 * wrap;
 
         float fres = pow(1.0 - saturate(dot(N, V)), 2.2) * (0.55 + u.fresnel);
-        body += fres * float3(0.85, 0.9, 1.0) * 0.85;
+        body += fres * float3(0.85, 0.9, 1.0) * 0.6;
 
         float3 H = normalize(L + V);
         float gloss = mix(12.0, 48.0, saturate(u.shininess));
