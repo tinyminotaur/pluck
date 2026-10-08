@@ -14,6 +14,12 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-compass") {
     exit(MainActor.assumeIsolated { PreviewRender.runCompass(outputPath: path) })
 }
 
+// `Pluck --live-smoke out.png`: the real Metal-layer view in a brief click-through window; prints frame pacing.
+if let i = CommandLine.arguments.firstIndex(of: "--live-smoke") {
+    let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "live.png"
+    MainActor.assumeIsolated { LiveSmoke.run(outputPath: path) }
+}
+
 // `Pluck --render-pinch out.png`: the commit pinch-off over time (headless), then exit.
 if let i = CommandLine.arguments.firstIndex(of: "--render-pinch") {
     let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "pinch.png"

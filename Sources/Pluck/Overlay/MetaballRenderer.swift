@@ -45,7 +45,7 @@ final class MetaballView: NSView {
     private var slosh: [CGFloat] = []
     private var prevSlosh: [CGFloat] = []
 
-    private var displayLink: CVDisplayLink?
+    private var cvLink: CVDisplayLink?
     private var fallbackTimer: Timer?
     private var lastTick: CFTimeInterval = 0
     private var physicsRunning = false
@@ -102,6 +102,43 @@ final class MetaballView: NSView {
 
     private let metal = ObsidianBlobMetal.shared
 
+    // Live presentation: the liquid is rendered straight into a CAMetalLayer (no CPU readback, no full-screen
+    // CoreGraphics redraw) on a vsync-locked display link; the label and ring live in a small overlay view that
+    // redraws only its dirty rectangle.
+    private let metalLayer = CAMetalLayer()
+    private let compassView = CompassOverlayView()
+    private var nsLink: CADisplayLink?
+    private var lastLinkTimestamp: CFTimeInterval = 0
+    private var liveMetal = false
+    private var lastCompassRect: CGRect = .null
+    private var metalDrawableSize: CGSize = .zero
+    /// Wall-clock gaps between presented frames (seconds), for `--live-smoke`.
+    private(set) var debugFrameIntervals: [Double] = []
+    private var debugLastPresent: CFTimeInterval = 0
+    var debugRecordFrames = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer = CALayer()
+        layer?.masksToBounds = false
+        metalLayer.device = ObsidianBlobMetal.shared?.metalDevice
+        metalLayer.pixelFormat = .bgra8Unorm
+        metalLayer.framebufferOnly = true
+        metalLayer.isOpaque = false
+        metalLayer.backgroundColor = nil
+        // The layer's frame and its drawable must change together as the liquid grows and moves.
+        metalLayer.presentsWithTransaction = true
+        metalLayer.isHidden = true
+        layer?.addSublayer(metalLayer)
+        compassView.owner = self
+        compassView.frame = bounds
+        compassView.autoresizingMask = [.width, .height]
+        addSubview(compassView)
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
     private var cfg: FeelLabConfig { FeelLabConfig.shared }
     private var mass: BlobMassParams { cfg.massParams }
     private var particleCount: Int { cfg.resolvedParticleCount }
@@ -153,6 +190,15 @@ final class MetaballView: NSView {
         lastTick = CACurrentMediaTime()
         if driveManually { return }   // headless report: the caller steps the simulation
 
+        if window != nil, metal != nil, metalLayer.device != nil {
+            liveMetal = true
+            lastLinkTimestamp = 0
+            let link = displayLink(target: self, selector: #selector(linkTick(_:)))
+            link.add(to: .main, forMode: .common)
+            nsLink = link
+            return
+        }
+
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else {
@@ -164,7 +210,7 @@ final class MetaballView: NSView {
             if let fallbackTimer { RunLoop.main.add(fallbackTimer, forMode: .common) }
             return
         }
-        displayLink = link
+        cvLink = link
         let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, context -> CVReturn in
             guard let context else { return kCVReturnSuccess }
             let view = Unmanaged<MetaballView>.fromOpaque(context).takeUnretainedValue()
@@ -182,27 +228,119 @@ final class MetaballView: NSView {
         recoiling = false
         recoilDone = nil
         pinLocked = false
-        if let displayLink {
-            CVDisplayLinkStop(displayLink)
-            self.displayLink = nil
+        if let cvLink {
+            CVDisplayLinkStop(cvLink)
+            self.cvLink = nil
         }
+        nsLink?.invalidate()
+        nsLink = nil
+        metalLayer.isHidden = true
         fallbackTimer?.invalidate()
         fallbackTimer = nil
     }
 
+    /// Fallback tick (CVDisplayLink path, used only when there is no window/Metal layer).
     private func tick() {
         guard physicsRunning || emerge > 0.01 else { return }
-        CursorGuard.shared.checkIn()
         let now = CACurrentMediaTime()
         var dt = now - lastTick
         lastTick = now
         dt = min(1.0 / 30.0, max(1.0 / 240.0, dt))
-        time += CGFloat(dt)
-        tintColor = cfg.tintColor
-        tickFixed(frameDt: CGFloat(dt))
-        updateCompassUI(dt: CGFloat(dt))
+        frameStep(dt: CGFloat(dt))
         needsDisplay = true
     }
+
+    /// Live tick: called on the main thread in sync with the display's refresh.
+    @objc private func linkTick(_ link: CADisplayLink) {
+        guard physicsRunning || emerge > 0.01 else { return }
+        var dt = lastLinkTimestamp == 0 ? 1.0 / 60 : link.timestamp - lastLinkTimestamp
+        lastLinkTimestamp = link.timestamp
+        dt = min(1.0 / 30.0, max(1.0 / 480.0, dt))
+        frameStep(dt: CGFloat(dt))
+        presentMetal()
+        updateCompassOverlay()
+        if debugRecordFrames {
+            let now = CACurrentMediaTime()
+            if debugLastPresent > 0 { debugFrameIntervals.append(now - debugLastPresent) }
+            debugLastPresent = now
+        }
+    }
+
+    /// For `--live-smoke`: drive the live view with a pointer position and armed role.
+    func debugDrive(pointer: CGPoint, armed: CompassRole?) {
+        pointerTarget = pointer
+        if captured != armed { captured = armed }
+        emerge = 1
+        bloom = 1
+    }
+
+    private func frameStep(dt: CGFloat) {
+        CursorGuard.shared.checkIn()
+        time += dt
+        tintColor = cfg.tintColor
+        tickFixed(frameDt: dt)
+        updateCompassUI(dt: dt)
+    }
+
+    /// Render the liquid straight into the Metal layer: size the layer to the (grid-snapped) bounds of the
+    /// liquid, encode, and present with the layer's transaction so frame and contents change together.
+    private func presentMetal() {
+        guard let metal, emerge > 0.01, let raw = massBounds() else {
+            metalLayer.isHidden = true
+            return
+        }
+        let q: CGFloat = 32
+        let x0 = floor(raw.minX / q) * q, y0 = floor(raw.minY / q) * q
+        var rect = CGRect(x: x0, y: y0, width: ceil((raw.maxX - x0) / q) * q, height: ceil((raw.maxY - y0) / q) * q)
+        rect = rect.intersection(bounds.insetBy(dx: -64, dy: -64))
+        guard rect.width >= 2, rect.height >= 2 else { metalLayer.isHidden = true; return }
+        let scale = min(2.0, window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
+        let px = CGSize(width: ceil(rect.width * scale), height: ceil(rect.height * scale))
+        guard px.width < 8192, px.height < 8192, let inputs = opticalInputs(in: rect, scale: scale) else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        metalLayer.frame = rect
+        metalLayer.contentsScale = scale
+        if metalDrawableSize != px {
+            metalLayer.drawableSize = px
+            metalDrawableSize = px
+        }
+        metalLayer.isHidden = false
+        CATransaction.commit()
+
+        guard let drawable = metalLayer.nextDrawable(), let cmd = metal.makeCommandBuffer() else { return }
+        metal.encode(
+            into: drawable.texture, commandBuffer: cmd, scale: scale,
+            circles: inputs.circles, spineCount: inputs.strandCount, fillet: inputs.fillet, look: inputs.look
+        )
+        cmd.commit()
+        cmd.waitUntilScheduled()
+        drawable.present()
+    }
+
+    /// Repaint only where the ring and label were and are now.
+    private func updateCompassOverlay() {
+        let now = compassDirtyRect()
+        let dirty = now.union(lastCompassRect)
+        if !dirty.isNull { compassView.setNeedsDisplay(dirty.insetBy(dx: -4, dy: -4)) }
+        lastCompassRect = now
+    }
+
+    private func compassDirtyRect() -> CGRect {
+        let committing = recoiling && commitRole != nil
+        guard !items.isEmpty, captured != nil || committing else { return .null }
+        let ringR = GestureMath.deadZone + 4
+        var rect = CGRect(x: lockedPin.x - ringR, y: lockedPin.y - ringR, width: ringR * 2, height: ringR * 2)
+        for bud in budGeometry(pinR: bulbPin) {
+            let half = bud.radius * 1.6 + 10
+            rect = rect.union(CGRect(x: bud.center.x - half, y: bud.center.y - half, width: half * 2, height: half * 2))
+        }
+        return rect
+    }
+
+    /// Entry point for the compass overlay view's drawing.
+    func drawCompassOverlay(_ ctx: CGContext) { drawCompass(ctx) }
 
     /// Headless stepping for `Pluck --sim-report`: one display frame of the real simulation.
     func debugAdvance(dt: CGFloat) {
@@ -706,6 +844,8 @@ final class MetaballView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        // Live frames are presented through the Metal layer; this CPU path serves headless previews and Reduce Motion.
+        if liveMetal { return }
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.clear(bounds)
         guard emerge > 0.01 else { return }
@@ -815,8 +955,23 @@ final class MetaballView: NSView {
 
     private func drawOptical(_ ctx: CGContext) -> Bool {
         guard let metal, let bbox = massBounds() else { return false }
-
         let scale = min(2.0, window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
+        guard let inputs = opticalInputs(in: bbox, scale: scale),
+              let image = metal.render(
+                size: bbox.size, scale: scale, circles: inputs.circles,
+                spineCount: inputs.strandCount, fillet: inputs.fillet, look: inputs.look
+              ) else { return false }
+        // Only composite the blob image; empty texels were scrubbed to alpha 0.
+        ctx.saveGState()
+        ctx.setBlendMode(.normal)
+        ctx.draw(image, in: bbox)
+        ctx.restoreGState()
+        return true
+    }
+
+    /// Everything the shader needs for one frame, with positions in `bbox`-local (y-up) coordinates.
+    private func opticalInputs(in bbox: CGRect, scale: CGFloat)
+        -> (circles: [ObsidianBlobMetal.Circle], strandCount: Int, fillet: CGFloat, look: ObsidianBlobMetal.Look)? {
         let anchor = lockedPin
 
         // LOCKED mapping: AppKit world → bbox-local (y-up). No inversion.
@@ -891,22 +1046,7 @@ final class MetaballView: NSView {
             roleShift: Float(roleShift)
         )
 
-        guard let image = metal.render(
-            size: bbox.size,
-            scale: scale,
-            circles: circles,
-            spineCount: strandCount,
-            fillet: params.restRadius * 0.38,
-            look: look
-        ) else {
-            return false
-        }
-        // Only composite the blob image; empty texels were scrubbed to alpha 0.
-        ctx.saveGState()
-        ctx.setBlendMode(.normal)
-        ctx.draw(image, in: bbox)
-        ctx.restoreGState()
-        return true
+        return (circles, strandCount, mass.restRadius * 0.38, look)
     }
 
     private func massBounds() -> CGRect? {
@@ -973,5 +1113,18 @@ final class MetaballView: NSView {
 
     private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
         CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+    }
+}
+
+/// Transparent overlay above the Metal layer that draws the cancel ring and the armed action's label, repainting
+/// only the rectangle that changed.
+@MainActor
+final class CompassOverlayView: NSView {
+    weak var owner: MetaballView?
+    override var isOpaque: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        owner?.drawCompassOverlay(ctx)
     }
 }

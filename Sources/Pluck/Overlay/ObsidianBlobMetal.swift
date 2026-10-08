@@ -102,30 +102,24 @@ final class ObsidianBlobMetal {
         var roleShift: Float = 0
     }
 
-    /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
-    /// by round-cone segments, not drawn as separate discs). Any remaining circles (pin / head
-    /// lobes) are smooth-unioned onto it. `fillet` is the blend width in points.
-    func render(
-        size: CGSize,
+    /// Encodes one frame into `texture` (any size, e.g. a `CAMetalLayer` drawable) without committing or waiting.
+    /// `circles` are in the texture's own point space; `scale` is pixels per point.
+    func encode(
+        into texture: MTLTexture,
+        commandBuffer cmd: MTLCommandBuffer,
         scale: CGFloat,
         circles: [Circle],
         spineCount: Int,
         fillet: CGFloat,
         look: Look
-    ) -> CGImage? {
-        let w = max(2, Int(ceil(size.width * scale)))
-        let h = max(2, Int(ceil(size.height * scale)))
-        guard w < 4096, h < 4096 else { return nil }
-        guard let texture = texture(width: w, height: h) else { return nil }
-        guard let cmd = queue.makeCommandBuffer() else { return nil }
-
+    ) {
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = texture
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].storeAction = .store
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
 
-        guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return nil }
+        guard let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
         enc.setRenderPipelineState(pipeline)
 
         let light = look.lightDir
@@ -133,7 +127,7 @@ final class ObsidianBlobMetal {
         let lightN = lightLen > 1e-4 ? light / lightLen : SIMD2<Float>(-0.45, 0.8)
 
         var uniforms = Uniforms(
-            resolution: SIMD2(Float(w), Float(h)),
+            resolution: SIMD2(Float(texture.width), Float(texture.height)),
             lightDir: lightN,
             time: look.time,
             shadow: look.shadow,
@@ -172,6 +166,29 @@ final class ObsidianBlobMetal {
 
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         enc.endEncoding()
+    }
+
+    var metalDevice: MTLDevice { device }
+    func makeCommandBuffer() -> MTLCommandBuffer? { queue.makeCommandBuffer() }
+
+    /// `circles[0..<spineCount]` form a continuous tapered tether (consecutive samples are joined
+    /// by round-cone segments, not drawn as separate discs). Any remaining circles (pin / head
+    /// lobes) are smooth-unioned onto it. `fillet` is the blend width in points.
+    func render(
+        size: CGSize,
+        scale: CGFloat,
+        circles: [Circle],
+        spineCount: Int,
+        fillet: CGFloat,
+        look: Look
+    ) -> CGImage? {
+        let w = max(2, Int(ceil(size.width * scale)))
+        let h = max(2, Int(ceil(size.height * scale)))
+        guard w < 4096, h < 4096 else { return nil }
+        guard let texture = texture(width: w, height: h) else { return nil }
+        guard let cmd = queue.makeCommandBuffer() else { return nil }
+
+        encode(into: texture, commandBuffer: cmd, scale: scale, circles: circles, spineCount: spineCount, fillet: fillet, look: look)
         cmd.commit()
         cmd.waitUntilCompleted()
 
