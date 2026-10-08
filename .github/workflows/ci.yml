@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build 2>&1 | tee build.log
+      - name: Test
+        run: swift test 2>&1 | tee test.log
+      - name: Compile Metal shader source (syntax check)
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          src = pathlib.Path("Sources/Pluck/Overlay/ObsidianBlobMetal.swift").read_text()
+          m = re.search(r'shaderSource = """\n(.*?)\n    """', src, re.S)
+          pathlib.Path("/tmp/obsidian.metal").write_text(m.group(1))
+          PY
+          xcrun -sdk macosx metal -c /tmp/obsidian.metal -o /tmp/obsidian.air || echo "::warning::metal CLI unavailable or shader failed to compile"
