@@ -87,6 +87,8 @@ final class FeelLabConfig: ObservableObject {
     var modifierTrigger: ModifierTrigger { ModifierTrigger(rawValue: modifierTriggerRaw) ?? .option }
     /// EXPERIMENTAL (private MultitouchSupport): three fingers down starts a gesture.
     @Published var threeFingerEnabled: Bool { didSet { saveBool("threeFingerEnabled", threeFingerEnabled) } }
+    /// Three fingers must rest without moving this long before it arms (so a normal three-finger drag is untouched).
+    @Published var threeFingerHoldMs: Double { didSet { save("threeFingerHoldMs", threeFingerHoldMs) } }
 
     var trackpadModifier: TriggerModifier { TriggerModifier(rawValue: trackpadModifierRaw) ?? .option }
 
@@ -133,6 +135,7 @@ final class FeelLabConfig: ObservableObject {
         trackpadModifierRaw = Int(Self.load("trackpadModifierRaw", 0))
         trackpadHoldMs = Self.load("trackpadHoldMs", 220)
         threeFingerEnabled = Self.loadBool("threeFingerEnabled", false)
+        threeFingerHoldMs = Self.load("threeFingerHoldMs", 200)
 
         gooBlur = Self.load("gooBlur", 16)
         gooThreshold = Self.load("gooThreshold", 0.5)
@@ -175,6 +178,7 @@ final class FeelLabConfig: ObservableObject {
         trackpadModifierRaw = 0
         trackpadHoldMs = 220
         threeFingerEnabled = false
+        threeFingerHoldMs = 200
         gooBlur = 16
         gooThreshold = 0.5
         useGooFilter = true

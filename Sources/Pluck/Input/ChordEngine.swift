@@ -37,6 +37,7 @@ final class ChordEngine {
     private var modTimer: Timer?
     private var touchCount = 0
     private var touchTimer: Timer?
+    private var touchArm = HoldArm()
     private var configSub: AnyCancellable?
     private var gestureStartedAt: CFTimeInterval = 0
     private var lastActivityAt: CFTimeInterval = 0
@@ -202,6 +203,7 @@ final class ChordEngine {
     private func handleMove(at location: CGPoint) {
         if holdArm.isPressed { holdArm.move(to: location) }
         if modArm.isPressed { modArm.move(to: location) }
+        if touchArm.isPressed { touchArm.move(to: location) }
         guard gestureActive else { return }
         let now = CACurrentMediaTime()
         lastActivityAt = now
@@ -304,6 +306,7 @@ final class ChordEngine {
             MultitouchMonitor.shared.stop()
             touchTimer?.invalidate()
             touchTimer = nil
+            touchArm.release()
             touchCount = 0
         }
     }
@@ -312,18 +315,25 @@ final class ChordEngine {
         touchCount = count
         if count >= 3 {
             guard !gestureActive, touchTimer == nil else { return }
-            // Small delay so a brief brush of three fingers doesn't fire it.
-            touchTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) { [weak self] _ in
+            // Rest-to-arm: three fingers must stay put for the hold time. If they start moving first,
+            // it is an ordinary three-finger drag and we never take over.
+            let seconds = FeelLabConfig.shared.threeFingerHoldMs / 1000
+            touchArm = HoldArm(holdSeconds: seconds, moveTolerance: 8)
+            touchArm.press(at: Self.mouseLocation(), time: CACurrentMediaTime())
+            touchTimer = Timer.scheduledTimer(withTimeInterval: seconds + 0.01, repeats: false) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
                     self.touchTimer = nil
-                    guard self.touchCount >= 3, !self.gestureActive, !self.frontmostExcluded() else { return }
+                    let ready = self.touchArm.isReady(at: CACurrentMediaTime())
+                    self.touchArm.release()
+                    guard ready, self.touchCount >= 3, !self.gestureActive, !self.frontmostExcluded() else { return }
                     self.startGesture(source: .touch, at: Self.mouseLocation())
                 }
             }
         } else {
             touchTimer?.invalidate()
             touchTimer = nil
+            touchArm.release()
             if gestureActive, gestureSource == .touch {
                 let loc = Self.mouseLocation()
                 endGestureLocally()
