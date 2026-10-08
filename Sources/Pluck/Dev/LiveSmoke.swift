@@ -18,7 +18,8 @@ enum LiveSmoke {
         let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.isOpaque = false
         window.backgroundColor = NSColor(calibratedWhite: 0.13, alpha: 1)
-        window.level = .floating
+        window.level = .screenSaver
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]   // same as the real overlay panel
         window.ignoresMouseEvents = true
         window.hasShadow = false
 
@@ -35,6 +36,7 @@ enum LiveSmoke {
         view.items = FeelLab.context.items
         view.startPhysics()
         view.debugRecordFrames = true
+        print("LiveSmoke: screen \(Int(screen.frame.width))x\(Int(screen.frame.height)) scale \(screen.backingScaleFactor) | window \(Int(window.frame.width))x\(Int(window.frame.height)) visible=\(window.isVisible) occluded=\(!window.occlusionState.contains(.visible)) | liveMetal path=\(view.debugLiveMetal)")
 
         let start = CACurrentMediaTime()
         var captured = false

@@ -116,6 +116,7 @@ final class MetaballView: NSView {
     private(set) var debugFrameIntervals: [Double] = []
     private var debugLastPresent: CFTimeInterval = 0
     var debugRecordFrames = false
+    var debugLiveMetal: Bool { liveMetal }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)

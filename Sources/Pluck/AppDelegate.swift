@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        // Compile the Metal shader now, not on the first gesture (that compile was a visible first-frame hitch).
+        _ = ObsidianBlobMetal.shared
         setupStatusItem()
         startPermissionWatcher()
 

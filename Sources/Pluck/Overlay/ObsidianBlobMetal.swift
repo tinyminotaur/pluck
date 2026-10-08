@@ -374,7 +374,7 @@ final class ObsidianBlobMetal {
             r = mix(r, rr, w);
             // Soft union (scaled to the local thickness) removes the crease that a hard min leaves where two
             // tapered segments overlap, which otherwise shows up as regular ribs along a smooth strand.
-            d = smin(d, di, max(0.18 * rr, 0.5));
+            d = smin3(d, di, max(0.5 * rr, 0.8));
         }
         // Pin / head lobes: smooth-unioned so they pool into the tether like liquid.
         for (uint i = spine; i < n; i++) {
@@ -610,7 +610,9 @@ final class ObsidianBlobMetal {
         float edgeW = 1.6 * u.scalePx;
         float edgeBand = smoothstep(0.0, 0.6 * u.scalePx, insideD) * (1.0 - smoothstep(edgeW, edgeW * 2.6, insideD));
         float edgeFacing = saturate(dot(gdir, normalize(u.lightDir)));
-        body += edgeBand * edgeFacing * edgeFacing * 0.6 * mix(float3(1.0), P, 0.3);
+        // Only on thick masses: on a hair-thin filament the line fills the whole width and picks up every crease.
+        float edgeGate = smoothstep(1.0 * k, 2.6 * k, f0.y);
+        body += edgeBand * edgeGate * edgeFacing * edgeFacing * 0.6 * mix(float3(1.0), P, 0.3);
 
         // Ember: a slow, slightly irregular pulse (two out-of-step sines) of amber light from inside.
         // It pools in the thin edges and crackles faintly along the facet seams.
