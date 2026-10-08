@@ -53,8 +53,23 @@ final class PluckSession: ObservableObject {
         clipboardHistory.stop()
     }
 
-    func begin(at location: CGPoint) {
+    /// If the grab is near a screen edge, move the pin (and the real cursor) inward so every direction
+    /// stays reachable. Warping the cursor is not an input event; Pluck still never synthesizes any.
+    private static func edgeSafe(_ location: CGPoint) -> CGPoint {
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(location, $0.frame, false) }) ?? NSScreen.main
+        else { return location }
+        let nudged = EdgeNudge.inset(location, in: screen.frame)
+        guard hypot(nudged.x - location.x, nudged.y - location.y) > 0.5,
+              let primary = NSScreen.screens.first else { return location }
+        // CoreGraphics global space is y-down from the primary display's top-left.
+        CGEventSource(stateID: .combinedSessionState)?.localEventsSuppressionInterval = 0
+        CGWarpMouseCursorPosition(CGPoint(x: nudged.x, y: primary.frame.maxY - nudged.y))
+        return nudged
+    }
+
+    func begin(at rawLocation: CGPoint) {
         guard !isActive else { return }
+        let location = Self.edgeSafe(rawLocation)
         // Fidget re-grab: cut a recoil in progress and start the new gesture straight away.
         // (Deliberately not forceReset(): that would also end the engine's new gesture.)
         if finishing {
