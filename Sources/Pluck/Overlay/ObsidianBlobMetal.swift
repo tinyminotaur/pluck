@@ -350,26 +350,18 @@ final class ObsidianBlobMetal {
 
         float2 f0 = blobField(p, circles, n, sp, k);
 
-        // Obsidian facets live in the blob's own material space (along the pin→head axis and
-        // across it), so they stretch, shear and re-catch the light as the liquid moves.
+        // Obsidian facets live in ONE fixed environment: a screen-aligned cell field anchored at the
+        // pin. The liquid moves through it, so the cells never turn, stretch or re-orient when the
+        // cursor moves (only the surface curvature changes what each facet catches).
         float4 cell = float4(0.0, 1.0, 0.5, 0.5);
-        float2 fdir = float2(1.0, 0.0);
         float2 domeS = float2(0.0);
         if (u.facet > 0.001 && n >= sp + 2u) {
-            float2 a = circles[n - 2].xy;
-            float2 ab = circles[n - 1].xy - a;
-            float len = length(ab);
-            float2 dir = len > 1.0 ? ab / len : float2(1.0, 0.0);
-            float2 rel = p - a;
-            float cellAlong = max(len * 0.25, u.facetSize);
-            float2 m = float2(dot(rel, dir) / cellAlong, dot(rel, float2(-dir.y, dir.x)) / u.facetSize);
+            float2 pin = circles[n - 2].xy;
+            float2 m = (p - pin) / u.facetSize;
             float2 toSeed;
             cell = facetCells(m, toSeed);
-            fdir = dir;
-            // Cell-space offset from the facet's seed, turned into a screen-space direction:
-            // each plane bulges slightly outward (conchoidal) instead of being dead flat.
-            float2 outward = -toSeed;
-            domeS = outward.x * dir + outward.y * float2(-dir.y, dir.x);
+            // Each plane bulges slightly outward (conchoidal) instead of being dead flat.
+            domeS = -toSeed;
             // Chipped, slightly angular silhouette.
             f0.x += u.facet * u.facetSize * 0.09 * (cell.z - 0.5) * 2.0;
         }

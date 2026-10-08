@@ -37,9 +37,8 @@ void main(){
  vec2 p=gl_FragCoord.xy; int n=min(nC,32); int sp=min(nS,n); float k=max(fillet,1.);
  vec2 f0=blobField(p,n,sp,k);
  vec4 cell=vec4(0,1,.5,.5); vec2 domeS=vec2(0);
- if(facet>.001 && n>=sp+2){vec2 a=c[n-2].xy,ab=c[n-1].xy-a;float len=length(ab);vec2 dir=len>1.?ab/len:vec2(1,0);vec2 rel=p-a;
-  float cellAlong=max(len*.25,facetSize);vec2 m=vec2(dot(rel,dir)/cellAlong,dot(rel,vec2(-dir.y,dir.x))/facetSize);
-  vec2 toSeed; cell=facetCells(m,toSeed); vec2 outw=-toSeed; domeS=outw.x*dir+outw.y*vec2(-dir.y,dir.x); f0.x+=facet*facetSize*.09*(cell.z-.5)*2.;}
+ if(facet>.001 && n>=sp+2){vec2 pin=c[n-2].xy; vec2 m=(p-pin)/facetSize;
+  vec2 toSeed; cell=facetCells(m,toSeed); domeS=-toSeed; f0.x+=facet*facetSize*.09*(cell.z-.5)*2.;}
  float alpha=clamp(.5-f0.x/1.5,0.,1.);
  if(alpha<.02){outC=vec4(0);return;}
  float h=pillow(f0);float e=1.5;

@@ -324,16 +324,9 @@ final class MetaballView: NSView {
         let stirRetain: CGFloat = stirTarget > stir ? 0.90 : 0.985
         stir += (stirTarget - stir) * GestureMath.smoothingAlpha(retain: stirRetain, dt: dt)
 
-        let speed = hypot(headVel.x, headVel.y)
-        if speed > 8 {
-            let target = CGPoint(x: -headVel.x / speed, y: headVel.y / speed * 0.35 + 0.65)
-            smoothLight.x += (target.x - smoothLight.x) * min(1, dt * 6)
-            smoothLight.y += (target.y - smoothLight.y) * min(1, dt * 6)
-        } else {
-            smoothLight.x += (-0.4 - smoothLight.x) * min(1, dt * 2)
-            smoothLight.y += (0.75 - smoothLight.y) * min(1, dt * 2)
-        }
-
+        // One fixed environment: the light does not swing with the cursor. Only the liquid's own
+        // surface changes what it reflects.
+        smoothLight = CGPoint(x: -0.4, y: 0.75)
     }
 
     /// One fixed physics step. `head` is the (possibly interpolated) head position for this step.
