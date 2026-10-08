@@ -40,4 +40,12 @@ Physics is a fixed 240 Hz step (≤4 substeps per frame) so the feel is identica
 
 ## Safety notes
 
-The 20 s failsafe, Escape cancel and ⌃⌥⌘P panic quit are unchanged. For a toy that is held for a long time the failsafe will probably want to become *idle-based* (cancel after N seconds without movement) rather than a hard cap — that is a safety trade-off to decide deliberately.
+Escape cancel and the ⌃⌥⌘P panic quit are unchanged. The old 20 s hard cap (a testing aid) is now an
+**idle** failsafe: the gesture ends after 12 s without movement, with a 30 min absolute cap, so a
+held toy never strands the cursor.
+
+## Also implemented
+
+- **Fling momentum** knob: how much release speed carries the head past the pin.
+- **Meeting mode** toggle: 65 % size, 80 % opacity.
+- `RecoilSpring` (PluckCore) holds the snap-back math with unit tests.

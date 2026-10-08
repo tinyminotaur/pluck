@@ -8,7 +8,7 @@ This build **cannot lock your keyboard or mouse**.
 - **No** `CGEventTap` (the thing that can swallow input)
 - **No** synthesizing clicks/keys
 - **No** System Settings UI automation / injected keystrokes
-- Gesture auto-cancels after **20 seconds**
+- Gesture auto-cancels after **12 seconds without movement** (30 min hard cap)
 - **Escape** cancels
 - Panic quit: **Control + Option + Command + P**
 - Menu bar → **Quit Pluck** always works (events aren’t swallowed)
@@ -39,6 +39,6 @@ Input Monitoring is **not required** and is **not automated**.
 
 ## If anything feels wrong
 
-- Escape, or wait 20s
+- Escape, or stop moving for 12s
 - Menu bar drop → **Reset Pointer / Gesture** or **Quit Pluck**
 - Panic: **⌃⌥⌘P**

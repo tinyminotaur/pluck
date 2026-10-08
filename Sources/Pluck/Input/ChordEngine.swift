@@ -23,8 +23,13 @@ final class ChordEngine {
     private var failsafeTimer: Timer?
     private var lastMoveAt: CFTimeInterval = 0
 
+    /// The gesture ends and the cursor is restored after this long without any pointer movement
+    /// or button activity (a fidget toy is held a long time, but never abandoned).
+    private static let idleSeconds: TimeInterval = 12
     /// Absolute cap — after this, gesture ends and cursor is restored. No exceptions.
-    private static let failsafeSeconds: TimeInterval = 20
+    private static let hardCapSeconds: TimeInterval = 30 * 60
+    private var gestureStartedAt: CFTimeInterval = 0
+    private var lastActivityAt: CFTimeInterval = 0
     private static let moveHz: CFTimeInterval = 1.0 / 90.0
 
     var isRunning: Bool { globalMonitor != nil }
@@ -168,6 +173,7 @@ final class ChordEngine {
     private func handleMove(at location: CGPoint) {
         guard gestureActive else { return }
         let now = CACurrentMediaTime()
+        lastActivityAt = now
         guard now - lastMoveAt >= Self.moveHz else { return }
         lastMoveAt = now
         session?.pointerMoved(to: location)
@@ -204,10 +210,16 @@ final class ChordEngine {
 
     private func armFailsafe() {
         clearFailsafe()
-        failsafeTimer = Timer.scheduledTimer(withTimeInterval: Self.failsafeSeconds, repeats: false) { [weak self] _ in
+        gestureStartedAt = CACurrentMediaTime()
+        lastActivityAt = gestureStartedAt
+        failsafeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self else { return }
-                NSLog("Pluck: gesture failsafe (%.1fs) — releasing", Self.failsafeSeconds)
+                guard let self, self.gestureActive else { return }
+                let now = CACurrentMediaTime()
+                let idle = now - self.lastActivityAt
+                let total = now - self.gestureStartedAt
+                guard idle > Self.idleSeconds || total > Self.hardCapSeconds else { return }
+                NSLog("Pluck: gesture failsafe (idle %.0fs, total %.0fs) — releasing", idle, total)
                 self.cancelActive()
                 self.forceCursorVisible()
             }

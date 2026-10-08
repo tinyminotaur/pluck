@@ -92,7 +92,7 @@ struct FeelGuideView: View {
     private var safetyBox: some View {
         GroupBox("Safety") {
             VStack(alignment: .leading, spacing: 4) {
-                Text("• Escape cancels · auto-ends after 20s")
+                Text("• Escape cancels · auto-ends after 12s idle")
                 Text("• Panic quit: ⌃⌥⌘P")
                 Text("• Menu: Reset Pointer / Quit Pluck")
             }
@@ -151,6 +151,9 @@ struct FeelGuideView: View {
                 knob("Release bounce (snap-back wobble)", value: $config.recoilBounce, range: 0...1, format: "%.2f")
                 knob("Crystallize with stretch", value: $config.crystallize, range: 0...1, format: "%.2f")
                 knob("Idle breathing", value: $config.idleLife, range: 0...1.5, format: "%.2f")
+                knob("Fling momentum (overshoot on flick)", value: $config.flingMomentum, range: 0...1.2, format: "%.2f")
+                Toggle("Meeting mode (smaller, dimmer)", isOn: $config.meetingMode)
+                    .font(.caption)
                 Toggle("Trackpad haptic ticks (direction + stretch detents)", isOn: $config.hapticsEnabled)
                     .font(.caption)
             }

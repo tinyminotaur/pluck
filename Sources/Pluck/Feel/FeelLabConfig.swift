@@ -48,6 +48,10 @@ final class FeelLabConfig: ObservableObject {
     /// Idle breathing while held still.
     @Published var idleLife: Double { didSet { save("idleLife", idleLife) } }
     @Published var hapticsEnabled: Bool { didSet { saveBool("hapticsEnabled", hapticsEnabled) } }
+    /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
+    @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
+    /// Smaller and dimmer, for fidgeting without drawing attention on a shared screen.
+    @Published var meetingMode: Bool { didSet { saveBool("meetingMode", meetingMode) } }
 
     // MARK: Field (metaball iso)
     @Published var gooBlur: Double { didSet { save("gooBlur", gooBlur) } }
@@ -84,6 +88,8 @@ final class FeelLabConfig: ObservableObject {
         crystallize = Self.load("crystallize", 0.7)
         idleLife = Self.load("idleLife", 0.5)
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
+        flingMomentum = Self.load("flingMomentum", 0.5)
+        meetingMode = Self.loadBool("meetingMode", false)
 
         gooBlur = Self.load("gooBlur", 16)
         gooThreshold = Self.load("gooThreshold", 0.5)
@@ -118,6 +124,8 @@ final class FeelLabConfig: ObservableObject {
         crystallize = 0.7
         idleLife = 0.5
         hapticsEnabled = true
+        flingMomentum = 0.5
+        meetingMode = false
         gooBlur = 16
         gooThreshold = 0.5
         useGooFilter = true
@@ -125,7 +133,7 @@ final class FeelLabConfig: ObservableObject {
 
     var massParams: BlobMassParams {
         BlobMassParams(
-            restRadius: CGFloat(restRadius),
+            restRadius: CGFloat(restRadius) * (meetingMode ? 0.65 : 1),
             minRadius: CGFloat(neckFloor),
             pinMass: CGFloat(pinMass),
             headMass: CGFloat(headMass),

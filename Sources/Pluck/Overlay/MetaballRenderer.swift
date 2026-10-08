@@ -180,24 +180,20 @@ final class MetaballView: NSView {
         recoilSettled = false
         recoilDone = done
         // Keep a fraction of the release momentum so a flick overshoots past the pin.
-        recoilVel = CGPoint(x: headVel.x * 0.5, y: headVel.y * 0.5)
+        let fling = CGFloat(cfg.flingMomentum)
+        recoilVel = CGPoint(x: headVel.x * fling, y: headVel.y * fling)
         recoilPulse = 1
     }
 
     private func integrateRecoil(steps: Int, h: CGFloat, frameDt: CGFloat) {
         // Underdamped spring toward the pin. Bounce knob: 0 = tight, 1 = very wobbly.
         let bounce = CGFloat(cfg.recoilBounce)
-        let zeta = 0.72 - 0.5 * bounce
-        let omega: CGFloat = 2 * .pi / 0.30
+        let zeta = RecoilSpring.zeta(bounce: bounce)
+        let omega = RecoilSpring.omega(period: 0.30)
         var x = CGPoint(x: head.x - lockedPin.x, y: head.y - lockedPin.y)
         var v = recoilVel
         for _ in 0..<steps {
-            let ax = -omega * omega * x.x - 2 * zeta * omega * v.x
-            let ay = -omega * omega * x.y - 2 * zeta * omega * v.y
-            v.x += ax * h
-            v.y += ay * h
-            x.x += v.x * h
-            x.y += v.y * h
+            RecoilSpring.step(x: &x, v: &v, omega: omega, zeta: zeta, h: h)
         }
         recoilVel = v
         head = CGPoint(x: lockedPin.x + x.x, y: lockedPin.y + x.y)
@@ -446,7 +442,7 @@ final class MetaballView: NSView {
             shininess: Float(max(0.55, cfg.shininess)),
             fresnel: Float(max(0.5, cfg.fresnel)),
             transmission: Float(max(0.45, cfg.transmission)),
-            opacity: Float(cfg.glassOpacity),
+            opacity: Float(cfg.glassOpacity * (cfg.meetingMode ? 0.8 : 1)),
             edgeSoft: Float(0.08 + (1 - cfg.gooThreshold) * 0.1),
             baseColor: SIMD3(Float(max(r, 0.04)), Float(max(g, 0.045)), Float(max(b, 0.06))),
             absorb: absorb,
