@@ -76,7 +76,7 @@ final class ObsidianBlobMetal {
         var fresnel: Float
         var transmission: Float
         var opacity: Float
-        var edgeSoft: Float
+        var shadow: Float
         var baseColor: SIMD3<Float>
         var absorb: SIMD3<Float>
         var glow: SIMD3<Float>
@@ -134,7 +134,7 @@ final class ObsidianBlobMetal {
             resolution: SIMD2(Float(w), Float(h)),
             lightDir: lightN,
             time: look.time,
-            edgeSoft: look.edgeSoft,
+            shadow: look.shadow,
             shininess: look.shininess,
             fresnel: look.fresnel,
             transmission: look.transmission,
@@ -148,6 +148,7 @@ final class ObsidianBlobMetal {
             facet: min(1, max(0, look.facet)),
             facetSize: max(6, look.facetSize * Float(scale)),
             ember: min(1.5, max(0, look.ember)),
+            scalePx: Float(scale),
             themeA: look.themeA,
             themeB: look.themeB,
             themeC: SIMD4(look.themeC.x, look.themeC.y, look.themeC.z, look.chrome),
@@ -240,7 +241,7 @@ final class ObsidianBlobMetal {
         var resolution: SIMD2<Float>
         var lightDir: SIMD2<Float>
         var time: Float
-        var edgeSoft: Float
+        var shadow: Float
         var shininess: Float
         var fresnel: Float
         var transmission: Float
@@ -254,6 +255,7 @@ final class ObsidianBlobMetal {
         var facet: Float
         var facetSize: Float
         var ember: Float
+        var scalePx: Float
         var themeA: SIMD4<Float>
         var themeB: SIMD4<Float>
         var themeC: SIMD4<Float>
@@ -270,7 +272,7 @@ final class ObsidianBlobMetal {
         float2 resolution;
         float2 lightDir;
         float time;
-        float edgeSoft;
+        float shadow;
         float shininess;
         float fresnel;
         float transmission;
@@ -284,6 +286,7 @@ final class ObsidianBlobMetal {
         float facet;
         float facetSize;
         float ember;
+        float scalePx;
         float4 themeA;
         float4 themeB;
         float4 themeC;
@@ -424,6 +427,16 @@ final class ObsidianBlobMetal {
         return float4(d1, d2 - d1, hash22(id + 17.0));
     }
 
+    // Soft contact shadow: a blurred copy of the silhouette, offset away from the light, drawn only outside the liquid.
+    float contactShadow(float2 p, constant float4 *circles, uint n, uint sp, float k, constant Uniforms &u) {
+        float strength = u.shadow;
+        if (strength < 0.001) return 0.0;
+        float2 Ld = u.lightDir;
+        float2 off = float2(-Ld.x, -Ld.y - 0.45) * (0.20 * k);
+        float ds = blobField(p - off, circles, n, sp, k, u).x;
+        return saturate(strength * 0.42 * exp(-max(ds, 0.0) / (0.30 * k)));
+    }
+
     // The theme's three colours cycle A -> B -> C -> A. `t` is in cycles.
     float3 themePalette(float t, constant Uniforms &u) {
         t = fract(t) * 3.0;
@@ -448,7 +461,10 @@ final class ObsidianBlobMetal {
         float wScale = max(wAmp * 6.5, 24.0);
         float2 f00 = blobField(p, circles, n, sp, k, u);
         // Far outside the liquid (beyond any warp): done, without the warped and gradient lookups.
-        if (f00.x > wAmp + 4.0) { return float4(0.0, 0.0, 0.0, 0.0); }
+        if (f00.x > wAmp + 4.0) {
+            if (u.shadow < 0.001 || f00.x > k * 1.25) { return float4(0.0, 0.0, 0.0, 0.0); }
+            return float4(0.0, 0.0, 0.0, contactShadow(p, circles, n, sp, k, u));
+        }
         float wAmpL = min(wAmp, 0.5 * f00.y);
         float2 f0 = blobField(waterWarp(p, wPin, wAmpL, wScale, u.time), circles, n, sp, k, u);
 
@@ -472,7 +488,7 @@ final class ObsidianBlobMetal {
 
         // Plate isolation: empty space is EXACT clear — no contact shadow fill.
         if (alpha < 0.02) {
-            return float4(0.0, 0.0, 0.0, 0.0);
+            return float4(0.0, 0.0, 0.0, contactShadow(p, circles, n, sp, k, u));
         }
 
         float h = pillow(f0);
@@ -566,6 +582,13 @@ final class ObsidianBlobMetal {
             float frn = 0.35 + 0.65 * pow(1.0 - saturate(N.z), 1.5);
             body = mix(body, env, saturate(u.themeC.w * (0.55 + 0.45 * frn)));
         }
+
+        // Glass edge: a crisp, thin inner highlight where the surface faces the light.
+        float insideD = max(0.0, -f0.x);
+        float edgeW = 1.6 * u.scalePx;
+        float edgeBand = smoothstep(0.0, 0.6 * u.scalePx, insideD) * (1.0 - smoothstep(edgeW, edgeW * 2.6, insideD));
+        float edgeFacing = saturate(dot(gdir, normalize(u.lightDir)));
+        body += edgeBand * edgeFacing * edgeFacing * 0.6 * mix(float3(1.0), P, 0.3);
 
         // Ember: a slow, slightly irregular pulse (two out-of-step sines) of amber light from inside.
         // It pools in the thin edges and crackles faintly along the facet seams.

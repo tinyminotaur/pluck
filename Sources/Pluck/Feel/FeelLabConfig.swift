@@ -96,6 +96,8 @@ final class FeelLabConfig: ObservableObject {
     /// Extra stiffness right at the cursor: trails when far, snaps and sticks when close.
     @Published var magnetStick: Double { didSet { save("magnetStick", magnetStick) } }
     @Published var hapticsEnabled: Bool { didSet { saveBool("hapticsEnabled", hapticsEnabled) } }
+    /// Very quiet system sounds on latch and commit. Off by default.
+    @Published var soundEnabled: Bool { didSet { saveBool("soundEnabled", soundEnabled) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
     /// Smaller and dimmer, for fidgeting without drawing attention on a shared screen.
@@ -165,6 +167,7 @@ final class FeelLabConfig: ObservableObject {
         magnetWeight = Self.load("magnetWeight", 0.62)
         magnetStick = Self.load("magnetStick", 0.9)
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
+        soundEnabled = Self.loadBool("soundEnabled", false)
         flingMomentum = Self.load("flingMomentum", 0.5)
         meetingMode = Self.loadBool("meetingMode", false)
         trackpadTriggerEnabled = Self.loadBool("trackpadTriggerEnabled", false)
@@ -220,6 +223,7 @@ final class FeelLabConfig: ObservableObject {
         magnetWeight = 0.62
         magnetStick = 0.9
         hapticsEnabled = true
+        soundEnabled = false
         flingMomentum = 0.5
         meetingMode = false
         trackpadTriggerEnabled = false

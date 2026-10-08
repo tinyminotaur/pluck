@@ -1,54 +1,41 @@
-# Pluck Feel Lab — safe testing
+# Pluck Feel Lab: testing
 
-This build **cannot lock your keyboard or mouse**.
+Pluck is **listen-only**: it cannot lock your keyboard or mouse (no event tap, no synthesized input).
 
-## Guarantees
+## Safety nets
 
-- Listen-only (`NSEvent` monitors) — events always pass through to the system
-- **No** `CGEventTap` (the thing that can swallow input)
-- **No** synthesizing clicks/keys
-- **No** System Settings UI automation / injected keystrokes
-- Gesture auto-cancels after **12 seconds without movement** (30 min hard cap)
-- **Escape** cancels
-- Panic quit: **Control + Option + Command + P**
-- Menu bar → **Quit Pluck** always works (events aren’t swallowed)
+- **Escape** cancels · **⌃⌥⌘P** quits · 12 s without movement ends a gesture (30 min hard cap)
+- A background watchdog restores the cursor if the app stalls; menu bar → **Reset Pointer / Gesture**
+- `~/Library/Logs/Pluck/gesture.log` records every gesture: trigger, why it ended, how long, how far
 
-## Setup (once)
+## Setup
 
-1. Open `build/Pluck.app`
-2. Enable **Accessibility** for Pluck if asked (should stick with **Pluck Dev** signing)
-3. Use the Feel Lab guide window
+1. `./scripts/build.sh && open build/Pluck.app` and grant **Accessibility** once.
+2. Feel Lab guide window: pick a preset and a theme.
 
-Input Monitoring is **not required** and is **not automated**.
+## Triggers (use whichever you have)
 
-## What to test
+- **Hold ⌥** (pointer still ~250 ms) or **Hyper**, move, release the modifier
+- **Three fingers** rest, then drag; lift to commit (turn it on in the guide; best with system three-finger drag off)
+- **Two-button chord** (if you have a second button)
 
-1. Hold left → press right (or reverse)
-2. Blob should rise and cover the cursor
-3. Move — one connected stretch; lobes highlight by direction
-4. Release — guide shows North/East/South/West or Canceled
+## Checklist
 
-## Fidget feel (check these too)
-
-5. Release a long pull — the blob should snap back to the pin with an overshoot wobble, then melt
-6. Hold still — the blob should gently breathe
-7. Stretch far — facets should sharpen; move the mouse — glints should sweep across the planes
-8. Re-grab immediately after a release — no cooldown, the old recoil is cut
-9. On a trackpad: haptic tick when a direction latches and a ratchet click every ~56 pt of stretch
-10. Your next click right after release must go to the app underneath (the overlay must not eat it)
-
-## Direction UI (check these too)
-
-11. **North must be up** (it was previously inverted: mouse up armed "South" because AppKit y is up)
-12. Fast flick: no labels flash. Linger ~0.2 s: pills fade in at N/E/S/W around the pin
-13. Move toward a direction: its pill pops (springy), brightens, others dim; the head squashes slightly
-14. A dashed ring marks the cancel zone; it brightens while you are inside it (release = cancel)
-15. Start a gesture near a screen edge: labels slide to stay on screen, but the direction slices don't change
-16. VoiceOver: each newly armed direction is announced
-17. Reduce Motion: labels appear without springs
+1. The drop rises over the cursor and the system cursor hides; it returns the instant you release
+2. Nothing is drawn around the drop at rest (no labels, no buds)
+3. Pull any direction: it keeps stretching all the way to the screen edge; it never snaps back until you release
+4. Up is Keep, right is Go, down is Give, left is Ask (check all four)
+5. The shape is two matched round masses with a fine filament between (not a head with a tail); no zigzag or kinks
+6. The latched direction's glyph and name appear inside the head; fast flicks show no label
+7. Release a latched direction: the thread snaps, a droplet carrying the label flies off, a tiny bead trails, the rest rounds back into the pin
+8. Release inside the faint dashed ring: cancels cleanly
+9. Start a gesture near any screen edge: it nudges inward so every direction is reachable
+10. Your next click right after release goes to the app underneath (the overlay never eats clicks)
+11. Hold still: a slow, calm breathing (not jitter); whip the cursor: it trails, sloshes, then catches up
+12. Try each preset and a few themes; "Surprise me" gives a new palette each time
+13. Haptics on a trackpad; "Soft Sounds" (menu bar) adds a very quiet tick and plip
+14. Reduce Motion: no springs or wobble, same angles and dead zone
 
 ## If anything feels wrong
 
-- Escape, or stop moving for 12s
-- Menu bar drop → **Reset Pointer / Gesture** or **Quit Pluck**
-- Panic: **⌃⌥⌘P**
+Escape, wait 12 s, **⌃⌥⌘P**, or `pkill -x Pluck`. Then look at `gesture.log`.

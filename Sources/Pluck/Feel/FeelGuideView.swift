@@ -282,6 +282,8 @@ struct FeelGuideView: View {
                     .font(.caption)
                 Toggle("Trackpad haptic ticks (direction + stretch detents)", isOn: $config.hapticsEnabled)
                     .font(.caption)
+                Toggle("Soft sounds (quiet tick on latch, plip on commit)", isOn: $config.soundEnabled)
+                    .font(.caption)
             }
         }
     }

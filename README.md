@@ -1,49 +1,69 @@
 # Pluck
 
-A macOS menu-bar utility: hold both mouse buttons, stretch a liquid drop toward a direction, release to act.
+A macOS menu-bar gesture utility: grab a blob of liquid obsidian, stretch it toward a direction, let go to act.
+Four directions, one gesture, no settings to open first.
 
-- **Keep** (north) — copy / keep what you’re holding  
-- **Go** (east) — the forward action  
-- **Give** (south) — share / hand off  
-- **West** (ask) — look up / get info  
+- **Keep** (up): copy or keep what you are holding
+- **Go** (right): the forward action
+- **Give** (down): share or hand off
+- **Ask** (left): look up or get info
 
-What you grabbed (selection, link, file, clipboard, or window chrome) chooses the labels. Release near the pin to cancel.
+Nothing is drawn at rest except the liquid itself. Move into a direction and that action's glyph and name appears
+inside the head of the liquid. Release to commit (the head pinches off as a droplet and flies to the action);
+release near the pin to cancel.
+
+> Status: **Feel Lab**. The gesture, physics and look are being tuned, so actions do not run yet. See
+> [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and [docs/ACTIONS.md](docs/ACTIONS.md) for what each
+> direction will do.
+
+## Triggers
+
+Pluck is **listen-only** (no event tap, it never synthesizes input), so it can never lock your mouse or keyboard.
+
+| Trigger | How |
+|---|---|
+| Hold ⌥ or Hyper (no click) | Hold the modifier (⌥ needs the pointer still for ~250 ms), move to stretch, release the modifier to commit |
+| Three fingers (experimental, off by default) | Rest three fingers on the trackpad without moving, then drag; lift to commit |
+| Two-button chord | Hold one mouse button, press the other, stretch, release |
+| Press-and-hold (off by default) | ⌥ + press and hold without moving, then drag |
+
+Escape cancels. **⌃⌥⌘P** quits Pluck. A gesture also ends after 12 s without movement.
+
+## Looks and feels
+
+The Feel Lab window (menu bar drop → Show Feel Lab Guide) has 10 feel presets (physics and colours together) and
+9 colour themes with gradient palettes, plus a "Surprise me" random palette. The menu bar has the same under
+**Feel Preset** and **Colour Theme**. Hundreds of live knobs are underneath, saved between launches.
 
 ## Requirements
 
-- macOS 14+
-- Accessibility (read under-pointer context, run actions)
-- That's it: the two-button chord is detected with listen-only `NSEvent` monitors. There is **no** `CGEventTap` and **no** Input Monitoring permission, so Pluck cannot swallow or delay your input. See [TEST.md](TEST.md) for the safety guarantees.
+macOS 14+. Accessibility (to listen for the trigger).
 
-## Build & run
+## Build and run
 
 ```bash
-cd pluck
-swift build
-swift run
-# or package an .app:
-./scripts/build.sh
-open build/Pluck.app
+swift build && swift test
+./scripts/build.sh && open build/Pluck.app     # signed with a stable local identity so Accessibility sticks
 ```
 
-On first launch, Pluck asks for Accessibility. Then **hold one mouse button and press the other**, stretch, release.
+Headless tools (no input, no cursor, no permissions):
 
-If the pointer ever feels stuck: **Escape**, stop moving for 12 s, menu bar drop → **Reset Pointer** / **Quit Pluck**, panic quit **⌃⌥⌘P**, or `pkill Pluck`.
+```bash
+.build/release/Pluck --render-compass out.png   # the live view with its action label
+.build/release/Pluck --render-pinch out.png     # the commit pinch-off over time
+.build/release/Pluck --render-themes out.png    # every theme
+.build/release/Pluck --render-preview out.png   # the standard look grid
+.build/release/Pluck --sim-report               # physics extent and draw cost
+```
 
-## Reduced Motion
+## Layout
 
-System Reduce Motion replaces the metaball with a plain cross and labels. The same angles and dead zone still apply.
+- `Sources/PluckCore`: pure, tested logic: gesture math, the dumbbell shape model, themes and presets, triggers
+- `Sources/Pluck`: the app: Metal renderer, physics view, input engine, Feel Lab UI, cursor guard
+- `docs/`: handoff notes, the action schema, design research
 
-## Feel
-
-Pluck is meant to be a little bit of a fidget toy: a glossy obsidian-liquid blob with springy snap-back, facets that sharpen as you stretch, trackpad haptic detents, and a Meeting Mode that keeps it small and quiet. Tune everything live in the Feel Lab window; design notes live in [docs/FIDGET.md](docs/FIDGET.md) and the research behind it in `reports/`.
-
-## Development
-
-- `PluckCore` — gesture math, compass model, exclude list (unit-tested)
-- `Pluck` — chord monitors, overlay (Metal blob + direction labels), Accessibility context, actions, settings
-- `scripts/preview` — WebGL port of the shader for checking the look without a Mac
-- CI (`.github/workflows/ci.yml`) builds and tests on macOS
+If the pointer ever feels stuck: menu bar drop → **Reset Pointer / Gesture**, or `pkill -x Pluck`.
+The cursor guard also restores it automatically, and `~/Library/Logs/Pluck/gesture.log` records why gestures end.
 
 ## License
 

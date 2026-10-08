@@ -79,7 +79,7 @@ enum PreviewRender {
 
                 let look = ObsidianBlobMetal.Look(
                     lightDir: light, time: 1.3, shininess: 0.95, fresnel: 0.85, transmission: 0.7,
-                    opacity: 0.92, edgeSoft: 0.1,
+                    opacity: 0.92, shadow: 0.5,
                     baseColor: SIMD3(theme.body.r, theme.body.g, theme.body.b),
                     absorb: SIMD3(theme.absorb.r, theme.absorb.g, theme.absorb.b),
                     glow: SIMD3(theme.a.r, theme.a.g, theme.a.b),

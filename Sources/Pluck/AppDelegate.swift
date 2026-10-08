@@ -87,6 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         haptics.target = self
         haptics.state = FeelLabConfig.shared.hapticsEnabled ? .on : .off
         menu.addItem(haptics)
+        let sounds = NSMenuItem(title: "Soft Sounds", action: #selector(toggleSounds), keyEquivalent: "")
+        sounds.target = self
+        sounds.state = FeelLabConfig.shared.soundEnabled ? .on : .off
+        menu.addItem(sounds)
 
         let presetMenu = NSMenu()
         for p in PresetLibrary.all {
@@ -165,6 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func surpriseTheme() { FeelLabConfig.shared.surpriseMe() }
+
+    @objc private func toggleSounds() {
+        FeelLabConfig.shared.soundEnabled.toggle()
+    }
 
     @objc private func toggleHaptics() {
         FeelLabConfig.shared.hapticsEnabled.toggle()

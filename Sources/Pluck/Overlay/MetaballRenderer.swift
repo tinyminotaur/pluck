@@ -861,7 +861,7 @@ final class MetaballView: NSView {
             fresnel: Float(max(0.3, cfg.fresnel)),
             transmission: Float(max(0.1, cfg.transmission)),
             opacity: Float(cfg.glassOpacity * (cfg.meetingMode ? 0.8 : 1)),
-            edgeSoft: Float(0.08 + (1 - cfg.gooThreshold) * 0.1),
+            shadow: Float(cfg.shadowStrength),
             baseColor: SIMD3(theme.body.r, theme.body.g, theme.body.b),
             absorb: absorb,
             glow: SIMD3(theme.a.r, theme.a.g, theme.a.b),

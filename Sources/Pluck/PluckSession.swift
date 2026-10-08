@@ -117,6 +117,7 @@ final class PluckSession: ObservableObject {
         // Fidget detents: a tick when a direction latches, and a ratchet click every ~56 pt of stretch.
         if capturedRole != previous, let role = capturedRole {
             Haptics.tick(.alignment)
+            Sounds.latch()
             // VoiceOver: say which direction is armed.
             NSAccessibility.post(
                 element: NSApp as Any,
@@ -143,7 +144,7 @@ final class PluckSession: ObservableObject {
         )
         let ctx = context
         let resultTitle = FeelLab.title(for: role)
-        if role != nil { Haptics.tick(.levelChange) }
+        if role != nil { Haptics.tick(.levelChange); Sounds.commit() }
 
         finishVisual(commitRole: role) {
             if FeelLab.enabled {
