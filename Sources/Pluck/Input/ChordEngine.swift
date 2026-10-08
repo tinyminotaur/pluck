@@ -44,6 +44,9 @@ final class ChordEngine {
     private var configSub: AnyCancellable?
     private var gestureStartedAt: CFTimeInterval = 0
     private var gesturePin: CGPoint = .zero
+    /// Modifier state as reported by the flagsChanged events themselves. (Polling the HID or NSEvent state was
+    /// wrong for held Hyper/remapped keys and ended gestures at the next 1 s tick: see gesture.log.)
+    private var lastModifiers: ModifierSet = []
     private var lastActivityAt: CFTimeInterval = 0
     private static let moveHz: CFTimeInterval = 1.0 / 90.0
 
@@ -226,6 +229,7 @@ final class ChordEngine {
     // MARK: - No-click modifier trigger
 
     private func handleFlags(_ held: ModifierSet) {
+        lastModifiers = held
         let trigger = FeelLabConfig.shared.modifierTrigger
         if gestureActive, gestureSource == .modifier {
             // Releasing the modifier commits, exactly like releasing a mouse button.
@@ -260,7 +264,7 @@ final class ChordEngine {
 
     private func modifierWatchMatured(_ trigger: ModifierTrigger) {
         modTimer = nil
-        let live = hardwareModifiers()
+        let live = lastModifiers
         guard modArm.isReady(at: CACurrentMediaTime()),
               !gestureActive, !isDown(.left), !isDown(.right),
               trigger.shouldArm(held: live), !frontmostExcluded() else {
@@ -412,18 +416,6 @@ final class ChordEngine {
 
     // MARK: - Helpers
 
-    /// Modifier keys straight from the HID system. `NSEvent.modifierFlags` can be stale for a background app that
-    /// never becomes active, which would end a held-modifier gesture at the next tick.
-    private func hardwareModifiers() -> ModifierSet {
-        let f = CGEventSource.flagsState(.hidSystemState)
-        var s: ModifierSet = []
-        if f.contains(.maskControl) { s.insert(.control) }
-        if f.contains(.maskAlternate) { s.insert(.option) }
-        if f.contains(.maskShift) { s.insert(.shift) }
-        if f.contains(.maskCommand) { s.insert(.command) }
-        return s
-    }
-
     private func physicalHeld() -> Set<MouseButton> {
         var s = Set<MouseButton>()
         if isDown(.left) { s.insert(.left) }
@@ -448,15 +440,6 @@ final class ChordEngine {
             Task { @MainActor in
                 guard let self, self.gestureActive else { return }
                 CursorGuard.shared.checkIn()
-                if self.gestureSource == .modifier,
-                   !FeelLabConfig.shared.modifierTrigger.shouldContinue(held: self.hardwareModifiers()) {
-                    // A modifier-up event was missed. Trust the hardware state.
-                    let loc = Self.mouseLocation()
-                    self.endLog("modifier ground-truth says released")
-                    self.endGestureLocally()
-                    self.session?.complete(at: loc)
-                    return
-                }
                 let now = CACurrentMediaTime()
                 let idle = now - self.lastActivityAt
                 let total = now - self.gestureStartedAt
