@@ -209,7 +209,7 @@ final class MetaballView: NSView {
     /// (Re)create the simulation for the current style at the locked pin. Presenter mode calls this when the chosen visual changes.
     private func buildStyle() {
         activeStyle = cfg.style
-        let radius = CGFloat(cfg.restRadius) * (cfg.meetingMode ? 0.65 : 1)
+        let radius = cfg.effectiveRestRadius
         ferro = FerroSim()
         ferro.params.bodyRadius = radius * 0.72
         ferro.reset(pin: lockedPin)
@@ -1132,7 +1132,7 @@ final class MetaballView: NSView {
             // The ripple is zero-mean (mass-neutral), grows with the stretch, and drifts slowly along the thread.
             let waistR = profile.solution.waist
             let lambda = max(9 * waistR, chord / 6, 30)
-            let beadGrow = smoothstep01((chord - 3.5 * CGFloat(cfg.restRadius)) / (5 * CGFloat(cfg.restRadius)))
+            let beadGrow = smoothstep01((chord - 3.5 * cfg.effectiveRestRadius) / (5 * cfg.effectiveRestRadius))
             let bead = sin(2 * .pi * (t * chord / lambda) - time * 0.9) * 0.45 * waistR * beadGrow * mid
             baseRadii[i] = max(waistR * 0.8, baseRadii[i] + slosh[i] * 0.12 * waistK + pool + bead)
         }

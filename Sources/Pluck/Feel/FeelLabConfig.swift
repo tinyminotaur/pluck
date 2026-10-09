@@ -116,6 +116,8 @@ final class FeelLabConfig: ObservableObject {
     @Published var packID: String { didSet { saveString("packID", packID) } }
     @Published var packParamsJSON: String { didSet { saveString("packParamsJSON", packParamsJSON) } }
     @Published var libraryURL: String { didSet { saveString("libraryURL", libraryURL) } }
+    /// Overall size of everything drawn, relative to the screen (1 = the original size).
+    @Published var sizeScale: Double { didSet { save("sizeScale", sizeScale) } }
     @Published var audioReactive: Bool { didSet { saveBool("audioReactive", audioReactive) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
@@ -189,6 +191,7 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         soundEnabled = Self.loadBool("soundEnabled", false)
         audioReactive = Self.loadBool("audioReactive", false)
+        sizeScale = Self.load("sizeScale", 1.25)
         packID = UserDefaults.standard.string(forKey: "pluck.feel.packID") ?? ""
         packParamsJSON = UserDefaults.standard.string(forKey: "pluck.feel.packParamsJSON") ?? "{}"
         libraryURL = UserDefaults.standard.string(forKey: "pluck.feel.libraryURL") ?? ""
@@ -257,6 +260,7 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = true
         soundEnabled = false
         audioReactive = false
+        sizeScale = 1.25
         interactionModeID = "actions"; presenterCount = 4; presenterRadius = 64
         presenterSlotsRaw = PresenterMath.defaultSlots.joined(separator: ",")
         reachExact = true
@@ -279,7 +283,7 @@ final class FeelLabConfig: ObservableObject {
     /// The dumbbell shape: round pin and head joined by a thin thread with concave blends.
     var dumbbell: DumbbellMass.Params {
         DumbbellMass.Params(
-            restRadius: CGFloat(restRadius) * (meetingMode ? 0.65 : 1),
+            restRadius: CGFloat(restRadius * sizeScale) * (meetingMode ? 0.65 : 1),
             waistRest: CGFloat(waistRest),
             headShare: CGFloat(headShare),
             meniscus: CGFloat(meniscus)
@@ -288,7 +292,7 @@ final class FeelLabConfig: ObservableObject {
 
     var massParams: BlobMassParams {
         BlobMassParams(
-            restRadius: CGFloat(restRadius) * (meetingMode ? 0.65 : 1),
+            restRadius: CGFloat(restRadius * sizeScale) * (meetingMode ? 0.65 : 1),
             minRadius: CGFloat(neckFloor),
             pinMass: CGFloat(pinMass),
             headMass: CGFloat(headMass),
@@ -345,6 +349,8 @@ final class FeelLabConfig: ObservableObject {
     /// While a presenter visual is showing, this overrides style, colours and beam variant without touching the saved choice.
     var transientPreset: FeelPreset?
     var effectiveBeamVariantID: String { transientPreset?.variant ?? beamVariantID }
+    /// The blob's rest radius after the overall size scale and meeting mode.
+    var effectiveRestRadius: CGFloat { CGFloat(restRadius * sizeScale) * (meetingMode ? 0.65 : 1) }
     var effectivePackID: String { transientPreset?.style == .pack ? (transientPreset?.variant ?? packID) : packID }
 
     /// Slider values for a pack, falling back to each parameter's default.

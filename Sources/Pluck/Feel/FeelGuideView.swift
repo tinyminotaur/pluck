@@ -201,7 +201,8 @@ struct FeelGuideView: View {
     private var feelTab: some View {
         VStack(alignment: .leading, spacing: 16) {
             sectionTitle("How it feels", "The few controls that matter most. Changes show on the next pull.")
-            simpleKnob("Size", "How big the blob is at rest.", value: $config.restRadius, range: 24...110, format: "%.0f")
+            simpleKnob("Overall size", "Scales everything drawn, relative to the screen.", value: $config.sizeScale, range: 0.6...2.2, format: "%.2f×")
+            simpleKnob("Blob size", "How big the liquid blob is at rest (before the overall scale).", value: $config.restRadius, range: 24...110, format: "%.0f")
             simpleKnob("Stretchiness", "How much material the thread draws out of the ends as you pull.", value: $config.stretchPull, range: 0...1.4, format: "%.2f")
             simpleKnob("Follow speed", "How quickly the blob chases your cursor. Higher is snappier.", value: $config.magnetPull, range: 25...120, format: "%.0f")
             simpleKnob("Weight", "Heavy and slow to settle, or light and quick.", value: $config.magnetWeight, range: 0.3...1.1, format: "%.2f")
