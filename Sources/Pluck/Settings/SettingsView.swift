@@ -114,7 +114,7 @@ struct SettingsView: View {
         "stars": "star.fill", "kite": "wind", "bubbles": "bubbles.and.sparkles.fill", "beam": "bolt.horizontal.fill", "lightning": "bolt.fill", "magnet": "magnet", "slinky": "waveform.path", "tincan": "phone.bubble.fill", "thread": "heart.fill", "pingpong": "tennisball.fill", "bridge": "figure.walk", "planes": "paperplane.fill", "water": "drop.fill",
         "train": "tram.fill", "equalizer": "waveform", "dna": "link", "fishing": "fish.fill", "ribbon": "scribble.variable", "tugofwar": "figure.rower", "cradle": "circle.hexagongrid.fill", "rainbow": "cloud.rainbow.half.fill",
         "dandelion": "leaf.fill", "cablecar": "cablecar.fill", "signal": "wifi", "lasso": "lasso", "laser": "dot.radiowaves.left.and.right", "marker": "highlighter", "spotlight": "flashlight.on.fill",
-        "callout": "arrow.turn.right.up", "targetlock": "scope", "pack": "shippingbox.fill", "marquee": "rectangle.dashed", "jelly": "circle.dashed", "freehand": "lasso.badge.sparkles",
+        "callout": "arrow.turn.right.up", "targetlock": "scope", "pack": "shippingbox.fill", "marquee": "rectangle.dashed", "jelly": "circle.dashed", "freehand": "lasso.badge.sparkles", "yarn": "scribble",
     ]
 
     private var looksTab: some View {

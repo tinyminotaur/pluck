@@ -55,6 +55,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case marquee
     case jelly
     case freehand
+    case yarn
     case pack
 
     public var name: String {
@@ -100,6 +101,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .marquee: return "Marquee"
         case .jelly: return "Jelly Select"
         case .freehand: return "Freehand Lasso"
+        case .yarn: return "Ball of Thread"
         case .pack: return "Community"
         }
     }
@@ -114,7 +116,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     }
 
     /// Drawn with hand-made vector sprites instead of the glass shader.
-    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon || self == .tugofwar || self == .cradle || self == .rainbow || self == .dandelion || self == .cablecar || self == .signal || self == .lasso || self == .laser || self == .marker || self == .spotlight || self == .callout || self == .targetlock || self == .marquee || self == .jelly || self == .freehand || self == .pack }
+    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon || self == .tugofwar || self == .cradle || self == .rainbow || self == .dandelion || self == .cablecar || self == .signal || self == .lasso || self == .laser || self == .marker || self == .spotlight || self == .callout || self == .targetlock || self == .marquee || self == .jelly || self == .freehand || self == .yarn || self == .pack }
 
     public var tagline: String {
         switch self {
@@ -159,6 +161,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .marquee: return "A lively desktop-style selection rectangle with marching ants"
         case .jelly: return "An organic selection bubble with real spring physics"
         case .freehand: return "Draws your path and closes it into a glowing selection"
+        case .yarn: return "A ball of thread unspools toward you and ends in a lasso loop; let go and it is thrown, cinches shut, and winds back"
         case .pack: return "Animations made and shared by the community"
         }
     }

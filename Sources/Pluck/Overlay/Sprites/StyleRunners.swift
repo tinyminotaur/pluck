@@ -196,6 +196,12 @@ enum VectorRunners {
                              reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
                              release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
                              present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .yarn:
+            let l = YarnLayers()
+            return SimRunner(sim: YarnLassoSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.75; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
         case .freehand:
             let l = FreehandLayers()
             return SimRunner(sim: FreehandLassoSim(), layer: l.root,

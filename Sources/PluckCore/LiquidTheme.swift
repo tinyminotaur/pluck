@@ -564,6 +564,11 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
                    ], style: .freehand),
+        FeelPreset(id: "ball-of-thread", name: "Ball of Thread", tagline: "A ball of thread unspools toward you and ends in a lasso loop; let go and it is thrown, cinches shut, and winds back",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .yarn),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.
