@@ -10,55 +10,138 @@ public struct TugScene: Sendable {
     public var flag: CGPoint
     public var flagAngle: CGFloat
     public var pin: CGPoint, head: CGPoint
+    public var pinOffset: CGPoint, headOffset: CGPoint
     public var pinSize: CGFloat, headSize: CGFloat
     public var pinLean: CGFloat, headLean: CGFloat
+    public var pinBob: CGFloat, headBob: CGFloat
     public var strain: CGFloat
+    /// -1...1: negative when you push toward the pin (the rope goes slack), positive as you pull away (it goes taut).
+    public var tension: CGFloat
     public var axis: CGFloat
     public var dust: [(CGPoint, CGFloat, CGFloat)]
+    public var sweat: [(CGPoint, CGFloat, CGFloat)]
     public var snapped: CGFloat
     public var alpha: CGFloat
 }
 
-/// Two critters in a tug of war. The rope's flag drifts toward whoever is heavier (the pin, by mass), both strain and
-/// lean back, and dust puffs from their feet. Commit: the rope snaps and they tumble backward.
+/// Two critters in a tug of war, with a feel of push and pull. The rope's tension follows how fast you pull away from
+/// or push toward the pin: pull and the pin fighter is yanked forward (stumbling, then digging in) while the cursor's
+/// fighter leans back harder; push and the rope goes slack, the pin fighter rocks back and the other lurches forward.
+/// Both are on springs, so they overshoot and settle. When you are still they keep heaving in turn, and sweat flies
+/// off them, more the harder the effort. The flag drifts toward the heavier end. Commit: the rope snaps and they tumble.
 public struct TugOfWarSim: Sendable {
     public var base = SimBase()
+    private var tension: CGFloat = 0
+    private var prevChord: CGFloat = 0
+    private var speedSmooth: CGFloat = 0
+    private var slideA: CGFloat = 0, slideAV: CGFloat = 0
+    private var slideB: CGFloat = 0, slideBV: CGFloat = 0
     public init() {}
     public var isFinished: Bool { base.releaseT > 0.9 }
-    public mutating func reset(pin: CGPoint) { base.start(pin) }
-    public mutating func step(dt: CGFloat, pin: CGPoint, head: CGPoint) { base.advance(dt, pin, head) }
+    public mutating func reset(pin: CGPoint) { base.start(pin); tension = 0; prevChord = 0; speedSmooth = 0; slideA = 0; slideAV = 0; slideB = 0; slideBV = 0 }
     public mutating func release(commit d: CGPoint?) { base.fire(d) }
+    /// The current effort, 0...1 (drives sweat and breathing).
+    public var effort: CGFloat { min(1, 0.28 + abs(tension) / 520 + speedSmooth / 1600) }
+
+    public mutating func step(dt: CGFloat, pin: CGPoint, head: CGPoint) {
+        guard dt > 0 else { return }
+        let prevHead = base.head
+        base.advance(dt, pin, head)
+        let chord = hypot(head.x - pin.x, head.y - pin.y)
+        let rate = prevChord > 0 || base.time > 0.05 ? (chord - prevChord) / dt : 0
+        prevChord = chord
+        tension += (max(-900, min(900, rate)) - tension) * min(1, 11 * dt)
+        speedSmooth += (hypot(head.x - prevHead.x, head.y - prevHead.y) / dt - speedSmooth) * min(1, 8 * dt)
+        // Springy stumbles. Pulling away drags the pin fighter toward the cursor and shoves the other back; pushing in
+        // does the opposite. Underdamped on purpose, so they overshoot and settle.
+        func spring(_ x: inout CGFloat, _ v: inout CGFloat, _ target: CGFloat) {
+            let w: CGFloat = 15, z: CGFloat = 0.3
+            v += (w * w * (target - x) - 2 * z * w * v) * dt; x += v * dt
+        }
+        spring(&slideA, &slideAV, max(-26, min(26, tension * 0.05)))
+        spring(&slideB, &slideBV, max(-16, min(16, tension * 0.028)))
+    }
 
     public func scene(emerge: CGFloat, headGlow: CGFloat = 0) -> TugScene {
-        let b = base, ax = b.axes, up = b.up()
+        let b = base, ax = b.axes
         let e = max(0, min(1, emerge)), reach = sm(30, 130, ax.chord)
+        let tt = b.fired ? b.releaseT : 0
+        let snapped: CGFloat = b.fired ? min(1, tt * 3) : 0
         let pm = b.rp * b.rp, hm = b.rh * b.rh
-        let balance = (pm - hm) / (pm + hm)                       // + means the pin is winning
-        let strain = 0.6 + 0.4 * CGFloat(sin(Double(b.time * 9)))
-        let snapped: CGFloat = b.fired ? min(1, b.releaseT * 3) : 0
+        let balance = (pm - hm) / (pm + hm)
+        let T = max(-1, min(1, tension / 500))
+        let effort = self.effort
+        // A shared heave-ho rhythm that quickens with effort: the two fighters take turns hauling.
+        let beat = b.time * (4.6 + 2.4 * effort)
+        let heaveA = CGFloat(sin(Double(beat))), heaveB = CGFloat(sin(Double(beat + .pi)))
+        let facing: CGFloat = ax.a.x >= 0 ? 1 : -1
+        let up = CGPoint(x: 0, y: 1)
+        // Offsets along the span (screen x/y), plus a small bounce on each heave.
+        let offA = CGPoint(x: ax.a.x * slideA, y: ax.a.y * slideA)
+        let offB = CGPoint(x: ax.a.x * slideB, y: ax.a.y * slideB)
+        let bobA = 3.5 * max(0, heaveA) * (0.5 + effort), bobB = 3.5 * max(0, heaveB) * (0.5 + effort)
+        let pinC = CGPoint(x: b.pin.x + offA.x, y: b.pin.y + offA.y + bobA)
+        let headC = CGPoint(x: b.head.x + offB.x, y: b.head.y + offB.y + bobB)
+
+        // The rope runs hand to hand. Taut when pulled, drooping when slack, always trembling a little.
+        let handA = CGPoint(x: pinC.x + ax.a.x * b.rp * 1.35, y: pinC.y + ax.a.y * b.rp * 1.35)
+        let handB = CGPoint(x: headC.x - ax.a.x * b.rh * 1.35, y: headC.y - ax.a.y * b.rh * 1.35)
+        let slack = max(0, -T) * 0.9 + (1 - effort) * 0.12
         var rope: [CGPoint] = []
-        let L = 28
+        let L = 30
         for j in 0...L {
             let s = CGFloat(j) / CGFloat(L)
-            let tremble = CGFloat(sin(Double(s * 40 - b.time * 30))) * 1.4 * strain * sin(.pi * s)
-            let droop = -(1 - strain * 0.8) * min(14, ax.chord * 0.03) * 4 * s * (1 - s) - snapped * 60 * s * (1 - s)
-            rope.append(CGPoint(x: b.pin.x + (b.head.x - b.pin.x) * s + up.x * (tremble + droop), y: b.pin.y + (b.head.y - b.pin.y) * s + up.y * (tremble + droop)))
+            let tremble = CGFloat(sin(Double(s * 42 - b.time * 32))) * (0.8 + 2.2 * max(0, T)) * sin(.pi * s)
+            let droop = -(slack * min(60, ax.chord * 0.16 + 14)) * 4 * s * (1 - s) - snapped * 70 * s * (1 - s)
+            rope.append(CGPoint(x: handA.x + (handB.x - handA.x) * s, y: handA.y + (handB.y - handA.y) * s + droop + tremble * up.y))
         }
-        let fs = max(0.12, min(0.88, 0.5 - 0.32 * balance + 0.012 * CGFloat(sin(Double(b.time * 7)))))
+        let fs = max(0.12, min(0.88, 0.5 - 0.32 * balance - 0.16 * T + 0.012 * CGFloat(sin(Double(b.time * 7)))))
         let fi = min(L - 1, Int(fs * CGFloat(L)))
         let fp = rope[fi]
-        let leanBase: CGFloat = 0.16 + 0.12 * strain
-        var out: [(CGPoint, CGFloat, CGFloat)] = []
-        for i in 0..<10 {
-            let ph = (b.time * 1.7 + CGFloat(i) / 10).truncatingRemainder(dividingBy: 1)
-            let (c, r, dir): (CGPoint, CGFloat, CGFloat) = i % 2 == 0 ? (b.pin, b.rp, -1) : (b.head, b.rh, 1)
-            out.append((CGPoint(x: c.x - ax.a.x * dir * -1 * r * 0.4 + ax.a.x * dir * 0 + ax.a.x * (-dir) * (r * 0.5 + 18 * ph) * -1 * -1 + up.x * (-r * 0.9 + 14 * ph),
-                                y: c.y + ax.a.y * (-dir) * (r * 0.5 + 18 * ph) * -1 * -1 * 0 + up.y * (-r * 0.9 + 14 * ph) - ax.a.y * dir * (r * 0.5 + 18 * ph) * -1),
-                        e * reach * (1 - ph) * 0.6, 5 + 10 * ph))
+
+        // Lean: leaning back to resist. A hard pull yanks the pin fighter forward (the lean flips), a push rocks it back.
+        var leanA = 0.2 - 0.34 * T + 0.07 * heaveA * (0.5 + effort)
+        var leanB = 0.2 + 0.30 * T + 0.07 * heaveB * (0.5 + effort)
+        leanA = max(-0.32, min(0.6, leanA)); leanB = max(-0.32, min(0.6, leanB))
+        if b.fired { leanA = -0.7 * snapped; leanB = -0.7 * snapped }
+
+        // Sweat: drops fly off each fighter's brow, more of them (and farther) the harder the effort.
+        var sweat: [(CGPoint, CGFloat, CGFloat)] = []
+        for who in 0..<2 {
+            let c = who == 0 ? pinC : headC
+            let R = who == 0 ? b.rp : b.rh
+            let away: CGFloat = who == 0 ? -facing : facing                   // flung away from the opponent
+            for j in 0..<9 {
+                let seed = who * 31 + j
+                let period = 0.55 + 0.5 * StyleHash.unit(seed, 601)
+                let cyc = (b.time / period + StyleHash.unit(seed, 602))
+                let age = cyc - floor(cyc)
+                let cycleIndex = Int(floor(cyc))
+                if StyleHash.unit(seed &* 13 &+ cycleIndex, 603) > effort * 0.95 + 0.1 { continue }      // fewer drops when relaxed
+                let tau = age * period
+                let kick = 1 + abs(T) * 0.9
+                let vx = away * (30 + 60 * StyleHash.unit(seed &+ cycleIndex, 604)) * kick
+                let vy = 70 + 90 * StyleHash.unit(seed &+ cycleIndex, 605)
+                let x0 = c.x + away * R * 0.35 + (StyleHash.unit(seed, 606) - 0.5) * R * 0.6
+                let y0 = c.y + R * 0.78
+                let p = CGPoint(x: x0 + vx * tau, y: y0 + vy * tau - 0.5 * 520 * tau * tau)
+                sweat.append((p, e * reach * pow(1 - age, 0.7) * (0.5 + 0.5 * effort), 2.6 + 2.4 * StyleHash.unit(seed, 607)))
+            }
         }
-        return TugScene(rope: rope, flag: fp, flagAngle: atan2(up.y, up.x) - .pi / 2 + 0.2 * CGFloat(sin(Double(b.time * 5))), pin: b.pin, head: b.head,
-                        pinSize: b.rp, headSize: b.rh * (1 + 0.1 * headGlow), pinLean: leanBase * (b.fired ? -3 * snapped : 1),
-                        headLean: leanBase * (b.fired ? -3 * snapped : 1), strain: strain, axis: atan2(ax.a.y, ax.a.x), dust: out, snapped: snapped,
+        // Dust kicked up at the feet when they scramble.
+        var dust: [(CGPoint, CGFloat, CGFloat)] = []
+        for i in 0..<10 {
+            let who = i % 2
+            let c = who == 0 ? pinC : headC
+            let R = who == 0 ? b.rp : b.rh
+            let ph = (b.time * (1.2 + effort) + CGFloat(i) / 10).truncatingRemainder(dividingBy: 1)
+            let away: CGFloat = who == 0 ? -facing : facing
+            let strength = min(1, abs(T) * 1.3 + 0.15)
+            dust.append((CGPoint(x: c.x + away * (R * 0.5 + 24 * ph), y: c.y - R * 1.0 + 12 * ph), e * reach * (1 - ph) * 0.5 * strength, 5 + 11 * ph))
+        }
+        return TugScene(rope: rope, flag: fp, flagAngle: 0.25 * CGFloat(sin(Double(b.time * 5))) + 0.5 * T, pin: b.pin, head: b.head, pinOffset: CGPoint(x: offA.x, y: offA.y + bobA),
+                        headOffset: CGPoint(x: offB.x, y: offB.y + bobB), pinSize: b.rp, headSize: b.rh * (1 + 0.1 * headGlow), pinLean: leanA, headLean: leanB,
+                        pinBob: bobA, headBob: bobB, strain: effort, tension: T, axis: atan2(ax.a.y, ax.a.x), dust: dust, sweat: sweat, snapped: snapped,
                         alpha: e * b.fade(1.0) * (reach > 0.02 ? 1 : 0.0001))
     }
 }

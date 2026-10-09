@@ -455,6 +455,47 @@ final class DelightSimTests: XCTestCase {
         XCTAssertGreaterThan(sc.pinSize, sc.headSize)
     }
 
+    func testTugOfWarFeelsPushAndPull() {
+        func settle(_ t: inout TugOfWarSim) { for _ in 0..<500 { t.step(dt: 1 / 120, pin: pin, head: head(1, 300)) } }
+        var t = TugOfWarSim(); t.reset(pin: pin)
+        settle(&t)
+        let calm = t.scene(emerge: 1)
+        XCTAssertEqual(calm.tension, 0, accuracy: 0.08)
+        // Pull away fast: the pin fighter is yanked toward the cursor and leans forward; the rope goes taut.
+        var maxPull: CGFloat = 0, minLean = CGFloat.infinity, sweatPulling = 0
+        for i in 0..<60 {
+            t.step(dt: 1 / 120, pin: pin, head: head(1, 300 + CGFloat(i) * 6))
+            let sc = t.scene(emerge: 1)
+            maxPull = max(maxPull, sc.pinOffset.x); minLean = min(minLean, sc.pinLean); sweatPulling += sc.sweat.count
+        }
+        XCTAssertGreaterThan(maxPull, 6)
+        XCTAssertLessThan(minLean, 0.1)
+        // Then push in fast: the rope goes slack and the pin fighter rocks back.
+        var minTension = CGFloat.infinity, maxBack: CGFloat = 0
+        for i in 0..<80 {
+            t.step(dt: 1 / 120, pin: pin, head: head(1, 660 - CGFloat(i) * 7))
+            let sc = t.scene(emerge: 1)
+            minTension = min(minTension, sc.tension); maxBack = min(maxBack, sc.pinOffset.x)
+        }
+        XCTAssertLessThan(minTension, -0.2)
+        XCTAssertLessThan(maxBack, -3)
+        // More effort, more sweat.
+        var still = TugOfWarSim(); still.reset(pin: pin)
+        var stillCount = 0, activeCount = 0
+        for i in 0..<400 {
+            still.step(dt: 1 / 120, pin: pin, head: head(1, 300))
+            if i > 200, i % 10 == 0 { stillCount += still.scene(emerge: 1).sweat.count }
+        }
+        var active = TugOfWarSim(); active.reset(pin: pin)
+        for i in 0..<400 {
+            active.step(dt: 1 / 120, pin: pin, head: head(1, 300 + 90 * CGFloat(sin(Double(i) * 0.12))))
+            if i > 200, i % 10 == 0 { activeCount += active.scene(emerge: 1).sweat.count }
+        }
+        XCTAssertGreaterThan(activeCount, stillCount)
+        XCTAssertGreaterThan(sweatPulling, 0)
+        XCTAssertTrue(t.scene(emerge: 1).sweat.allSatisfy { $0.0.x.isFinite && $0.0.y.isFinite })
+    }
+
     func testCradleBallsClickOutAtTheEnds() {
         var c = NewtonsCradleSim(); c.reset(pin: pin)
         var leftOut = false, rightOut = false

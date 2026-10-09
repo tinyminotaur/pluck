@@ -16,6 +16,16 @@ final class TugLayers {
     private let pole = lineLayer(Sprite.color(150, 106, 64), 2.4), flagShape = paperShape(Sprite.color(235, 80, 90), border: 1.8, depth: 1.2)
     private let fighterA = Fighter(bear: true), fighterB = Fighter(bear: false)
     private lazy var dust = DotPool(parent: root, image: softDot)
+    private lazy var sweat = DotPool(parent: root, image: TugLayers.sweatImage)
+    private static let sweatImage: CGImage? = Sprite.image(CGSize(width: 16, height: 20), scale: 3) { c in
+        // A teardrop: pale blue with a bright highlight.
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: 8, y: 19)); p.addCurve(to: CGPoint(x: 8, y: 1), control1: CGPoint(x: 15, y: 9), control2: CGPoint(x: 15, y: 1))
+        p.addCurve(to: CGPoint(x: 8, y: 19), control1: CGPoint(x: 1, y: 1), control2: CGPoint(x: 1, y: 9)); p.closeSubpath()
+        c.addPath(p); c.setFillColor(Sprite.color(150, 214, 255, 0.95)); c.fillPath()
+        c.addPath(p); c.setStrokeColor(Sprite.color(255, 255, 255, 0.9)); c.setLineWidth(1.1); c.strokePath()
+        c.setFillColor(Sprite.color(255, 255, 255, 0.9)); c.fillEllipse(in: CGRect(x: 5, y: 5, width: 3, height: 4))
+    }
 
     init() {
         root.masksToBounds = false
@@ -29,8 +39,12 @@ final class TugLayers {
         ropeShadow.path = p; rope.path = p; twist.path = p
         // Fighters always stand upright; they only mirror to face their opponent and lift their arms toward the rope.
         let toHead = CGPoint(x: cos(s.axis), y: sin(s.axis))
-        fighterA.update(at: s.pin, size: s.pinSize, toward: toHead, lean: s.pinLean, strain: s.strain)
-        fighterB.update(at: s.head, size: s.headSize, toward: CGPoint(x: -toHead.x, y: -toHead.y), lean: s.headLean, strain: s.strain)
+        fighterA.update(at: CGPoint(x: s.pin.x + s.pinOffset.x, y: s.pin.y + s.pinOffset.y), size: s.pinSize, toward: toHead, lean: s.pinLean, strain: s.strain, bob: s.pinBob)
+        fighterB.update(at: CGPoint(x: s.head.x + s.headOffset.x, y: s.head.y + s.headOffset.y), size: s.headSize, toward: CGPoint(x: -toHead.x, y: -toHead.y), lean: s.headLean, strain: s.strain, bob: s.headBob)
+        // The rope looks more strained the tauter it is.
+        rope.lineWidth = 5 + 1.6 * max(0, s.tension); twist.lineWidth = rope.lineWidth
+        for (i, d) in s.sweat.enumerated() { sweat.place(i, at: d.0, size: d.2 * 3.8, alpha: min(1, d.1 * 1.4)) }
+        sweat.hide(from: s.sweat.count)
         // The flag on the rope.
         let f = s.flag, a = s.flagAngle
         let up = CGPoint(x: -sin(a), y: cos(a))
@@ -61,7 +75,7 @@ final class TugLayers {
             cheek.fillColor = Sprite.color(255, 143, 163, 0.85)
             for l in [earA, earB, footA, footB, body, belly, cheek, eyeA, eyeB, mouth, arm] { root.addSublayer(l) }
         }
-        func update(at p: CGPoint, size R: CGFloat, toward: CGPoint, lean: CGFloat, strain: CGFloat) {
+        func update(at p: CGPoint, size R: CGFloat, toward: CGPoint, lean: CGFloat, strain: CGFloat, bob: CGFloat) {
             root.position = p
             // Face the opponent by mirroring (never by rotating), then lean back about the feet.
             let facing: CGFloat = toward.x >= 0 ? 1 : -1
