@@ -211,7 +211,7 @@ enum ActionRunner {
         let script = """
         tell application "Finder"
           activate
-          open information window of (POSIX file "\(url.path)" as alias)
+          open information window of (POSIX file \(AppleScriptEscape.quoted(url.path)) as alias)
         end tell
         """
         var error: NSDictionary?

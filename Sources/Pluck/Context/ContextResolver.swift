@@ -114,18 +114,15 @@ enum ContextResolver {
                 items.append(CompassItem(
                     role: role,
                     title: clip.shortTitle,
-                    subtitle: inTextField ? "Paste" : "Ready to paste",
+                    subtitle: inTextField ? "Copies it, then press ⌘V" : "Ready to paste",
                     actionID: "\(action):\(clip.id.uuidString)"
                 ))
             }
         }
 
-        // If no history yet, offer Keep=Copy (noop of current) / Go=Paste current when in field.
+        // If no history yet, say so: the current clipboard is already ready to paste with ⌘V.
         if items.isEmpty {
             if !current.isEmpty {
-                if inTextField {
-                    items.append(CompassItem(role: .east, title: "Paste", subtitle: nucleus, actionID: "clip.pasteCurrent"))
-                }
                 items.append(CompassItem(role: .south, title: "Keep", subtitle: "Already on clipboard", actionID: "clip.keep"))
             } else {
                 items.append(CompassItem(role: .west, title: "Empty", subtitle: "Copy something first", actionID: "clip.empty"))

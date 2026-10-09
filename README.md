@@ -85,4 +85,4 @@ Pluck --install-pack <file.pluckpack> # install a pack with the app's safety che
 
 ## Licence
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Made by [Tiny Minotaur](https://tinyminotaur.co).

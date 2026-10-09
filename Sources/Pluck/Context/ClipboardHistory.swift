@@ -54,14 +54,8 @@ final class ClipboardHistory: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         lastChangeCount = NSPasteboard.general.changeCount
-        // ⌘V into frontmost app
-        let src = CGEventSource(stateID: .hidSystemState)
-        let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V
-        let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
-        keyDown?.flags = .maskCommand
-        keyUp?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
+        // Deliberately NOT synthesizing ⌘V: Pluck promises it never sends keystrokes or clicks of its own,
+        // so the clip is put on the pasteboard and the person presses ⌘V.
     }
 
     private func poll() {

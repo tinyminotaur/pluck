@@ -175,6 +175,16 @@ final class PackLibrary: ObservableObject {
             // List first: reject odd names before extracting anything.
             let listing = try run("/usr/bin/unzip", ["-Z1", source.path]).split(separator: "\n").map(String.init)
             guard !listing.isEmpty else { throw ImportError.notAZip }
+            // Refuse links up front: extracting a symlink and then a file "through" it could write outside the folder.
+            // `unzip -Z` prints a Unix-style listing whose first character is `l` for a symlink.
+            let longListing = try run("/usr/bin/unzip", ["-Z", source.path])
+            if longListing.split(separator: "\n").contains(where: { $0.first == "l" }) { throw ImportError.unsafe("it contains a link") }
+            // Refuse zip bombs before extracting: the totals line reads "N files, X bytes uncompressed, Y bytes compressed".
+            let totals = try run("/usr/bin/unzip", ["-Zt", source.path])
+            if let range = totals.range(of: #"(\d+) bytes uncompressed"#, options: .regularExpression),
+               let n = Int(totals[range].split(separator: " ").first ?? ""), n > Self.maxExtractedBytes {
+                throw ImportError.tooBig
+            }
             if listing.count > Self.maxFiles { throw ImportError.tooBig }
             for name in listing where !name.hasSuffix("/") {
                 if name.hasPrefix("/") || name.contains("..") || name.contains("\\") { throw ImportError.unsafe("a file has the path '\(name)'") }

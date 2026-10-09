@@ -23,7 +23,7 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 Pluck contributors. Licensed under the Apache License 2.0.</string>
+	<string>Copyright © 2026 Tiny Minotaur and contributors. Licensed under the Apache License 2.0.</string>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>Pluck needs Accessibility to notice your trigger (holding a modifier, a trackpad gesture, or a mouse chord) and to draw over other apps. It only listens; it never blocks or sends mouse or keyboard input.</string>
 	<key>NSAppleEventsUsageDescription</key>
