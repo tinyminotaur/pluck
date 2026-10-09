@@ -245,18 +245,16 @@ final class PluckSession: ObservableObject {
         )
     }
 
-    /// Presenter mode: dragging past the radius arms a direction (its name shows); a little further brings its visual to life.
+    /// Presenter mode: dragging past the radius picks a direction and locks it until release; a little further brings
+    /// its visual to life, and it stays alive even if the pointer comes back inside.
     private func handlePresenterMove() {
         let cfg = FeelLabConfig.shared
-        let radius = CGFloat(cfg.presenterRadius)
-        let previous = presenterIndex
-        presenterIndex = PresenterMath.capture(pin: pin, pointer: pointer, count: cfg.presenterCount, radius: radius, current: presenterIndex)
-        if presenterIndex != previous, presenterIndex != nil { Haptics.tick(.alignment); Sounds.latch() }
-        let engagedNow = presenterIndex != nil && PresenterMath.isEngaged(pin: pin, pointer: pointer, radius: radius, wasEngaged: presenterEngaged)
-        if engagedNow != presenterEngaged {
-            presenterEngaged = engagedNow
-            if engagedNow { hideCursor() } else { showCursor() }
-        }
+        let before = PresenterMath.Selection(index: presenterIndex, engaged: presenterEngaged)
+        let after = PresenterMath.advance(before, pin: pin, pointer: pointer, count: cfg.presenterCount, radius: CGFloat(cfg.presenterRadius))
+        if after.index != before.index, after.index != nil { Haptics.tick(.alignment); Sounds.latch() }
+        if after.engaged != before.engaged { if after.engaged { hideCursor() } else { showCursor() } }
+        presenterIndex = after.index
+        presenterEngaged = after.engaged
         pushPresenter()
         pushOverlay()
     }

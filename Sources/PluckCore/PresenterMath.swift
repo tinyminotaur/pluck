@@ -46,6 +46,27 @@ public enum PresenterMath {
         return d > radius + (wasEngaged ? engageMargin * 0.4 : engageMargin)
     }
 
+    /// The selection state across a whole gesture.
+    public struct Selection: Equatable, Sendable {
+        public var index: Int?
+        public var engaged: Bool
+        public init(index: Int? = nil, engaged: Bool = false) { self.index = index; self.engaged = engaged }
+    }
+
+    /// One pointer move. The first time the pointer leaves the radius it picks a direction, and that choice is then
+    /// locked until the gesture ends: moving to another direction, or back inside the ring, changes nothing. Dragging a
+    /// little further brings the chosen visual to life, and once alive it stays alive.
+    public static func advance(_ s: Selection, pin: CGPoint, pointer: CGPoint, count: Int, radius: CGFloat) -> Selection {
+        var out = s
+        if out.index == nil {
+            out.index = capture(pin: pin, pointer: pointer, count: count, radius: radius, current: nil)
+        }
+        if out.index != nil, !out.engaged {
+            out.engaged = isEngaged(pin: pin, pointer: pointer, radius: radius, wasEngaged: false)
+        }
+        return out
+    }
+
     /// Parse a stored comma-separated slot list into exactly 8 ids, falling back to the defaults for blanks.
     public static func parseSlots(_ s: String?) -> [String] {
         let parts = (s ?? "").split(separator: ",", omittingEmptySubsequences: false).map { String($0).trimmingCharacters(in: .whitespaces) }

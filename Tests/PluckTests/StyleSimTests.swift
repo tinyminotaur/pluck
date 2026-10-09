@@ -760,6 +760,22 @@ final class PresenterMathTests: XCTestCase {
         XCTAssertTrue(PresenterMath.isEngaged(pin: pin, pointer: CGPoint(x: pin.x + 75, y: pin.y), radius: 60, wasEngaged: true))   // stays engaged a bit closer
     }
 
+    func testTheChoiceIsLockedUntilRelease() {
+        func move(_ s: PresenterMath.Selection, _ dx: CGFloat, _ dy: CGFloat) -> PresenterMath.Selection {
+            PresenterMath.advance(s, pin: pin, pointer: CGPoint(x: pin.x + dx, y: pin.y + dy), count: 4, radius: 60)
+        }
+        var s = PresenterMath.Selection()
+        s = move(s, 10, 10);   XCTAssertNil(s.index)                       // inside the ring: nothing chosen
+        s = move(s, 0, 80);    XCTAssertEqual(s.index, 0)                  // dragged out to the north: chosen
+        XCTAssertFalse(s.engaged)
+        s = move(s, -90, 0);   XCTAssertEqual(s.index, 0)                  // moving to the west does not change it
+        s = move(s, 5, 5);     XCTAssertEqual(s.index, 0)                  // nor does coming back inside
+        s = move(s, 0, 100);   XCTAssertTrue(s.engaged)                    // pulling a little further brings it to life
+        s = move(s, 3, 3)
+        XCTAssertEqual(s.index, 0); XCTAssertTrue(s.engaged)               // and it stays alive and unchanged inside the ring
+        s = move(s, -150, -150); XCTAssertEqual(s.index, 0)                // even far to the opposite side
+    }
+
     func testSlotsParseWithDefaultsAndExistInThePresetLibrary() {
         XCTAssertEqual(PresenterMath.parseSlots(nil), PresenterMath.defaultSlots)
         XCTAssertEqual(PresenterMath.parseSlots("fireflies,,x")[1], PresenterMath.defaultSlots[1])
