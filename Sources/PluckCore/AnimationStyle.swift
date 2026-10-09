@@ -52,6 +52,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case spotlight
     case callout
     case targetlock
+    case marquee
+    case jelly
+    case freehand
 
     public var name: String {
         switch self {
@@ -93,6 +96,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .spotlight: return "Spotlight"
         case .callout: return "Callout Arrow"
         case .targetlock: return "Target Lock"
+        case .marquee: return "Marquee"
+        case .jelly: return "Jelly Select"
+        case .freehand: return "Freehand Lasso"
         }
     }
 
@@ -106,7 +112,7 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     }
 
     /// Drawn with hand-made vector sprites instead of the glass shader.
-    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon || self == .tugofwar || self == .cradle || self == .rainbow || self == .dandelion || self == .cablecar || self == .signal || self == .lasso || self == .laser || self == .marker || self == .spotlight || self == .callout || self == .targetlock }
+    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon || self == .tugofwar || self == .cradle || self == .rainbow || self == .dandelion || self == .cablecar || self == .signal || self == .lasso || self == .laser || self == .marker || self == .spotlight || self == .callout || self == .targetlock || self == .marquee || self == .jelly || self == .freehand }
 
     public var tagline: String {
         switch self {
@@ -148,6 +154,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .spotlight: return "A stage light dims the screen and pools light on the target"
         case .callout: return "A hand-drawn stop-motion arrow and a scribbled circle"
         case .targetlock: return "A viewfinder HUD closes in and locks on, with a live readout"
+        case .marquee: return "A lively desktop-style selection rectangle with marching ants"
+        case .jelly: return "An organic selection bubble with real spring physics"
+        case .freehand: return "Draws your path and closes it into a glowing selection"
         }
     }
 }

@@ -171,10 +171,28 @@ enum VectorRunners {
                              reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
                              release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
                              present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .marquee:
+            let l = MarqueeLayers()
+            return SimRunner(sim: MarqueeSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .jelly:
+            let l = JellyLayers()
+            return SimRunner(sim: JellySim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .freehand:
+            let l = FreehandLayers()
+            return SimRunner(sim: FreehandLassoSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
         case .beam:
             let l = EnergyLayers()
             var proto = EnergySim()
-            proto.variant = EnergyVariant(rawValue: FeelLabConfig.shared.beamVariantID) ?? .kamehameha
+            proto.variant = EnergyVariant(rawValue: FeelLabConfig.shared.effectiveBeamVariantID) ?? .kamehameha
             proto.chargeThenFire = FeelLabConfig.shared.beamChargeMode
             return SimRunner(sim: proto, layer: l.root,
                              reset: { $0.base.bodyRadius = $2 * 0.7; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },

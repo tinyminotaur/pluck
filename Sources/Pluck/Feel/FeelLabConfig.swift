@@ -104,6 +104,14 @@ final class FeelLabConfig: ObservableObject {
     /// Which anime energy attack the Energy Beam style uses, and whether it fires on release (charge mode).
     @Published var beamVariantID: String { didSet { UserDefaults.standard.set(beamVariantID, forKey: "feelLab.beamVariantID") } }
     @Published var beamChargeMode: Bool { didSet { saveBool("beamChargeMode", beamChargeMode) } }
+    /// The blob's end sits exactly under the real pointer (so the cursor never seems to jump when it reappears).
+    @Published var reachExact: Bool { didSet { saveBool("reachExact", reachExact) } }
+    /// "actions" (a direction picks an action) or "presenter" (a direction picks a visual).
+    @Published var interactionModeID: String { didSet { saveString("interactionModeID", interactionModeID) } }
+    /// Presenter mode: 4 or 8 directions, how far to drag before one is chosen, and the preset ids for the 8 directions.
+    @Published var presenterCount: Int { didSet { UserDefaults.standard.set(presenterCount, forKey: "pluck.feel.presenterCount") } }
+    @Published var presenterRadius: Double { didSet { save("presenterRadius", presenterRadius) } }
+    @Published var presenterSlotsRaw: String { didSet { saveString("presenterSlotsRaw", presenterSlotsRaw) } }
     @Published var audioReactive: Bool { didSet { saveBool("audioReactive", audioReactive) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
@@ -177,6 +185,11 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         soundEnabled = Self.loadBool("soundEnabled", false)
         audioReactive = Self.loadBool("audioReactive", false)
+        interactionModeID = UserDefaults.standard.string(forKey: "pluck.feel.interactionModeID") ?? "actions"
+        presenterCount = UserDefaults.standard.integer(forKey: "pluck.feel.presenterCount") == 8 ? 8 : 4
+        presenterRadius = Self.load("presenterRadius", 64)
+        presenterSlotsRaw = UserDefaults.standard.string(forKey: "pluck.feel.presenterSlotsRaw") ?? PresenterMath.defaultSlots.joined(separator: ",")
+        reachExact = Self.loadBool("reachExact", true)
         beamVariantID = UserDefaults.standard.string(forKey: "feelLab.beamVariantID") ?? EnergyVariant.kamehameha.rawValue
         beamChargeMode = Self.loadBool("beamChargeMode", true)
         flingMomentum = Self.load("flingMomentum", 0.5)
@@ -237,6 +250,9 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = true
         soundEnabled = false
         audioReactive = false
+        interactionModeID = "actions"; presenterCount = 4; presenterRadius = 64
+        presenterSlotsRaw = PresenterMath.defaultSlots.joined(separator: ",")
+        reachExact = true
         beamVariantID = EnergyVariant.kamehameha.rawValue
         beamChargeMode = true
         flingMomentum = 0.5
@@ -301,10 +317,31 @@ final class FeelLabConfig: ObservableObject {
 
     // MARK: Themes and presets
 
-    var style: AnimationStyle { AnimationStyle(rawValue: styleID) ?? .liquid }
+    var style: AnimationStyle { transientPreset?.style ?? AnimationStyle(rawValue: styleID) ?? .liquid }
+
+    // MARK: Presenter mode
+
+    var presenterMode: Bool { interactionModeID == "presenter" }
+    var presenterSlots: [String] { PresenterMath.parseSlots(presenterSlotsRaw) }
+    func setPresenterSlot(_ index: Int, to id: String) {
+        var slots = presenterSlots
+        guard slots.indices.contains(index) else { return }
+        slots[index] = id
+        presenterSlotsRaw = slots.joined(separator: ",")
+    }
+    /// The preset a presenter direction (0..<presenterCount) maps to.
+    func presenterPreset(forSector sector: Int) -> FeelPreset? {
+        let indices = PresenterMath.slotIndices(count: presenterCount)
+        guard indices.indices.contains(sector) else { return nil }
+        return PresetLibrary.preset(id: presenterSlots[indices[sector]])
+    }
+    /// While a presenter visual is showing, this overrides style, colours and beam variant without touching the saved choice.
+    var transientPreset: FeelPreset?
+    var effectiveBeamVariantID: String { transientPreset?.variant ?? beamVariantID }
 
     /// The active theme (a built-in, or the last "Surprise me" palette).
     var theme: LiquidTheme {
+        if let t = transientPreset, let th = ThemeLibrary.theme(id: t.themeID) { return th }
         if themeID == "custom", let customTheme { return customTheme }
         return ThemeLibrary.theme(id: themeID) ?? ThemeLibrary.obsidianEmber
     }

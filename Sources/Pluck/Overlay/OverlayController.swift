@@ -60,6 +60,11 @@ final class OverlayController {
         view.startPhysics()
     }
 
+    /// Presenter mode: the armed direction and its visual (nil preset when nothing is armed yet).
+    func setPresenter(_ state: MetaballView.PresenterOverlayState, preset: FeelPreset?) {
+        blobView?.updatePresenter(state, preset: preset)
+    }
+
     func update(
         pin: CGPoint,
         pointer: CGPoint,
@@ -75,7 +80,7 @@ final class OverlayController {
         let target = headTarget(for: pointer)
         view.pointerTarget = target
         if reducedMotion { view.head = view.pointerTarget }   // no physics: the head is the (gained) pointer
-        view.emerge = emerge
+        if !view.presenterActive { view.emerge = emerge }
         view.bloom = bloom
         view.captured = captured
         view.items = context?.items ?? []
@@ -86,7 +91,8 @@ final class OverlayController {
     /// The drawn head position for a raw global pointer position.
     private func headTarget(for pointer: CGPoint) -> CGPoint {
         let cfg = FeelLabConfig.shared
-        let virtual = GestureMath.reachHead(
+        // Exact by default: the blob's end is the pointer, so the cursor never appears to jump when it comes back.
+        let virtual = cfg.reachExact ? pointer : GestureMath.reachHead(
             pin: gesturePin, pointer: pointer,
             bounds: screenFrame.insetBy(dx: 8, dy: 8), gain: CGFloat(cfg.reachGain)
         )

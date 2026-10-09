@@ -12,6 +12,10 @@ final class PluckSession: ObservableObject {
     @Published private(set) var isActive = false
     @Published private(set) var context: GrabContext?
     @Published private(set) var capturedRole: CompassRole?
+    /// Presenter mode: the armed direction, and whether the visual has been brought to life by dragging further.
+    private var presenterMode = false
+    private var presenterIndex: Int?
+    private var presenterEngaged = false
     @Published private(set) var pin: CGPoint = .zero
     @Published private(set) var pointer: CGPoint = .zero
     @Published private(set) var emergeProgress: CGFloat = 0
@@ -87,12 +91,17 @@ final class PluckSession: ObservableObject {
         bloomProgress = 0
         lastRing = 0
 
-        // Hide system cursor FIRST so the blob is the only pointer you see.
-        hideCursor()
+        presenterMode = FeelLabConfig.shared.presenterMode
+        presenterIndex = nil
+        presenterEngaged = false
+        // Hide the system cursor first so the blob is the only pointer you see. (Presenter mode keeps it until a visual starts.)
+        if !presenterMode { hideCursor() }
 
-        let ctx = FeelLab.enabled ? FeelLab.context : ContextResolver.resolve(at: location)
+        let ctx = presenterMode ? GrabContext(kind: .clipboard, nucleusTitle: "", items: [])
+            : (FeelLab.enabled ? FeelLab.context : ContextResolver.resolve(at: location))
         context = ctx
         overlay.show(pin: location, context: ctx, reducedMotion: reducedMotion)
+        if presenterMode { pushPresenter() }
         pushOverlay()
 
         if reducedMotion {
@@ -108,6 +117,7 @@ final class PluckSession: ObservableObject {
         guard isActive, !finishing else { return }
         CursorGuard.shared.checkIn()
         pointer = location
+        if presenterMode { handlePresenterMove(); return }
         let available = context?.items.map(\.role) ?? CompassRole.allCases
         let previous = capturedRole
         capturedRole = GestureMath.capture(
@@ -136,6 +146,16 @@ final class PluckSession: ObservableObject {
     func complete(at location: CGPoint) {
         guard isActive, !finishing else { return }
         pointer = location
+        if presenterMode {
+            let engaged = presenterEngaged && presenterIndex != nil
+            let title = presenterIndex.flatMap { FeelLabConfig.shared.presenterPreset(forSector: $0)?.name }
+            if engaged { Haptics.tick(.levelChange); Sounds.commit() }
+            finishVisual(commitRole: engaged ? .north : nil) {
+                if FeelLab.enabled { NotificationCenter.default.post(name: .pluckFeelResult, object: engaged ? "Presenter: \(title ?? "")" : "Canceled") }
+            }
+            presenterMode = false; presenterIndex = nil; presenterEngaged = false
+            return
+        }
 
         let available = context?.items.map(\.role) ?? []
         let role = GestureMath.roleAtRelease(
@@ -179,6 +199,8 @@ final class PluckSession: ObservableObject {
         CursorGuard.forceVisible()
         context = nil
         capturedRole = nil
+        presenterMode = false; presenterIndex = nil; presenterEngaged = false
+        FeelLabConfig.shared.transientPreset = nil
         engine.gestureDidEnd()
     }
 
@@ -208,6 +230,35 @@ final class PluckSession: ObservableObject {
             guard let self, self.finishing else { return }
             self.forceReset()
         }
+    }
+
+    private func presenterNames() -> [String] {
+        let cfg = FeelLabConfig.shared
+        return (0..<cfg.presenterCount).map { cfg.presenterPreset(forSector: $0)?.name ?? "None" }
+    }
+
+    private func pushPresenter() {
+        let cfg = FeelLabConfig.shared
+        overlay.setPresenter(
+            .init(count: cfg.presenterCount, radius: CGFloat(cfg.presenterRadius), names: presenterNames(), armed: presenterIndex, engaged: presenterEngaged),
+            preset: presenterIndex.flatMap { cfg.presenterPreset(forSector: $0) }
+        )
+    }
+
+    /// Presenter mode: dragging past the radius arms a direction (its name shows); a little further brings its visual to life.
+    private func handlePresenterMove() {
+        let cfg = FeelLabConfig.shared
+        let radius = CGFloat(cfg.presenterRadius)
+        let previous = presenterIndex
+        presenterIndex = PresenterMath.capture(pin: pin, pointer: pointer, count: cfg.presenterCount, radius: radius, current: presenterIndex)
+        if presenterIndex != previous, presenterIndex != nil { Haptics.tick(.alignment); Sounds.latch() }
+        let engagedNow = presenterIndex != nil && PresenterMath.isEngaged(pin: pin, pointer: pointer, radius: radius, wasEngaged: presenterEngaged)
+        if engagedNow != presenterEngaged {
+            presenterEngaged = engagedNow
+            if engagedNow { hideCursor() } else { showCursor() }
+        }
+        pushPresenter()
+        pushOverlay()
     }
 
     private func pushOverlay() {

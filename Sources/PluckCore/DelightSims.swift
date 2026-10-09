@@ -269,14 +269,15 @@ extension SwarmSim {
     public var headLantern: (center: CGPoint, radius: CGFloat) { (head, max(sol.head, 5) * 1.05) }
 }
 
-/// Tendrils: a sea-creature pin whose tentacles reach for the head. Each tentacle is a chain that follows the one
-/// before it with lag, undulating as it goes; the tentacles fan out and taper to fine tips. Commit makes them
-/// whip toward the pull and curl back.
+/// Tendrils: a possessed mass in the manner of the cursed gods of Princess Mononoke. Many black, glistening worms
+/// boil out of the pin and are never still: they thrash and knot around each other whether or not the cursor
+/// moves. They lash toward the cursor and coil around it, tightening and loosening, with sudden whip-like lunges.
+/// Commit: the whole mass convulses and whips toward the pull, then dies away. Release: they writhe back and slacken.
 public struct TendrilSim: Sendable {
     public struct Params: Equatable, Sendable {
         public var bodyRadius: CGFloat = 28
-        public var tentacles: Int = 6
-        public var links: Int = 22
+        public var tentacles: Int = 15
+        public var links: Int = 26
         public var dumbbell = DumbbellMass.Params()
         public init() {}
     }
@@ -289,11 +290,17 @@ public struct TendrilSim: Sendable {
     private var releaseT: CGFloat = -1
     private var grip: CGFloat = 0
     public init(params: Params = Params()) { self.params = params }
-    public var isFinished: Bool { releaseT > 0.6 }
+    public var isFinished: Bool { releaseT > 0.9 }
     public var tentacleCount: Int { tent.count }
     /// 0...1 how tightly the tentacles have closed around the head.
     public var gripAmount: CGFloat { grip }
     fileprivate var sol: DumbbellMass.Solution { mass.sol }
+
+    /// Per-tentacle personality: thickness, writhe speed, length, which way it coils, and when it thrashes.
+    private func trait(_ t: Int) -> (thick: CGFloat, speed: CGFloat, length: CGFloat, dir: CGFloat, phase: CGFloat, lunge: CGFloat) {
+        (0.45 + 1.1 * StyleHash.unit(t, 501), 0.8 + 1.5 * StyleHash.unit(t, 502), 0.75 + 0.5 * StyleHash.unit(t, 503),
+         StyleHash.unit(t, 504) > 0.5 ? 1 : -1, 6.28 * StyleHash.unit(t, 505), 1.2 + 2.6 * StyleHash.unit(t, 506))
+    }
 
     public mutating func reset(pin: CGPoint) {
         self.pin = pin; head = pin; time = 0; releaseT = -1; mass = MassFlow(); grip = 0
@@ -310,58 +317,69 @@ public struct TendrilSim: Sendable {
         let chord = hypot(dx, dy)
         mass.update(chord: chord, dt: dt, params: params.dumbbell, bodyRadius: params.bodyRadius)
 
-        let dir = chord > 1 ? CGPoint(x: dx / chord, y: dy / chord) : CGPoint(x: 0, y: -1)
+        let dir = chord > 1 ? CGPoint(x: dx / chord, y: dy / chord) : CGPoint(x: 0, y: 1)
         let nrm = CGPoint(x: -dir.y, y: dir.x)
         let nT = tent.count
-        let reach = StyleHash.smoothstep(10, 140, chord)
-        // Far enough away, they stop fanning and lunge: straight at the head, then coil around it.
-        let wrap = StyleHash.smoothstep(60, 210, chord) * (releaseT >= 0 ? 0 : 1)
-        grip += (wrap - grip) * (1 - CGFloat(exp(Double(-9 * dt))))
+        let reach = StyleHash.smoothstep(10, 150, chord)
+        // They always swarm the head. Far away they first lunge to it; close in they simply boil around it.
+        let wrapTarget = (0.62 + 0.38 * StyleHash.smoothstep(60, 220, chord)) * (releaseT >= 0 ? 0 : 1)
+        grip += (wrapTarget - grip) * (1 - CGFloat(exp(Double(-7 * dt))))
         let headR = max(sol.head * 0.8, 9)
         let hold: CGFloat = releaseT >= 0 ? 0 : 1
         let toPin = atan2(-dy, -dx)
-        let uW: CGFloat = 0.42
+        let uW: CGFloat = 0.5
+        let commitT = releaseT >= 0 ? releaseT : 0
 
         for t in 0..<nT {
-            let fan = (CGFloat(t) / CGFloat(max(1, nT - 1)) - 0.5) * 2          // -1...1
-            let sgn: CGFloat = t % 2 == 0 ? 1 : -1
+            let tr = trait(t)
             let L = tent[t].count
-            let reachLen = (chord * (0.55 + 0.4 * (1 - abs(fan))) + params.bodyRadius * 1.2) * reach
-                + params.bodyRadius * (1.3 + 0.5 * (1 - abs(fan))) * (1 - reach)
-            let seg = max(3, reachLen / CGFloat(L - 1))
-            let root = CGPoint(x: pin.x + nrm.x * fan * sol.pin * 0.5, y: pin.y + nrm.y * fan * sol.pin * 0.5)
+            let fan = (CGFloat(t) / CGFloat(max(1, nT - 1)) - 0.5) * 2
+            let root = CGPoint(x: pin.x + nrm.x * fan * sol.pin * 0.55, y: pin.y + nrm.y * fan * sol.pin * 0.55)
             tent[t][0] = root
-            // Where this tentacle meets the head's circle, and how many turns it coils.
-            let theta0 = toPin + fan * 1.5
-            let entryR = headR * 2.3
+            // A periodic thrash: this worm suddenly whips (a sharp bump in its writhing amplitude).
+            let cycle = tr.lunge + 1.4
+            let tc = (time + tr.phase).truncatingRemainder(dividingBy: cycle) / cycle
+            let thrash = max(0, 1 - abs(tc - 0.12) / 0.07)
+            let theta0 = toPin + fan * 1.6 + 0.5 * CGFloat(sin(Double(time * 0.7 + tr.phase)))
+            let entryR = headR * (2.2 + 0.5 * CGFloat(sin(Double(time * 1.3 + tr.phase))))
             let entry = CGPoint(x: head.x + cos(theta0) * entryR, y: head.y + sin(theta0) * entryR)
-            let turns = 1.15 + 0.35 * StyleHash.unit(t, 111)
-            let squeeze = 1 + 0.16 * CGFloat(sin(Double(time * 13 + CGFloat(t) * 1.9))) * grip
+            let turns = 1.2 + 0.8 * StyleHash.unit(t, 507)
+            let reachLen = (chord * (0.5 + 0.45 * tr.length) + params.bodyRadius * 1.4) * reach + params.bodyRadius * (1.6 * tr.length) * (1 - reach)
+            let seg = max(3, reachLen / CGFloat(L - 1))
             for j in 1..<L {
                 let u = CGFloat(j) / CGFloat(L - 1)
-                // Relaxed shape: a fanned, undulating reach (or a droop at the pin).
-                let wave = CGFloat(sin(Double(time * 2.4 - u * 5 + CGFloat(t) * 1.3)))
-                let spreadAng = fan * 1.2 * (1 - reach * 0.78)
+                // Endless writhing: two travelling waves of different speeds plus a pulse, bigger toward the tip.
+                let k1 = 7 + 5 * StyleHash.unit(t, 508), k2 = 13 + 6 * StyleHash.unit(t, 509)
+                let amp = (9 + 22 * u) * tr.thick * (0.7 + 0.6 * thrash * 2.2 + 0.2)
+                let w1 = CGFloat(sin(Double(time * 3.1 * tr.speed - u * k1 + tr.phase)))
+                let w2 = CGFloat(sin(Double(time * 5.3 * tr.speed - u * k2 + tr.phase * 1.7)))
+                let writhe = amp * (w1 + 0.55 * w2) * (0.6 + 0.4 * u)
+                // Relaxed: they lie along the reach direction, fanning a little, wriggling sideways.
+                let spreadAng = fan * 1.3 * (1 - reach * 0.7)
                 let ca = CGFloat(cos(Double(spreadAng))), sa = CGFloat(sin(Double(spreadAng)))
                 let fdir = CGPoint(x: dir.x * ca - dir.y * sa, y: dir.x * sa + dir.y * ca)
-                let relaxed = CGPoint(x: root.x + fdir.x * seg * CGFloat(j) + nrm.x * wave * 7 * u * (0.4 + reach),
-                                      y: root.y + fdir.y * seg * CGFloat(j) + nrm.y * wave * 7 * u * (0.4 + reach) - (1 - reach) * u * u * 22)
-                // Grabbing shape: lunge to the entry point, then spiral in around the head, squeezing.
+                let relaxed = CGPoint(x: root.x + fdir.x * seg * CGFloat(j) + nrm.x * writhe, y: root.y + fdir.y * seg * CGFloat(j) + nrm.y * writhe)
+                // Grabbing: out along a writhing path to the head, then a coiling spiral that breathes in and out.
                 var grab: CGPoint
                 if u <= uW {
                     let w = u / uW
-                    let lash = CGFloat(sin(Double(time * 9 + CGFloat(t) * 2.1 + u * 7))) * 14 * sin(.pi * w) * (0.5 + 0.5 * wrap)
+                    let lash = writhe * (0.6 + 0.8 * sin(.pi * w))
                     grab = CGPoint(x: root.x + (entry.x - root.x) * w + nrm.x * lash, y: root.y + (entry.y - root.y) * w + nrm.y * lash)
                 } else {
                     let w = (u - uW) / (1 - uW)
-                    let ang = theta0 + sgn * w * turns * 2 * .pi
-                    let r = headR * (2.3 - 1.25 * w) * squeeze
+                    let ang = theta0 + tr.dir * (w * turns * 2 * .pi) + CGFloat(sin(Double(time * 2.0 * tr.speed + tr.phase))) * 0.9 + time * 0.6 * tr.dir
+                    let pulse = 1 + 0.28 * CGFloat(sin(Double(time * 6 * tr.speed + w * 5 + tr.phase))) + 0.35 * thrash
+                    let r = headR * (2.3 - 1.2 * w) * pulse + 5 * CGFloat(sin(Double(time * 9 * tr.speed + w * 11))) * tr.thick
                     grab = CGPoint(x: head.x + cos(ang) * r, y: head.y + sin(ang) * r)
                 }
-                let aim = CGPoint(x: relaxed.x + (grab.x - relaxed.x) * grip, y: relaxed.y + (grab.y - relaxed.y) * grip)
-                // Springy joints: outer ones are looser, so a sudden move whips the tips and they overshoot.
-                let omega: CGFloat = (hold == 1 ? 30 : 5) - 12 * u
-                let zeta: CGFloat = 0.30
+                var aim = CGPoint(x: relaxed.x + (grab.x - relaxed.x) * grip, y: relaxed.y + (grab.y - relaxed.y) * grip)
+                if releaseT >= 0 {                                               // commit: a convulsing lunge along the pull, then slack
+                    let kick = max(0, 1 - commitT / 0.5)
+                    aim.x += dir.x * 160 * u * kick; aim.y += dir.y * 160 * u * kick
+                    aim.y -= 90 * u * u * (1 - kick)
+                }
+                let omega: CGFloat = (hold == 1 ? 24 : 6) - 8 * u
+                let zeta: CGFloat = 0.34
                 let ax = omega * omega * (aim.x - tent[t][j].x) - 2 * zeta * omega * tentV[t][j].x
                 let ay = omega * omega * (aim.y - tent[t][j].y) - 2 * zeta * omega * tentV[t][j].y
                 tentV[t][j].x += ax * dt; tentV[t][j].y += ay * dt
@@ -373,31 +391,28 @@ public struct TendrilSim: Sendable {
 
     public mutating func release(commit direction: CGPoint?) {
         releaseT = 0
-        guard let d = direction else { return }
-        for t in tent.indices {
-            for j in 1..<tent[t].count {
-                let u = CGFloat(j) / CGFloat(tent[t].count - 1)
-                tent[t][j].x += d.x * 90 * u; tent[t][j].y += d.y * 90 * u
-            }
-        }
     }
 
     public func primitives(emerge: CGFloat, headGlow: CGFloat = 0) -> [ShapePrim] {
         let e = max(0, min(1.15, emerge))
         guard e > 0.01 else { return [] }
-        let fade = releaseT >= 0 ? max(0, 1 - releaseT / 0.5) : 1
+        let fade = releaseT >= 0 ? max(0, 1 - max(0, releaseT - 0.35) / 0.5) : 1
         var out: [ShapePrim] = []
-        out.append(ShapePrim(kind: .circle, a: pin, ra: sol.pin * e * (0.4 + 0.6 * fade), blend: .soft))
-        out.append(ShapePrim(kind: .circle, a: head, ra: max(sol.head, 5) * 0.8 * e * (1 + 0.12 * headGlow) * (0.4 + 0.6 * fade),
-                             blend: .soft, emphasis: headGlow))
+        // The mass itself seethes: it swells and sags unevenly.
+        let breathe = 1 + 0.07 * CGFloat(sin(Double(time * 3.2))) + 0.04 * CGFloat(sin(Double(time * 7.1)))
+        out.append(ShapePrim(kind: .circle, a: pin, ra: sol.pin * e * breathe * (0.5 + 0.5 * fade), blend: .soft))
+        out.append(ShapePrim(kind: .circle, a: head, ra: max(sol.head, 5) * 0.8 * e * (1 + 0.12 * headGlow) * (0.5 + 0.5 * fade), blend: .soft, emphasis: headGlow))
         for t in tent.indices {
+            let tr = trait(t)
             let L = tent[t].count
             for j in 0..<(L - 1) {
                 let u = CGFloat(j) / CGFloat(L - 1)
-                let base = max(1.2, sol.pin * 0.24 * (1 - u) * (1 - u) + 3.2)
-                let tip = max(0.9, sol.pin * 0.24 * (1 - (u + 1 / CGFloat(L - 1))) * (1 - (u + 1 / CGFloat(L - 1))) + 2.4)
-                out.append(ShapePrim(kind: .cone, a: tent[t][j], b: tent[t][j + 1], ra: base * e * fade, rb: tip * e * fade,
-                                     blend: .tight))
+                let u2 = u + 1 / CGFloat(L - 1)
+                // Thick at the root, thinning to a whip-fine tip; a slow swell travels along each worm.
+                let swell = 1 + 0.18 * CGFloat(sin(Double(time * 4 * tr.speed - u * 9 + tr.phase)))
+                let base = max(1.4, (sol.pin * 0.2 * (1 - u) * (1 - u) + 3.0) * tr.thick * swell)
+                let tip = max(0.9, (sol.pin * 0.2 * (1 - u2) * (1 - u2) + 3.0) * tr.thick * (1 + 0.18 * CGFloat(sin(Double(time * 4 * tr.speed - u2 * 9 + tr.phase)))))
+                out.append(ShapePrim(kind: .cone, a: tent[t][j], b: tent[t][j + 1], ra: base * e * fade, rb: tip * e * fade, blend: .soft))
             }
         }
         return out

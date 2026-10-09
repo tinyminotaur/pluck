@@ -68,6 +68,12 @@ public enum ThemeLibrary {
         body: RGB(0.035, 0.028, 0.024), absorb: RGB(1.45, 2.8, 4.25),
         ember: 0.55, sheen: 1.0, rim: 1.0, gradientScale: 260, gradientSpeed: 0.02, iridescence: 0, fill: 0.1, chrome: 0
     )
+    public static let curse = LiquidTheme(
+        id: "curse", name: "Curse", tagline: "Wet black with a sick crimson glow in the cracks",
+        a: RGB(0.62, 0.05, 0.06), b: RGB(0.10, 0.02, 0.06), c: RGB(0.92, 0.22, 0.10),
+        body: RGB(0.008, 0.006, 0.008), absorb: RGB(2.4, 3.6, 4.2),
+        ember: 0.42, sheen: 0.55, rim: 0.85, gradientScale: 120, gradientSpeed: 0.05, iridescence: 0, fill: 0.16, chrome: 0.12
+    )
     public static let oilSlick = LiquidTheme(
         id: "oil-slick", name: "Oil Slick", tagline: "Black with a magenta, teal and gold sheen",
         a: RGB(0.95, 0.20, 0.65), b: RGB(0.10, 0.80, 0.75), c: RGB(0.95, 0.75, 0.15),
@@ -143,7 +149,7 @@ public enum ThemeLibrary {
 
     public static let all: [LiquidTheme] = [
         obsidianEmber, mist, oilSlick, aurora, moltenGold, mercury, neonJelly, deepSea, sunsetLava,
-        ferrofluid, amethyst, frost,
+        ferrofluid, amethyst, frost, curse,
     ]
 
     public static func theme(id: String) -> LiquidTheme? { all.first { $0.id == id } }
@@ -321,10 +327,10 @@ public enum PresetLibrary {
                     "restRadius": 44, "magnetPull": 90, "magnetWeight": 0.7, "magnetStick": 0.25, "reachGain": 2.2,
                     "idleLife": 0.6, "glassOpacity": 0.95, "shadowStrength": 0.2,
                    ], style: .swarm),
-        FeelPreset(id: "anemone", name: "Anemone", tagline: "Soft tentacles reach for the cursor and sway",
-                   themeID: "neon-jelly", values: [
-                    "restRadius": 46, "magnetPull": 55, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
-                    "idleLife": 0.6, "glassOpacity": 0.95, "shadowStrength": 0.3,
+        FeelPreset(id: "curse-writhe", name: "Curse Writhe", tagline: "Black worms boil out of the pin and coil around the cursor, never still",
+                   themeID: "curse", values: [
+                    "restRadius": 50, "magnetPull": 60, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
+                    "idleLife": 0.8, "glassOpacity": 0.97, "shadowStrength": 0.45,
                    ], style: .tendrils),
         FeelPreset(id: "jump-rope", name: "Jump Rope", tagline: "A little critter hops the rope in the middle of the span",
                    themeID: "sunset-lava", values: [
@@ -386,6 +392,11 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
                    ], style: .beam, variant: "fireRoar"),
+        FeelPreset(id: "event-horizon", name: "Event Horizon", tagline: "Negative light: a black beam with a blazing rim and a singularity at the target",
+                   themeID: "oil-slick", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "voidBeam"),
         FeelPreset(id: "moon-prism", name: "Moon Prism", tagline: "A pink stream of hearts, stars and ribbons",
                    themeID: "neon-jelly", values: [
                     "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
@@ -526,6 +537,21 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
                    ], style: .targetlock),
+        FeelPreset(id: "marquee-select", name: "Marquee Select", tagline: "A lively desktop-style selection rectangle with marching ants",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .marquee),
+        FeelPreset(id: "jelly-select", name: "Jelly Select", tagline: "An organic selection bubble with real spring physics",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .jelly),
+        FeelPreset(id: "freehand-lasso", name: "Freehand Lasso", tagline: "Draws your path and closes it into a glowing selection",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .freehand),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.

@@ -5,7 +5,7 @@ import Foundation
 /// extra strands, particles and impact, and the whole set can run either "held" (the attack streams while you hold
 /// the pull) or "charge, then fire" (hold to charge, aim with the head, release to shoot).
 public enum EnergyVariant: String, CaseIterable, Codable, Sendable {
-    case kamehameha, spiritGun, finalFlash, drillBeam, getsuga, rasengan, cero, fireRoar, moonPrism, spiritBomb
+    case kamehameha, spiritGun, finalFlash, drillBeam, getsuga, rasengan, cero, fireRoar, moonPrism, spiritBomb, voidBeam
 
     public var name: String {
         switch self {
@@ -19,6 +19,7 @@ public enum EnergyVariant: String, CaseIterable, Codable, Sendable {
         case .fireRoar: return "Fire Roar"
         case .moonPrism: return "Moon Prism"
         case .spiritBomb: return "Spirit Bomb"
+        case .voidBeam: return "Event Horizon"
         }
     }
 
@@ -34,6 +35,7 @@ public enum EnergyVariant: String, CaseIterable, Codable, Sendable {
         case .fireRoar: return "A roaring stream of tumbling flames"
         case .moonPrism: return "A pink stream of hearts, stars and ribbons"
         case .spiritBomb: return "A huge orb gathers light, then is hurled"
+        case .voidBeam: return "Negative light: a black beam with a blazing rim, matter spiralling in, a singularity at the target"
         }
     }
 
@@ -50,6 +52,7 @@ public enum EnergyVariant: String, CaseIterable, Codable, Sendable {
         case .fireRoar: return [[200, 40, 20], [255, 140, 30], [255, 232, 120], [60, 30, 28]]
         case .moonPrism: return [[255, 130, 200], [255, 182, 226], [255, 255, 255], [255, 222, 120]]
         case .spiritBomb: return [[90, 190, 255], [190, 232, 255], [255, 255, 255], [255, 255, 200]]
+        case .voidBeam: return [[160, 110, 255], [10, 6, 16], [0, 0, 0], [255, 244, 255]]
         }
     }
 
@@ -199,6 +202,7 @@ public struct EnergySim: Sendable {
         func env(_ s: CGFloat) -> CGFloat { sm(0, 0.07, s) * (0.8 + 0.2 * CGFloat(sin(Double(.pi * s)))) * (1 + 0.3 * sm(0.85, 1, s)) }
         let wob = { (s: CGFloat, f: CGFloat, a: CGFloat) -> CGFloat in 1 + a * CGFloat(sin(Double(s * f - t * 32))) + 0.4 * a * CGFloat(sin(Double(s * f * 2.3 - t * 51))) }
         var strandRole = 3
+        var voidRings: [(CGFloat, CGFloat)] = []
 
         if amount > 0.01 || (chargeThenFire && fired) {
             switch variant {
@@ -280,6 +284,24 @@ public struct EnergySim: Sendable {
                     particles.append(EnergyParticle(position: point(s, off), size: 6 + 7 * StyleHash.unit(i, 322), alpha: e * amount * sin(.pi * s) * fadeAll,
                                                     color: i % 3 == 0 ? 3 : (i % 3 == 1 ? 1 : 2), shape: i % 2 == 0 ? 1 : 2, angle: 0.5 * CGFloat(sin(Double(t * 3 + CGFloat(i))))))
                 }
+            case .voidBeam:
+                let w = (b.rp * 0.5 + 5) * surge
+                ribbons.append(ribbon(role: 0, scale: 1.7, base: w, alpha: 0.55, width: { env($0) * wob($0, 11, 0.1) }))
+                ribbons.append(ribbon(role: 3, scale: 1.24, base: w, alpha: 1.0, width: { env($0) * wob($0, 11, 0.1) }))
+                ribbons.append(ribbon(role: 1, scale: 1.0, base: w, alpha: 1.0, width: { env($0) * wob($0, 11, 0.1) }))
+                // Matter streams in from either side and is swallowed by the beam.
+                for i in 0..<34 {
+                    let age = (t * 0.9 + CGFloat(i) / 34).truncatingRemainder(dividingBy: 1)
+                    let side: CGFloat = i % 2 == 0 ? 1 : -1
+                    let s = StyleHash.unit(i, 331)
+                    let off = side * w * (4.2 * (1 - age) * (1 - age) + 0.2) * (0.6 + 0.8 * StyleHash.unit(i, 332))
+                    particles.append(EnergyParticle(position: point(s, off), size: 2 + 3 * (1 - age), alpha: e * amount * sin(.pi * age) * fadeAll, color: i % 3 == 0 ? 0 : 3, shape: 0, angle: 0))
+                }
+                // The singularity at the target: rings collapse inward the whole time it is on.
+                for k in 0..<3 {
+                    let ph = (t * 0.9 + CGFloat(k) / 3).truncatingRemainder(dividingBy: 1)
+                    voidRings.append((max(6, b.rh * 1.2 + 44) * (1 - ph) + 8, e * amount * sin(.pi * ph) * 0.9 * fadeAll))
+                }
             default:
                 break
             }
@@ -327,6 +349,7 @@ public struct EnergySim: Sendable {
             rings = [(b.rh * 1.5 + 420 * min(1, k / 0.6), max(0, 1 - k / 0.6)), (b.rh + 260 * min(1, k / 0.6), max(0, 0.7 - k / 0.7))]
             if chargeThenFire && variant.isProjectile && tt < 0.5 { rings = [] }
         }
+        rings += voidRings
         let impactR = max(b.rh * 1.2, 12) * (1 + 0.15 * headGlow) * (0.7 + 0.5 * impactAmount) * (fired ? 1 + flash : 1)
 
         // ----- aim: while charging, the head is the target

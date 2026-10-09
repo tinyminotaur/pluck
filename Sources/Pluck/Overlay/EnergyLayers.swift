@@ -70,8 +70,19 @@ final class EnergyLayers {
         lastVariant = v
         let g = col(v, 0), body = col(v, 1), core = col(v, 2)
         func glow(_ inner: CGColor, _ mid: CGColor) -> CGImage? { glowSprite(inner, g.copy(alpha: 0)!, mid: mid) }
-        haloImg = glow(col(v, 1, 0.85), col(v, 0, 0.45))
-        coreImg = glow(core, col(v, 1, 0.95))
+        if v == .voidBeam {
+            // A black hole: a violet-white glow around a hard black disc.
+            haloImg = glow(col(v, 3, 0.55), col(v, 0, 0.35))
+            coreImg = Sprite.image(CGSize(width: 64, height: 64), scale: 3) { c in
+                let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+                                   colors: [Sprite.color(0, 0, 0), Sprite.color(0, 0, 0), Sprite.color(10, 6, 20), self.col(v, 3, 0.95), self.col(v, 0, 0.0)] as CFArray,
+                                   locations: [0, 0.5, 0.64, 0.7, 1])!
+                c.drawRadialGradient(g, startCenter: CGPoint(x: 32, y: 32), startRadius: 0, endCenter: CGPoint(x: 32, y: 32), endRadius: 32, options: [])
+            }
+        } else {
+            haloImg = glow(col(v, 1, 0.85), col(v, 0, 0.45))
+            coreImg = glow(core, col(v, 1, 0.95))
+        }
         moteImg = Sprite.image(CGSize(width: 12, height: 12), scale: 3) { c in
             Sprite.radial(c, center: CGPoint(x: 6, y: 6), radius: 5.5, inner: core, outer: self.col(v, 0, 0))
         }
@@ -82,7 +93,7 @@ final class EnergyLayers {
         speed.strokeColor = col(v, 2, 0.9)
         orbRing.strokeColor = col(v, 1, 0.8)
         aim.strokeColor = col(v, 1, 0.6); reticle.strokeColor = col(v, 2, 0.9); reticle2.strokeColor = col(v, 1, 0.9)
-        burst.fillColor = col(v, 2, 0.92); burst.shadowColor = col(v, 1)
+        burst.fillColor = col(v, 2, 0.95); burst.shadowColor = col(v, v == .voidBeam ? 3 : 1)
         for r in ribbonLayers { r.shadowOpacity = 0 }
     }
 

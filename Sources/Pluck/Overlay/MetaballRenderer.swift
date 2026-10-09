@@ -83,6 +83,32 @@ final class MetaballView: NSView {
     private var kitesim = KiteSim()
     private var bubblesim = BubbleSim()
     private var runner: VectorRunner?
+
+    /// Presenter mode: which visual each direction picks. Nil in the normal action mode.
+    struct PresenterOverlayState {
+        var count: Int
+        var radius: CGFloat
+        var names: [String]
+        var armed: Int?
+        var engaged: Bool
+    }
+    var presenter: PresenterOverlayState?
+    private var presenterGate: CGFloat = 0
+    private var presenterShown: Int?
+    private var presenterHold: CGFloat = 0
+    var presenterActive: Bool { presenter != nil }
+
+    /// Called as the pointer moves in presenter mode.
+    func updatePresenter(_ st: PresenterOverlayState, preset: FeelPreset?) {
+        presenter = st
+        if st.engaged, let arm = st.armed, let preset {
+            if presenterShown != arm {
+                cfg.transientPreset = preset
+                buildStyle()
+                presenterShown = arm
+            }
+        }
+    }
     private var lightsim = LightningSim()
     private var magsim = MagnetSim()
     private var slinkysim = SlinkySim()
@@ -179,26 +205,8 @@ final class MetaballView: NSView {
 
     deinit { stopPhysics() }
 
-    func startPhysics(driveManually: Bool = false) {
-        // LOCK pin to wherever the gesture began.
-        lockedPin = pin
-        pinLocked = true
-        head = pin
-
-        guard !reducedMotion else {
-            resetSpineStraight()
-            needsDisplay = true
-            return
-        }
-        resetSpineStraight()
-        prevHead = head
-        frameStartHead = head
-        pointerTarget = head
-        frameStartTarget = head
-        magVel = .zero
-        pinM2 = .zero; pinM2v = .zero; pinM3 = .zero; pinM3v = .zero
-        headM2 = .zero; headM2v = .zero; headM3 = .zero; headM3v = .zero
-        drops = []; pinching = false; pinchTime = 0
+    /// (Re)create the simulation for the current style at the locked pin. Presenter mode calls this when the chosen visual changes.
+    private func buildStyle() {
         activeStyle = cfg.style
         let radius = CGFloat(cfg.restRadius) * (cfg.meetingMode ? 0.65 : 1)
         ferro = FerroSim()
@@ -224,6 +232,30 @@ final class MetaballView: NSView {
         slinkysim = SlinkySim(); slinkysim.params.bodyRadius = radius * 0.7; slinkysim.reset(pin: lockedPin)
         cansim = TinCanSim(); cansim.params.bodyRadius = radius * 0.7; cansim.reset(pin: lockedPin)
         threadsim = ThreadSim(); threadsim.params.bodyRadius = radius * 0.7; threadsim.reset(pin: lockedPin)
+    }
+
+    func startPhysics(driveManually: Bool = false) {
+        // LOCK pin to wherever the gesture began.
+        lockedPin = pin
+        pinLocked = true
+        head = pin
+
+        guard !reducedMotion else {
+            resetSpineStraight()
+            needsDisplay = true
+            return
+        }
+        resetSpineStraight()
+        prevHead = head
+        frameStartHead = head
+        pointerTarget = head
+        frameStartTarget = head
+        magVel = .zero
+        pinM2 = .zero; pinM2v = .zero; pinM3 = .zero; pinM3v = .zero
+        headM2 = .zero; headM2v = .zero; headM3 = .zero; headM3v = .zero
+        drops = []; pinching = false; pinchTime = 0
+        presenter = nil; presenterGate = 0; presenterShown = nil; presenterHold = 0; cfg.transientPreset = nil
+        buildStyle()
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -276,6 +308,7 @@ final class MetaballView: NSView {
 
     func stopPhysics() {
         physicsRunning = false
+        presenter = nil; cfg.transientPreset = nil
         drops = []
         pinching = false
         recoiling = false
@@ -332,6 +365,14 @@ final class MetaballView: NSView {
     private func frameStep(dt: CGFloat) {
         CursorGuard.shared.checkIn()
         time += dt
+        if let p = presenter {
+            presenterHold = p.armed == nil ? presenterHold + dt : 0
+            if !recoiling {
+                let target: CGFloat = (p.engaged && p.armed != nil) ? 1 : 0
+                presenterGate += (target - presenterGate) * CGFloat(1 - exp(-Double(dt) * (target > presenterGate ? 11 : 7)))
+                emerge = presenterGate
+            }
+        }
         tintColor = cfg.tintColor
         tickFixed(frameDt: dt)
         updateCompassUI(dt: dt)
@@ -531,6 +572,10 @@ final class MetaballView: NSView {
     }
 
     private func compassDirtyRect() -> CGRect {
+        if let p = presenter {
+            let r = p.radius + 190
+            return CGRect(x: lockedPin.x - r, y: lockedPin.y - r, width: r * 2, height: r * 2).union(CGRect(x: head.x - 260, y: head.y - 60, width: 520, height: 120))
+        }
         let committing = recoiling && commitRole != nil
         guard !items.isEmpty, captured != nil || committing else { return .null }
         let ringR = GestureMath.deadZone + 4
@@ -770,6 +815,7 @@ final class MetaballView: NSView {
     /// Release: the head springs back to the pin with overshoot while the body sloshes, then
     /// the blob melts away. `done` fires once, after the blob has settled.
     func beginRecoil(role: CompassRole? = nil, done: @escaping () -> Void) {
+        presenter = nil                                  // the selector ring goes; the chosen visual plays out
         guard !reducedMotion, physicsRunning, !recoiling else { done(); return }
         commitRole = role
         commitFlash = role == nil ? 0 : 1
@@ -1207,6 +1253,7 @@ final class MetaballView: NSView {
     /// Text is composited with a screen blend, tinted by the theme, over a faint dark inset, so it reads as light
     /// held inside the glass rather than a sticker.
     private func drawCompass(_ ctx: CGContext) {
+        if let p = presenter { drawPresenter(ctx, p); return }
         let committing = recoiling && commitRole != nil
         guard !items.isEmpty, captured != nil || committing else { return }
         let theme = cfg.theme
@@ -1253,6 +1300,71 @@ final class MetaballView: NSView {
             if let glyph { glyph.draw(in: CGRect(x: x, y: cy - 8, width: 16, height: 16)); x += glyphW + 6 }
             title.draw(at: CGPoint(x: x, y: cy - tSize.height / 2))
             ctx.restoreGState()
+        }
+    }
+
+    /// A small rounded label pill.
+    private func drawPill(_ ctx: CGContext, text: String, center: CGPoint, alpha: CGFloat, accent: NSColor, strong: Bool) {
+        let font = NSFont.systemFont(ofSize: strong ? 13 : 11.5, weight: .semibold)
+        let str = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.white])
+        let size = str.size()
+        let w = size.width + 22, h: CGFloat = strong ? 28 : 24
+        let rect = CGRect(x: center.x - w / 2, y: center.y - h / 2, width: w, height: h)
+        ctx.saveGState()
+        ctx.setAlpha(alpha)
+        let pill = NSBezierPath(roundedRect: rect, xRadius: h / 2, yRadius: h / 2)
+        ctx.setShadow(offset: CGSize(width: 0, height: -2), blur: 6, color: NSColor(calibratedWhite: 0, alpha: 0.35).cgColor)
+        NSColor(calibratedWhite: 0.05, alpha: 0.8).setFill(); pill.fill()
+        ctx.setShadow(offset: .zero, blur: 0, color: nil)
+        accent.withAlphaComponent(strong ? 0.95 : 0.55).setStroke(); pill.lineWidth = strong ? 1.6 : 1; pill.stroke()
+        str.draw(at: CGPoint(x: rect.minX + 11, y: center.y - size.height / 2))
+        ctx.restoreGState()
+    }
+
+    /// Presenter mode's selector: a faint ring around the pin with the directions marked on it. Holding still shows
+    /// what each direction does; once one is armed only its name shows, beside the cursor so nothing is covered.
+    private func drawPresenter(_ ctx: CGContext, _ p: PresenterOverlayState) {
+        let theme = cfg.theme
+        let accent = NSColor(calibratedRed: CGFloat(theme.a.r), green: CGFloat(theme.a.g), blue: CGFloat(theme.a.b), alpha: 1).blended(withFraction: 0.35, of: .white) ?? .white
+        let c = lockedPin
+        let step = 2 * .pi / CGFloat(p.count)
+        let fadeOut = p.engaged ? CGFloat(0.35) : 1
+        ctx.saveGState()
+        ctx.setAlpha(fadeOut)
+        // The ring and its dividers.
+        let ring = NSBezierPath(ovalIn: CGRect(x: c.x - p.radius, y: c.y - p.radius, width: p.radius * 2, height: p.radius * 2))
+        ring.lineWidth = 1.2; ring.setLineDash([3, 5], count: 2, phase: 0)
+        NSColor.white.withAlphaComponent(p.armed == nil ? 0.28 : 0.14).setStroke(); ring.stroke()
+        for i in 0..<p.count {
+            let a = PresenterMath.centerAngle(index: i, count: p.count) + step / 2
+            let t = NSBezierPath()
+            t.move(to: CGPoint(x: c.x + cos(a) * (p.radius - 5), y: c.y + sin(a) * (p.radius - 5)))
+            t.line(to: CGPoint(x: c.x + cos(a) * (p.radius + 5), y: c.y + sin(a) * (p.radius + 5)))
+            t.lineWidth = 1.4
+            NSColor.white.withAlphaComponent(0.3).setStroke(); t.stroke()
+        }
+        // The armed sector lights up as an arc on the ring.
+        if let arm = p.armed {
+            let mid = PresenterMath.centerAngle(index: arm, count: p.count)
+            let arc = NSBezierPath()
+            arc.appendArc(withCenter: c, radius: p.radius, startAngle: (mid - step / 2 + 0.05) * 180 / .pi, endAngle: (mid + step / 2 - 0.05) * 180 / .pi)
+            arc.lineWidth = 4; arc.lineCapStyle = .round
+            accent.setStroke(); arc.stroke()
+        }
+        ctx.restoreGState()
+        if let arm = p.armed, p.names.indices.contains(arm) {
+            // Beside the cursor, to the right (or left near the edge).
+            var cx = head.x + 70
+            if cx + 90 > bounds.maxX { cx = head.x - 70 }
+            let cy = min(max(head.y + 22, bounds.minY + 30), bounds.maxY - 30)
+            drawPill(ctx, text: p.names[arm], center: CGPoint(x: cx, y: cy), alpha: 1, accent: accent, strong: true)
+        } else if presenterHold > 0.3 {
+            let a = min(1, (presenterHold - 0.3) * 4)
+            for i in 0..<p.count where p.names.indices.contains(i) {
+                let ang = PresenterMath.centerAngle(index: i, count: p.count)
+                let r = p.radius + 44
+                drawPill(ctx, text: p.names[i], center: CGPoint(x: c.x + cos(ang) * r * 1.18, y: c.y + sin(ang) * r), alpha: 0.85 * a, accent: accent, strong: false)
+            }
         }
     }
 

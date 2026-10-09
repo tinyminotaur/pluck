@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 38)
+        XCTAssertEqual(AnimationStyle.allCases.count, 41)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -211,7 +211,17 @@ final class DelightSimTests: XCTestCase {
         for i in 0..<500 { t.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 100), 400)) }
         let cones = t.primitives(emerge: 1).filter { $0.kind == .cone }
         XCTAssertGreaterThan(cones.map { $0.b.x }.max()!, pin.x + 150)
-        XCTAssertTrue(cones.allSatisfy { $0.ra >= $0.rb - 1e-6 })
+        XCTAssertTrue(cones.allSatisfy { $0.ra >= $0.rb * 0.7 })      // thick at the root, thinning to the tip (with a travelling swell)
+    }
+
+    func testTendrilsNeverStopWrithingEvenWhenTheCursorIsStill() {
+        var t = TendrilSim(); t.reset(pin: pin)
+        for _ in 0..<300 { t.step(dt: 1 / 120, pin: pin, head: head(1, 250)) }
+        let a = t.primitives(emerge: 1).filter { $0.kind == .cone }.map { $0.b }
+        for _ in 0..<30 { t.step(dt: 1 / 120, pin: pin, head: head(1, 250)) }
+        let b = t.primitives(emerge: 1).filter { $0.kind == .cone }.map { $0.b }
+        let moved = zip(a, b).map { hypot($0.x - $1.x, $0.y - $1.y) }.reduce(0, +) / CGFloat(a.count)
+        XCTAssertGreaterThan(moved, 1.5)        // the head has not moved, yet the worms have
     }
 
     func testAllReleaseToFinished() {
@@ -219,7 +229,7 @@ final class DelightSimTests: XCTestCase {
         var s = SwarmSim(); s.reset(pin: pin)
         var t = TendrilSim(); t.reset(pin: pin)
         p.release(commit: CGPoint(x: 1, y: 0)); s.release(commit: CGPoint(x: 1, y: 0)); t.release(commit: CGPoint(x: 1, y: 0))
-        for _ in 0..<100 {
+        for _ in 0..<130 {
             p.step(dt: 1 / 120, pin: pin, head: head(1, 300)); s.step(dt: 1 / 120, pin: pin, head: head(1, 300))
             t.step(dt: 1 / 120, pin: pin, head: head(1, 300))
         }
@@ -566,6 +576,38 @@ final class SpectrumAnalyzerTests: XCTestCase {
         XCTAssertEqual(seen.count, EnergyVariant.allCases.count)
     }
 
+    func testSelectionToolsSettleAndRespond() {
+        var m = MarqueeSim(); m.reset(pin: pin)
+        let target = head(1, 400)
+        for i in 0..<400 { m.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 400)) }
+        let r = m.scene(emerge: 1).rect
+        XCTAssertEqual(r.width, abs(target.x - pin.x), accuracy: 3)       // the springy edges settle on the corners
+        XCTAssertEqual(m.scene(emerge: 1).handles.count, 8)
+        XCTAssertTrue(m.scene(emerge: 1).tag.contains("\u{00D7}"))
+
+        var j = JellySim(); j.reset(pin: pin)
+        for i in 0..<300 { j.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 30), 400)) }
+        let js = j.scene(emerge: 1)
+        XCTAssertEqual(js.outline.count, 44)
+        XCTAssertEqual(js.radius, 200, accuracy: 25)                       // its diameter runs between the two points
+        XCTAssertTrue(js.outline.allSatisfy { $0.x.isFinite && $0.y.isFinite })
+        // Whipping the head sideways makes it slosh: the outline stops being a perfect circle.
+        for i in 0..<60 { j.step(dt: 1 / 120, pin: pin, head: CGPoint(x: pin.x + 400, y: pin.y + CGFloat(i) * 6)) }
+        XCTAssertGreaterThan(j.scene(emerge: 1).wobble, 0.3)
+
+        var f = FreehandLassoSim(); f.reset(pin: pin)
+        for i in 0..<240 {
+            let a = CGFloat(i) / 240 * 2 * .pi
+            f.step(dt: 1 / 120, pin: pin, head: CGPoint(x: pin.x + 120 * sin(a), y: pin.y + 120 - 120 * cos(a)))
+        }
+        let fs = f.scene(emerge: 1)
+        XCTAssertGreaterThan(fs.path.count, 20)
+        XCTAssertEqual(fs.closing.count, 13)
+        f.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<40 { f.step(dt: 1 / 120, pin: pin, head: pin) }
+        XCTAssertEqual(f.scene(emerge: 1).closed, 1, accuracy: 0.01)
+    }
+
     func testPresetFamiliesAreGrouped() {
         XCTAssertEqual(PresetLibrary.presets(for: .beam).count, EnergyVariant.allCases.count)
         XCTAssertEqual(Set(PresetLibrary.presets(for: .beam).compactMap(\.variant)).count, EnergyVariant.allCases.count)
@@ -675,3 +717,54 @@ final class SpectrumAnalyzerTests: XCTestCase {
     }
 }
 
+
+final class PresenterMathTests: XCTestCase {
+    let pin = CGPoint(x: 500, y: 500)
+
+    func testInsideTheRadiusSelectsNothing() {
+        XCTAssertNil(PresenterMath.capture(pin: pin, pointer: CGPoint(x: 520, y: 500), count: 8, radius: 60, current: nil))
+    }
+
+    func testFourDirectionsMapToCompassPoints() {
+        func pick(_ dx: CGFloat, _ dy: CGFloat) -> Int? { PresenterMath.capture(pin: pin, pointer: CGPoint(x: pin.x + dx, y: pin.y + dy), count: 4, radius: 60, current: nil) }
+        XCTAssertEqual(pick(0, 100), 0)      // up (y up) is north
+        XCTAssertEqual(pick(100, 0), 1)      // east
+        XCTAssertEqual(pick(0, -100), 2)     // south: dragging down
+        XCTAssertEqual(pick(-100, 0), 3)     // west
+    }
+
+    func testEightDirectionsIncludeTheDiagonals() {
+        func pick(_ dx: CGFloat, _ dy: CGFloat) -> Int? { PresenterMath.capture(pin: pin, pointer: CGPoint(x: pin.x + dx, y: pin.y + dy), count: 8, radius: 60, current: nil) }
+        XCTAssertEqual(pick(80, 80), 1)      // north-east
+        XCTAssertEqual(pick(80, -80), 3)     // south-east
+        XCTAssertEqual(pick(-80, -80), 5)    // south-west
+        XCTAssertEqual(pick(-80, 80), 7)     // north-west
+        XCTAssertEqual(pick(0, 90), 0)
+        XCTAssertEqual(pick(-90, 0), 6)
+    }
+
+    func testHysteresisKeepsTheSectorNearAnEdge() {
+        // 8 sectors are 45 wide; just past the N/NE boundary the armed N sticks, but well past it, NE takes over.
+        func pick(_ deg: CGFloat, current: Int?) -> Int? {
+            let a = (90 - deg) * .pi / 180
+            return PresenterMath.capture(pin: pin, pointer: CGPoint(x: pin.x + 120 * cos(a), y: pin.y + 120 * sin(a)), count: 8, radius: 60, current: current)
+        }
+        XCTAssertEqual(pick(24, current: 0), 0)
+        XCTAssertEqual(pick(24, current: nil), 1)
+        XCTAssertEqual(pick(40, current: 0), 1)
+    }
+
+    func testEngageNeedsAFurtherDrag() {
+        XCTAssertFalse(PresenterMath.isEngaged(pin: pin, pointer: CGPoint(x: pin.x + 70, y: pin.y), radius: 60, wasEngaged: false))
+        XCTAssertTrue(PresenterMath.isEngaged(pin: pin, pointer: CGPoint(x: pin.x + 100, y: pin.y), radius: 60, wasEngaged: false))
+        XCTAssertTrue(PresenterMath.isEngaged(pin: pin, pointer: CGPoint(x: pin.x + 75, y: pin.y), radius: 60, wasEngaged: true))   // stays engaged a bit closer
+    }
+
+    func testSlotsParseWithDefaultsAndExistInThePresetLibrary() {
+        XCTAssertEqual(PresenterMath.parseSlots(nil), PresenterMath.defaultSlots)
+        XCTAssertEqual(PresenterMath.parseSlots("fireflies,,x")[1], PresenterMath.defaultSlots[1])
+        XCTAssertEqual(PresenterMath.parseSlots("fireflies")[0], "fireflies")
+        for id in PresenterMath.defaultSlots { XCTAssertNotNil(PresetLibrary.preset(id: id), id) }
+        XCTAssertEqual(PresenterMath.slotIndices(count: 4), [0, 2, 4, 6])
+    }
+}

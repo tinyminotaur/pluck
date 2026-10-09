@@ -299,3 +299,150 @@ final class TargetLockLayers {
         text.position = CGPoint(x: s.readoutPos.x + 6 + (w - 12) / 2, y: s.readoutPos.y + h / 2 + 1)
     }
 }
+
+private func closedSmooth(_ pts: [CGPoint]) -> CGPath {
+    let p = CGMutablePath()
+    guard pts.count > 3 else { return p }
+    let n = pts.count
+    func mid(_ a: CGPoint, _ b: CGPoint) -> CGPoint { CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+    p.move(to: mid(pts[n - 1], pts[0]))
+    for i in 0..<n { p.addQuadCurve(to: mid(pts[i], pts[(i + 1) % n]), control: pts[i]) }
+    p.closeSubpath()
+    return p
+}
+
+// MARK: - Marquee
+
+@MainActor
+final class MarqueeLayers {
+    let root = CALayer()
+    private let fill = CAShapeLayer(), hatch = CAShapeLayer(), hatchMask = CAShapeLayer()
+    private let glow = CAShapeLayer(), edge = CAShapeLayer(), ants = CAShapeLayer()
+    private var handles: [CAShapeLayer] = []
+    private lazy var sparkles = DotPool(parent: root, image: softDot)
+    private let tag = CAShapeLayer(), tagText = CATextLayer(), flash = CAShapeLayer()
+
+    init() {
+        root.masksToBounds = false
+        fill.fillColor = neon(70, 150, 255, 0.13)
+        hatch.fillColor = nil; hatch.strokeColor = neon(255, 255, 255, 0.16); hatch.lineWidth = 2
+        hatchMask.fillColor = neon(0, 0, 0, 1); hatch.mask = hatchMask
+        glow.fillColor = nil; glow.strokeColor = neon(70, 160, 255, 0.45); glow.lineWidth = 9
+        glow.shadowColor = neon(70, 160, 255); glow.shadowOpacity = 1; glow.shadowRadius = 10; glow.shadowOffset = .zero
+        edge.fillColor = nil; edge.strokeColor = neon(255, 255, 255, 0.9); edge.lineWidth = 1.6
+        ants.fillColor = nil; ants.strokeColor = neon(60, 140, 255); ants.lineWidth = 3.2; ants.lineDashPattern = [10, 10]
+        flash.fillColor = neon(255, 255, 255, 0)
+        tag.fillColor = neon(10, 24, 48, 0.82); tag.strokeColor = neon(120, 180, 255, 0.9); tag.lineWidth = 1.2
+        tagText.contentsScale = 3; tagText.foregroundColor = neon(210, 232, 255); tagText.fontSize = 12; tagText.alignmentMode = .center
+        tagText.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+        for l in [fill, hatch, glow, edge, ants, flash, tag, tagText] { root.addSublayer(l) }
+    }
+
+    func update(_ s: MarqueeScene) {
+        root.opacity = Float(s.alpha)
+        let r = s.rect
+        let rr = CGPath(roundedRect: r, cornerWidth: min(s.corner, r.width / 2), cornerHeight: min(s.corner, r.height / 2), transform: nil)
+        fill.path = rr; glow.path = rr; edge.path = rr; ants.path = rr; hatchMask.path = rr; flash.path = rr
+        ants.lineDashPhase = -s.phase * 34
+        flash.fillColor = neon(255, 255, 255, 0.5 * s.flash)
+        // A diagonal shimmer sweeping through the glass.
+        let hp = CGMutablePath()
+        let gap: CGFloat = 16, off = (s.phase * 26).truncatingRemainder(dividingBy: gap)
+        var x = r.minX - r.height + off
+        while x < r.maxX { hp.move(to: CGPoint(x: x, y: r.minY)); hp.addLine(to: CGPoint(x: x + r.height, y: r.maxY)); x += gap }
+        hatch.path = hp
+        while handles.count < s.handles.count {
+            let h = paperShape(neon(255, 255, 255), border: 0, depth: 0); h.strokeColor = neon(60, 140, 255); h.lineWidth = 2.4; root.addSublayer(h); handles.append(h)
+        }
+        for (i, h) in handles.enumerated() {
+            let big = i < 4
+            let pop = 1 + 0.18 * CGFloat(sin(Double(s.phase * 4 + CGFloat(i))))
+            h.path = circlePath(s.handles[i], (big ? 6 : 4) * pop)
+        }
+        for (i, sp) in s.sparkles.enumerated() { sparkles.place(i, at: sp.0, size: sp.2 * 2.6, alpha: sp.1) }
+        sparkles.hide(from: s.sparkles.count)
+        let w: CGFloat = 92, h: CGFloat = 22
+        tag.path = CGPath(roundedRect: CGRect(x: s.tagPos.x, y: s.tagPos.y, width: w, height: h), cornerWidth: 6, cornerHeight: 6, transform: nil)
+        tagText.string = s.tag
+        tagText.bounds = CGRect(x: 0, y: 0, width: w, height: h - 4); tagText.position = CGPoint(x: s.tagPos.x + w / 2, y: s.tagPos.y + h / 2 + 1)
+    }
+}
+
+// MARK: - Jelly
+
+@MainActor
+final class JellyLayers {
+    let root = CALayer()
+    private let body = CAShapeLayer(), inner = CAShapeLayer(), glow = CAShapeLayer(), membrane = CAShapeLayer(), rim = CAShapeLayer()
+    private var rings: [CAShapeLayer] = []
+    private lazy var sparkles = DotPool(parent: root, image: softDot)
+    private let pinDrop = CAShapeLayer(), headDrop = CAShapeLayer()
+
+    init() {
+        root.masksToBounds = false
+        body.fillColor = neon(110, 255, 190, 0.20)
+        inner.fillColor = neon(255, 255, 255, 0.12)
+        glow.fillColor = nil; glow.strokeColor = neon(120, 255, 200, 0.5); glow.lineWidth = 11
+        glow.shadowColor = neon(120, 255, 200); glow.shadowOpacity = 1; glow.shadowRadius = 12; glow.shadowOffset = .zero
+        membrane.fillColor = nil; membrane.strokeColor = neon(200, 255, 235, 0.35); membrane.lineWidth = 3
+        rim.fillColor = nil; rim.strokeColor = neon(255, 255, 255, 0.85); rim.lineWidth = 2
+        for d in [pinDrop, headDrop] { d.fillColor = neon(255, 255, 255, 0.95); d.strokeColor = neon(120, 255, 200); d.lineWidth = 2 }
+        for l in [body, inner, glow, membrane, rim, pinDrop, headDrop] { root.addSublayer(l) }
+    }
+
+    func update(_ s: JellyScene) {
+        root.opacity = Float(s.alpha)
+        let path = closedSmooth(s.outline)
+        body.path = path; glow.path = path; rim.path = path
+        // An inner highlight (smaller, shifted toward the light) and a looser outer membrane.
+        func scaled(_ k: CGFloat, dx: CGFloat, dy: CGFloat) -> CGPath {
+            closedSmooth(s.outline.map { CGPoint(x: s.center.x + ($0.x - s.center.x) * k + dx, y: s.center.y + ($0.y - s.center.y) * k + dy) })
+        }
+        inner.path = scaled(0.66, dx: -s.radius * 0.1, dy: s.radius * 0.12)
+        membrane.path = scaled(1.07 + min(0.08, s.wobble * 0.004), dx: 0, dy: 0)
+        for (i, sp) in s.sparkles.enumerated() { sparkles.place(i, at: sp.0, size: sp.2 * 2.4, alpha: sp.1) }
+        sparkles.hide(from: s.sparkles.count)
+        pinDrop.path = circlePath(s.pin, 5); headDrop.path = circlePath(s.head, 5)
+        while rings.count < s.ripples.count { let l = lineLayer(neon(200, 255, 235), 3); root.addSublayer(l); rings.append(l) }
+        for (i, l) in rings.enumerated() {
+            guard i < s.ripples.count else { l.isHidden = true; continue }
+            l.isHidden = false; l.path = circlePath(s.center, s.ripples[i].0); l.opacity = Float(s.ripples[i].1)
+        }
+    }
+}
+
+// MARK: - Freehand lasso
+
+@MainActor
+final class FreehandLayers {
+    let root = CALayer()
+    private let fill = CAShapeLayer()
+    private let glow = lineLayer(neon(255, 150, 60, 0.45), 10), core = lineLayer(neon(255, 255, 255), 2.4), ants = lineLayer(neon(255, 70, 150), 3.2)
+    private let closing = lineLayer(neon(255, 255, 255, 0.85), 2), flash = CAShapeLayer()
+    private let tip = CAShapeLayer(), start = CAShapeLayer()
+    private lazy var sparkles = DotPool(parent: root, image: softDot)
+
+    init() {
+        root.masksToBounds = false
+        fill.fillColor = neon(255, 90, 170, 0.14)
+        glow.shadowColor = neon(255, 150, 60); glow.shadowOpacity = 1; glow.shadowRadius = 10; glow.shadowOffset = .zero
+        ants.lineDashPattern = [9, 9]; closing.lineDashPattern = [4, 7]
+        flash.fillColor = neon(255, 255, 255, 0)
+        tip.fillColor = neon(255, 255, 255); tip.strokeColor = neon(255, 90, 160); tip.lineWidth = 3
+        start.fillColor = neon(255, 90, 160); start.strokeColor = neon(255, 255, 255); start.lineWidth = 2
+        for l in [fill, flash, glow, core, ants, closing, start, tip] { root.addSublayer(l) }
+    }
+
+    func update(_ s: FreehandScene) {
+        root.opacity = Float(s.alpha)
+        let p = polyline(s.path)
+        let region = CGMutablePath(); region.addPath(p); region.addLines(between: s.closing); region.closeSubpath()
+        fill.path = region; flash.path = region
+        flash.fillColor = neon(255, 255, 255, 0.5 * s.flash)
+        glow.path = p; core.path = p; ants.path = p; ants.lineDashPhase = -s.phase * 30
+        closing.path = polyline(s.closing); closing.lineDashPhase = s.phase * 20; closing.opacity = Float(1 - 0.6 * s.closed)
+        start.path = circlePath(s.pin, 6); tip.path = circlePath(s.head, 7)
+        for (i, sp) in s.sparkles.enumerated() { sparkles.place(i, at: sp.0, size: sp.2 * 2.6, alpha: sp.1) }
+        sparkles.hide(from: s.sparkles.count)
+    }
+}

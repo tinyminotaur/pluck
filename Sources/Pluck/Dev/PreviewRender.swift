@@ -176,8 +176,9 @@ enum PreviewRender {
         let allRows: [(AnimationStyle, LiquidTheme)] = [
             (.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst), (.crystal, ThemeLibrary.frost),
             (.gravity, ThemeLibrary.moltenGold), (.pearls, ThemeLibrary.mercury), (.swarm, ThemeLibrary.aurora),
-            (.tendrils, ThemeLibrary.neonJelly), (.jumprope, ThemeLibrary.sunsetLava),
+            (.tendrils, ThemeLibrary.curse), (.jumprope, ThemeLibrary.sunsetLava),
             (.stars, ThemeLibrary.aurora), (.kite, ThemeLibrary.sunsetLava), (.bubbles, ThemeLibrary.mist),
+            (.beam, ThemeLibrary.mist),
             (.beam, ThemeLibrary.mist),
             (.beam, ThemeLibrary.mist),
             (.beam, ThemeLibrary.mist),
@@ -193,6 +194,7 @@ enum PreviewRender {
             (.equalizer, ThemeLibrary.mist), (.dna, ThemeLibrary.mist), (.fishing, ThemeLibrary.mist), (.ribbon, ThemeLibrary.mist),
             (.tugofwar, ThemeLibrary.mist), (.cradle, ThemeLibrary.mist), (.rainbow, ThemeLibrary.mist), (.dandelion, ThemeLibrary.mist), (.cablecar, ThemeLibrary.mist), (.signal, ThemeLibrary.mist),
             (.lasso, ThemeLibrary.mist), (.laser, ThemeLibrary.mist), (.marker, ThemeLibrary.mist), (.spotlight, ThemeLibrary.mist), (.callout, ThemeLibrary.mist), (.targetlock, ThemeLibrary.mist),
+            (.marquee, ThemeLibrary.mist), (.jelly, ThemeLibrary.mist), (.freehand, ThemeLibrary.mist),
         ]
         // PLUCK_STYLES=a,b,c renders only those styles (by raw value), to keep previews quick.
         let only = (ProcessInfo.processInfo.environment["PLUCK_STYLES"] ?? "").split(separator: ",").map(String.init)
@@ -268,7 +270,7 @@ enum PreviewRender {
                             host.updatePaper(a.paperScene(emerge: 1, headGlow: armed))
                             host.pruneHidden(); host.root.render(in: ctx)
                         }
-                    case .lasso, .laser, .marker, .spotlight, .callout, .targetlock, .beam, .pingpong, .bridge, .planes, .water, .train, .equalizer, .dna, .fishing, .ribbon, .tugofwar, .cradle, .rainbow, .dandelion, .cablecar, .signal:
+                    case .marquee, .jelly, .freehand, .lasso, .laser, .marker, .spotlight, .callout, .targetlock, .beam, .pingpong, .bridge, .planes, .water, .train, .equalizer, .dna, .fishing, .ribbon, .tugofwar, .cradle, .rainbow, .dandelion, .cablecar, .signal:
                         if row.0 == .beam {
                             // Beam rows run through every energy variant in order, in charge-then-fire mode.
                             let beamIndex = rows[..<r].filter { $0.0 == .beam }.count
@@ -281,8 +283,16 @@ enum PreviewRender {
                             while t < (c == 0 ? 1.0 : 1.9) { runner.step(dt: dt, pin: pin, head: head(min(1, t / 0.5))); t += dt }
                             if c >= 2 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<Int(120 * (c == 2 ? 0.22 : 0.62)) { runner.step(dt: dt, pin: pin, head: head(1)) } }
                         } else {
-                            let endT: CGFloat = (row.0 == .marker || row.0 == .laser) ? 0.55 + CGFloat(c) * 0.12 : 2.6 + CGFloat(c) * 0.37
-                            while t < endT { runner.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                            let endT: CGFloat = (row.0 == .marker || row.0 == .laser) ? 0.55 + CGFloat(c) * 0.12 : (row.0 == .freehand ? 1.2 + CGFloat(c) * 0.3 : 2.6 + CGFloat(c) * 0.37)
+                            let reachK: CGFloat = chord == 0 ? 0 : chord
+                            let hp: (CGFloat) -> CGPoint = {
+                                switch row.0 {
+                                case .marquee: return CGPoint(x: pin.x + max(40, reachK) * $0 * 0.9, y: pin.y + max(40, reachK) * 0.7 * $0)
+                                case .freehand: let a = $0 * 2 * .pi * 0.92; let r = max(50, reachK * 0.3); return CGPoint(x: pin.x + r * sin(a), y: pin.y + r - r * cos(a))
+                                default: return head($0)
+                                }
+                            }
+                            while t < endT { runner.step(dt: dt, pin: pin, head: hp(min(1, t / (row.0 == .freehand ? 1.1 : 0.9)))); t += dt }
                             if c == 3 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<14 { runner.step(dt: dt, pin: pin, head: head(1)) } }
                         }
                         vector = { ctx in let host = VectorStyleHost(); host.attach(runner.layer); host.present(runner, emerge: 1, glow: armed); host.pruneHidden(); host.root.render(in: ctx) }

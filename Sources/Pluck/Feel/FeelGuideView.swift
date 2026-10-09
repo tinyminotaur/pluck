@@ -12,13 +12,14 @@ struct FeelGuideView: View {
     @State private var styleFilter: String = "all"
 
     enum Tab: String, CaseIterable, Identifiable {
-        case looks, feel, trigger, advanced, help
+        case looks, feel, trigger, presenter, advanced, help
         var id: String { rawValue }
         var title: String {
             switch self {
             case .looks: return "Looks"
             case .feel: return "Feel"
             case .trigger: return "Trigger"
+            case .presenter: return "Presenter"
             case .advanced: return "Advanced"
             case .help: return "Help"
             }
@@ -45,6 +46,7 @@ struct FeelGuideView: View {
                     case .looks: looksTab
                     case .feel: feelTab
                     case .trigger: triggerTab
+                    case .presenter: presenterTab
                     case .advanced: advancedTab
                     case .help: helpTab
                     }
@@ -109,7 +111,7 @@ struct FeelGuideView: View {
         "stars": "star.fill", "kite": "wind", "bubbles": "bubbles.and.sparkles.fill", "beam": "bolt.horizontal.fill", "lightning": "bolt.fill", "magnet": "magnet", "slinky": "waveform.path", "tincan": "phone.bubble.fill", "thread": "heart.fill", "pingpong": "tennisball.fill", "bridge": "figure.walk", "planes": "paperplane.fill", "water": "drop.fill",
         "train": "tram.fill", "equalizer": "waveform", "dna": "link", "fishing": "fish.fill", "ribbon": "scribble.variable", "tugofwar": "figure.rower", "cradle": "circle.hexagongrid.fill", "rainbow": "cloud.rainbow.half.fill",
         "dandelion": "leaf.fill", "cablecar": "cablecar.fill", "signal": "wifi", "lasso": "lasso", "laser": "dot.radiowaves.left.and.right", "marker": "highlighter", "spotlight": "flashlight.on.fill",
-        "callout": "arrow.turn.right.up", "targetlock": "scope",
+        "callout": "arrow.turn.right.up", "targetlock": "scope", "marquee": "rectangle.dashed", "jelly": "circle.dashed", "freehand": "lasso.badge.sparkles",
     ]
 
     private var looksTab: some View {
@@ -200,7 +202,9 @@ struct FeelGuideView: View {
             simpleKnob("Stretchiness", "How much material the thread draws out of the ends as you pull.", value: $config.stretchPull, range: 0...1.4, format: "%.2f")
             simpleKnob("Follow speed", "How quickly the blob chases your cursor. Higher is snappier.", value: $config.magnetPull, range: 25...120, format: "%.0f")
             simpleKnob("Weight", "Heavy and slow to settle, or light and quick.", value: $config.magnetWeight, range: 0.3...1.1, format: "%.2f")
-            simpleKnob("Reach", "How far a small hand movement stretches it across the screen.", value: $config.reachGain, range: 0...4, format: "%.1f")
+            Toggle("Stretch follows the cursor exactly", isOn: $config.reachExact)
+            hint("Recommended: the blob ends right under your pointer, so the cursor never seems to jump when you let go. Turn off to exaggerate small movements.")
+            if !config.reachExact { simpleKnob("Reach", "How far a small hand movement stretches it across the screen.", value: $config.reachGain, range: 0...4, format: "%.1f") }
             simpleKnob("Bounce on release", "The wobble when it snaps back.", value: $config.recoilBounce, range: 0...1, format: "%.2f")
             simpleKnob("Gravity", "How much it sags and pools downward.", value: $config.gravity, range: 0...1.5, format: "%.2f")
             simpleKnob("Aliveness", "How much it breathes and drifts when you hold still.", value: $config.idleLife, range: 0...1.5, format: "%.2f")
@@ -237,6 +241,55 @@ struct FeelGuideView: View {
             sectionTitle("How you start it", "Pluck only listens. It never clicks or types for you. Pick whichever suits your hands.")
             triggerSection
         }
+    }
+
+    private static let dirNames = ["North", "North-East", "East", "South-East", "South", "South-West", "West", "North-West"]
+    private static let dirArrows = ["arrow.up", "arrow.up.right", "arrow.right", "arrow.down.right", "arrow.down", "arrow.down.left", "arrow.left", "arrow.up.left"]
+
+    private var presenterTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("Mode", "Actions: a direction picks an action (copy, share and so on). Presenter: a direction picks a visual to draw between the two points.")
+            Picker("", selection: $config.interactionModeID) {
+                Text("Actions").tag("actions")
+                Text("Presenter").tag("presenter")
+            }
+            .pickerStyle(.segmented).labelsHidden()
+
+            if config.presenterMode {
+                hint("Hold your trigger, then drag out past the ring in a direction. Its name appears; drag a little further and the visual comes to life between the two points. Let go to finish it, or drag back inside the ring to pick again.")
+                sectionTitle("Directions")
+                Picker("", selection: $config.presenterCount) {
+                    Text("4 directions").tag(4)
+                    Text("8 directions").tag(8)
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                simpleKnob("Selection radius", "How far you drag before a direction is chosen.", value: $config.presenterRadius, range: 36...160, format: "%.0f pt")
+
+                sectionTitle("What each direction does")
+                ForEach(PresenterMath.slotIndices(count: config.presenterCount), id: \.self) { idx in
+                    HStack {
+                        Image(systemName: Self.dirArrows[idx]).frame(width: 22).foregroundStyle(.secondary)
+                        Text(Self.dirNames[idx]).frame(width: 90, alignment: .leading)
+                        Picker("", selection: Binding(get: { config.presenterSlots[idx] }, set: { config.setPresenterSlot(idx, to: $0) })) {
+                            ForEach(AnimationStyle.allCases, id: \.rawValue) { st in
+                                let list = PresetLibrary.presets(for: st)
+                                if !list.isEmpty {
+                                    Section(st.name) { ForEach(list) { p in Text(p.name).tag(p.id) } }
+                                }
+                            }
+                        }
+                        .labelsHidden()
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Reset directions") { config.presenterSlotsRaw = PresenterMath.defaultSlots.joined(separator: ",") }.controlSize(.small)
+                }
+            } else {
+                hint("Turn on Presenter to choose a visual per direction. In Actions mode the four directions run actions as before.")
+            }
+        }
+        .font(.callout)
     }
 
     private var advancedTab: some View {
@@ -590,7 +643,7 @@ final class FeelGuideController {
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             w.setContentSize(NSSize(width: 500, height: 720))
             w.minSize = NSSize(width: 440, height: 400)
-            w.level = .floating
+            w.level = .normal
             w.isReleasedWhenClosed = false
             w.center()
             window = w
