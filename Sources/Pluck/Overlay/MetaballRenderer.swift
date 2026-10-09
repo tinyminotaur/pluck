@@ -96,6 +96,7 @@ final class MetaballView: NSView {
     private var presenterGate: CGFloat = 0
     private var presenterShown: Int?
     private var presenterHold: CGFloat = 0
+    private var presenterArmedFor: CGFloat = 0
     var presenterActive: Bool { presenter != nil }
 
     /// Called as the pointer moves in presenter mode.
@@ -254,7 +255,7 @@ final class MetaballView: NSView {
         pinM2 = .zero; pinM2v = .zero; pinM3 = .zero; pinM3v = .zero
         headM2 = .zero; headM2v = .zero; headM3 = .zero; headM3v = .zero
         drops = []; pinching = false; pinchTime = 0
-        presenter = nil; presenterGate = 0; presenterShown = nil; presenterHold = 0; cfg.transientPreset = nil
+        presenter = nil; presenterGate = 0; presenterShown = nil; presenterHold = 0; presenterArmedFor = 0; cfg.transientPreset = nil
         buildStyle()
         seedOrganicShape()
         accumulator = 0
@@ -367,6 +368,7 @@ final class MetaballView: NSView {
         time += dt
         if let p = presenter {
             presenterHold = p.armed == nil ? presenterHold + dt : 0
+            presenterArmedFor = p.armed == nil ? 0 : presenterArmedFor + dt
             if !recoiling {
                 let target: CGFloat = (p.engaged && p.armed != nil) ? 1 : 0
                 presenterGate += (target - presenterGate) * CGFloat(1 - exp(-Double(dt) * (target > presenterGate ? 11 : 7)))
@@ -1328,7 +1330,8 @@ final class MetaballView: NSView {
         let accent = NSColor(calibratedRed: CGFloat(theme.a.r), green: CGFloat(theme.a.g), blue: CGFloat(theme.a.b), alpha: 1).blended(withFraction: 0.35, of: .white) ?? .white
         let c = lockedPin
         let step = 2 * .pi / CGFloat(p.count)
-        let fadeOut = p.engaged ? CGFloat(0.35) : 1
+        // Once the visual is alive the selector is no longer needed: the ring fades away entirely.
+        let fadeOut: CGFloat = p.engaged ? 0 : 1
         ctx.saveGState()
         ctx.setAlpha(fadeOut)
         // The ring and its dividers.
@@ -1352,13 +1355,15 @@ final class MetaballView: NSView {
             accent.setStroke(); arc.stroke()
         }
         ctx.restoreGState()
-        if let arm = p.armed, p.names.indices.contains(arm) {
+        // The chosen name confirms the pick for a moment, then goes (and it never shows once the visual is alive).
+        let nameAlpha: CGFloat = p.engaged ? 0 : max(0, min(1, 1 - (presenterArmedFor - 0.6) / 0.3))
+        if let arm = p.armed, p.names.indices.contains(arm), nameAlpha > 0.01 {
             // Beside the cursor, to the right (or left near the edge).
             var cx = head.x + 70
             if cx + 90 > bounds.maxX { cx = head.x - 70 }
             let cy = min(max(head.y + 22, bounds.minY + 30), bounds.maxY - 30)
-            drawPill(ctx, text: p.names[arm], center: CGPoint(x: cx, y: cy), alpha: 1, accent: accent, strong: true)
-        } else if presenterHold > 0.3 {
+            drawPill(ctx, text: p.names[arm], center: CGPoint(x: cx, y: cy), alpha: nameAlpha, accent: accent, strong: true)
+        } else if p.armed == nil, presenterHold > 0.3 {
             let a = min(1, (presenterHold - 0.3) * 4)
             for i in 0..<p.count where p.names.indices.contains(i) {
                 let ang = PresenterMath.centerAngle(index: i, count: p.count)
