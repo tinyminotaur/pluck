@@ -191,6 +191,7 @@ enum PreviewRender {
             for (c, chord) in chords.enumerated() {
                 let armed: CGFloat = c == 3 ? 1 : 0
                 var prims: [ShapePrim] = []
+                var vector: ((CGContext) -> Void)?
                 let dt: CGFloat = 1.0 / 120
                 if row.0 == .ferro {
                     var f = FerroSim()
@@ -213,11 +214,20 @@ enum PreviewRender {
                     case .swarm:
                         var a = SwarmSim(); a.params.bodyRadius = 26; a.reset(pin: pin)
                         while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        prims = a.primitives(emerge: 1, headGlow: armed)
+                        vector = { ctx in
+                            let host = VectorStyleHost()
+                            host.updateFireflies(a.fireflyStates(emerge: 1), pin: a.pinLantern, head: a.headLantern,
+                                                 alpha: 1, headGlow: armed, time: t)
+                            host.root.render(in: ctx)
+                        }
                     case .jumprope:
                         var a = JumpRopeSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
                         while t < 2.4 + CGFloat(c) * 0.13 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        prims = a.primitives(emerge: 1, headGlow: armed)
+                        vector = { ctx in
+                            let host = VectorStyleHost()
+                            host.updatePaper(a.paperScene(emerge: 1, headGlow: armed))
+                            host.root.render(in: ctx)
+                        }
                     default:
                         var a = TendrilSim(); a.params.bodyRadius = 28; a.reset(pin: pin)
                         while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
@@ -244,6 +254,14 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = cr.primitives(emerge: 1, headGlow: armed)
+                }
+                if let vector {
+                    ctx.saveGState()
+                    ctx.translateBy(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale)
+                    ctx.scaleBy(x: scale, y: scale)
+                    vector(ctx)
+                    ctx.restoreGState()
+                    continue
                 }
                 let look = ShapeListMetal.look(mode: row.0 == .crystal ? .crystal : .ferro, theme: row.1, time: 1.3)
                 guard let img = shapes.render(size: tile, scale: scale, prims: prims, look: look) else { return 4 }

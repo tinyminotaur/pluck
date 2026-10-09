@@ -121,6 +121,7 @@ final class MetaballView: NSView {
     // CoreGraphics redraw) on a vsync-locked display link; the label and ring live in a small overlay view that
     // redraws only its dirty rectangle.
     private let metalLayer = CAMetalLayer()
+    private let vectorHost = VectorStyleHost()
     private let compassView = CompassOverlayView()
     private var nsLink: CADisplayLink?
     private var lastLinkTimestamp: CFTimeInterval = 0
@@ -148,6 +149,7 @@ final class MetaballView: NSView {
         metalLayer.presentsWithTransaction = true
         metalLayer.isHidden = true
         layer?.addSublayer(metalLayer)
+        layer?.addSublayer(vectorHost.root)
         compassView.owner = self
         compassView.frame = bounds
         compassView.autoresizingMask = [.width, .height]
@@ -267,6 +269,7 @@ final class MetaballView: NSView {
         nsLink?.invalidate()
         nsLink = nil
         metalLayer.isHidden = true
+        vectorHost.hide()
         fallbackTimer?.invalidate()
         fallbackTimer = nil
     }
@@ -352,6 +355,8 @@ final class MetaballView: NSView {
     /// Render the liquid straight into the Metal layer: size the layer to the (grid-snapped) bounds of the
     /// liquid, encode, and present with the layer's transaction so frame and contents change together.
     private func presentMetal() {
+        if activeStyle.isVector { metalLayer.isHidden = true; presentVector(); return }
+        vectorHost.hide()
         if activeStyle != .liquid { presentStyle(); return }
         guard let metal, emerge > 0.01, let raw = massBounds() else {
             metalLayer.isHidden = true
@@ -399,6 +404,21 @@ final class MetaballView: NSView {
         case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
         case .jumprope: return jumprope.primitives(emerge: emerge, headGlow: glow)
         case .liquid: return []
+        }
+    }
+
+    /// Fireflies and the paper jump rope: hand-drawn vector sprites on Core Animation layers (no glass shader).
+    private func presentVector() {
+        let glow: CGFloat = captured != nil ? min(1, max(0, armedPos[captured ?? .north] ?? 0)) : 0
+        guard emerge > 0.01 else { vectorHost.hide(); return }
+        switch activeStyle {
+        case .swarm:
+            vectorHost.updateFireflies(swarm.fireflyStates(emerge: emerge), pin: swarm.pinLantern, head: swarm.headLantern,
+                                       alpha: min(1, emerge), headGlow: glow, time: time)
+        case .jumprope:
+            vectorHost.updatePaper(jumprope.paperScene(emerge: emerge, headGlow: glow))
+        default:
+            vectorHost.hide()
         }
     }
 

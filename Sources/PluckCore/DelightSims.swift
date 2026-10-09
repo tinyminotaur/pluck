@@ -115,10 +115,12 @@ public struct SwarmSim: Sendable {
     public struct Params: Equatable, Sendable {
         public var bodyRadius: CGFloat = 26
         public var motes: Int = 70
+        /// Insects drawn when rendered as real fireflies (the first N motes).
+        public var fireflies: Int = 15
         public var dumbbell = DumbbellMass.Params()
         public init() {}
     }
-    private struct Mote { var p: CGPoint; var v: CGPoint; var s: CGFloat; var lane: CGFloat; var size: CGFloat; var phase: CGFloat }
+    private struct Mote { var p: CGPoint; var v: CGPoint; var s: CGFloat; var lane: CGFloat; var size: CGFloat; var phase: CGFloat; var heading: CGFloat = 0 }
     public var params: Params
     private var motes: [Mote] = []
     private var pin = CGPoint.zero, head = CGPoint.zero
@@ -167,9 +169,10 @@ public struct SwarmSim: Sendable {
             // Where this mote wants to be: a point on the band, wandering with a slow personal orbit.
             let wob = CGFloat(sin(Double(time * 0.9 + m.phase))), wob2 = CGFloat(cos(Double(time * 1.3 + m.phase * 1.7)))
             let ends = sol.pin * (1 - m.s) + max(sol.head, 6) * m.s
-            let bandW = (ends * 1.5 + 14 * wob) * (0.35 + 0.65 * (1 - abs(m.s - 0.5) * 0.9))
+            let insect: CGFloat = i < params.fireflies ? 2.3 : 1
+            let bandW = (ends * 1.5 + 14 * wob) * (0.35 + 0.65 * (1 - abs(m.s - 0.5) * 0.9)) * insect
             let base = CGPoint(x: pin.x + dx * m.s * spread, y: pin.y + dy * m.s * spread)
-            let loop = (1 - spread) * params.bodyRadius * 1.8     // with no pull they hover around the pin
+            let loop = (1 - spread) * params.bodyRadius * (i < params.fireflies ? 3.0 : 1.8)     // with no pull they hover around the pin
             let tgt = CGPoint(x: base.x + nrm.x * m.lane * bandW + wob * loop + dir.x * wob2 * 6 * spread,
                               y: base.y + nrm.y * m.lane * bandW + wob2 * loop + dir.y * wob * 6 * spread)
             let w: CGFloat = 7 + 5 * StyleHash.unit(i, 57)
@@ -179,6 +182,14 @@ public struct SwarmSim: Sendable {
             m.v.x *= hold == 1 ? 1 : CGFloat(exp(Double(-1.2 * dt)))
             m.v.y *= hold == 1 ? 1 : CGFloat(exp(Double(-1.2 * dt)))
             m.p.x += m.v.x * dt; m.p.y += m.v.y * dt
+            // Insects face the way they fly (slowly turning when nearly still).
+            let sp = hypot(m.v.x, m.v.y)
+            if sp > 8 {
+                var dA = atan2(m.v.y, m.v.x) - m.heading
+                while dA > .pi { dA -= 2 * .pi }
+                while dA < -.pi { dA += 2 * .pi }
+                m.heading += dA * min(1, 7 * dt)
+            }
             motes[i] = m
         }
         if releaseT >= 0 { releaseT += dt }
@@ -209,6 +220,44 @@ public struct SwarmSim: Sendable {
         }
         return out
     }
+}
+
+/// One firefly for the sprite renderer.
+public struct FireflyState: Equatable, Sendable {
+    public var position: CGPoint
+    /// Direction the insect faces (radians, y-up).
+    public var heading: CGFloat
+    /// Body length in points.
+    public var length: CGFloat
+    /// 0...1 lantern brightness (a slow flash with long dark pauses).
+    public var glow: CGFloat
+    /// Wing-beat phase (radians).
+    public var wingPhase: CGFloat
+    public var alpha: CGFloat
+}
+
+extension SwarmSim {
+    /// The insects to draw (pin and head are drawn separately as lanterns).
+    public func fireflyStates(emerge: CGFloat) -> [FireflyState] {
+        let e = max(0, min(1, emerge))
+        let fade = releaseT >= 0 ? max(0, 1 - releaseT / 0.5) : 1
+        let scale = params.bodyRadius / 26
+        var out: [FireflyState] = []
+        for (i, m) in motes.prefix(max(0, params.fireflies)).enumerated() {
+            // Each insect flashes on its own rhythm: a quick swell, a glow, a fade, then a long dark pause.
+            let period = 2.4 + 2.2 * StyleHash.unit(i, 61)
+            let ph = (time / period + StyleHash.unit(i, 62)).truncatingRemainder(dividingBy: 1)
+            let on = StyleHash.smoothstep(0.0, 0.12, ph) * (1 - StyleHash.smoothstep(0.30, 0.52, ph))
+            let rest = 0.12 + 0.06 * CGFloat(sin(Double(time * 1.7 + m.phase)))
+            out.append(FireflyState(position: m.p, heading: m.heading, length: (20 + 8 * m.size / 5) * scale,
+                                    glow: max(rest * 0.6, on), wingPhase: time * (70 + 25 * StyleHash.unit(i, 63)) + m.phase,
+                                    alpha: e * fade))
+        }
+        return out
+    }
+
+    public var pinLantern: (center: CGPoint, radius: CGFloat) { (pin, sol.pin * 1.05) }
+    public var headLantern: (center: CGPoint, radius: CGFloat) { (head, max(sol.head, 5) * 1.05) }
 }
 
 /// Tendrils: a sea-creature pin whose tentacles reach for the head. Each tentacle is a chain that follows the one
@@ -464,5 +513,74 @@ public struct JumpRopeSim: Sendable {
         out.append(ShapePrim(kind: .circle, a: at(-R * 0.30, R * 0.15), ra: R * 0.13 * cf, blend: .hard, emphasis: 1))
         out.append(ShapePrim(kind: .circle, a: at(R * 0.30, R * 0.15), ra: R * 0.13 * cf, blend: .hard, emphasis: 1))
         return out
+    }
+}
+
+/// Everything the paper-craft renderer needs for the jump rope, in screen points (y-up).
+public struct PaperRopeScene: Equatable, Sendable {
+    public var rope: [CGPoint]
+    /// 0...1 how far the rope is toward the viewer (swing > 0 means up and behind, < 0 means down and in front).
+    public var ropeInFront: Bool
+    public var ropeWidth: CGFloat
+    public var handlePin: CGPoint
+    public var handleHead: CGPoint
+    public var handlePinSize: CGFloat
+    public var handleHeadSize: CGFloat
+    public var handleAngle: CGFloat
+    public var armed: CGFloat
+    public var groundCenter: CGPoint
+    public var groundAngle: CGFloat
+    public var groundWidth: CGFloat
+    public var critterCenter: CGPoint
+    /// Rotation so the critter's up is the span's up (radians).
+    public var critterAngle: CGFloat
+    public var critterSize: CGFloat
+    public var squash: CGFloat
+    public var lift: CGFloat
+    public var earFlop: CGFloat
+    public var blink: CGFloat
+    public var alpha: CGFloat
+    public var hopping: Bool
+}
+
+extension JumpRopeSim {
+    public func paperScene(emerge: CGFloat, headGlow: CGFloat = 0) -> PaperRopeScene {
+        let e = max(0, min(1, emerge))
+        let fade = releaseT >= 0 ? max(0, 1 - releaseT / 0.6) : 1
+        let ax = axes()
+        let reach = reachAmount
+        let amp = min(ax.chord * 0.32, 150) * reach * (releaseT >= 0 ? max(0, 1 - releaseT / 0.4) : 1)
+        let L = params.links
+        var pts: [CGPoint] = []
+        for j in 0...L {
+            let s = CGFloat(j) / CGFloat(L)
+            let swing = CGFloat(cos(Double(phase - 0.25 * sin(Double(.pi * s)))))
+            let v = amp * CGFloat(sin(Double(.pi * s))) * swing
+            let hang: CGFloat = releaseT >= 0 ? min(1, releaseT * 2) * 0.35 * ax.chord * CGFloat(sin(Double(.pi * s))) : 0
+            pts.append(CGPoint(x: pin.x + (head.x - pin.x) * s + ax.up.x * (v - hang),
+                               y: pin.y + (head.y - pin.y) * s + ax.up.y * (v - hang)))
+        }
+        let midSwing = CGFloat(cos(Double(phase - 0.25)))
+        let R = params.bodyRadius * 1.1 * reach
+        let sqy = 1 - 0.22 * squash
+        var c = CGPoint(x: ax.mid.x + ax.up.x * (R * 0.95 * sqy + lift), y: ax.mid.y + ax.up.y * (R * 0.95 * sqy + lift))
+        if releaseT >= 0 {
+            let t = releaseT
+            c.x += releaseDir.x * 380 * t; c.y += releaseDir.y * 380 * t + (300 * t - 900 * t * t) * 0.3
+        }
+        // Blink every few seconds.
+        let bp = time.truncatingRemainder(dividingBy: 3.4)
+        let blink: CGFloat = bp < 0.13 ? CGFloat(sin(Double(bp / 0.13 * .pi))) : 0
+        let along = atan2(ax.along.y, ax.along.x)
+        return PaperRopeScene(
+            rope: pts, ropeInFront: midSwing < 0, ropeWidth: max(6, params.bodyRadius * 0.26),
+            handlePin: pin, handleHead: head,
+            handlePinSize: max(12, sol.pin * 1.25), handleHeadSize: max(12, max(sol.head, 6) * 1.25 * (1 + 0.12 * headGlow)),
+            handleAngle: along, armed: headGlow,
+            groundCenter: ax.mid, groundAngle: along, groundWidth: R * 3.2,
+            critterCenter: c, critterAngle: atan2(ax.up.y, ax.up.x) - .pi / 2, critterSize: R,
+            squash: squash, lift: lift, earFlop: max(-0.7, min(0.7, earLag * 1.4)), blink: blink,
+            alpha: e * fade * (reach > 0.02 ? 1 : 0), hopping: lift > 1
+        )
     }
 }

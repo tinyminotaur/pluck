@@ -26,6 +26,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Drawn with hand-made vector sprites instead of the glass shader.
+    public var isVector: Bool { self == .swarm || self == .jumprope }
+
     public var tagline: String {
         switch self {
         case .liquid: return "Stretchy liquid with a pinch-off"
@@ -33,9 +36,9 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .crystal: return "A crystal grows toward you, branching and evolving; it shatters on commit"
         case .gravity: return "Two bodies: the heavy pin pulls harder, grains orbit and stream between them"
         case .pearls: return "A beaded necklace on rope physics: it sags, swings and flings its pearls"
-        case .swarm: return "A swarm of glowing fireflies hovers at the pin and streams toward you"
+        case .swarm: return "Real fireflies with flapping wings and glowing lanterns drift between two jar lights"
         case .tendrils: return "Tentacles reach for the cursor, undulating and tapering to fine tips"
-        case .jumprope: return "Two turners swing a rope; a little critter hops it at the middle of the span"
+        case .jumprope: return "A papercraft scene: a bunny hops a striped paper rope at the middle of the span"
         }
     }
 }
