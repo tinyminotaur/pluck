@@ -608,6 +608,21 @@ final class SpectrumAnalyzerTests: XCTestCase {
         XCTAssertEqual(f.scene(emerge: 1).closed, 1, accuracy: 0.01)
     }
 
+    func testCharactersNeverTurnUpsideDownWhateverTheDirection() {
+        let dirs: [CGPoint] = [CGPoint(x: 1, y: 0), CGPoint(x: -1, y: 0), CGPoint(x: 0, y: 1), CGPoint(x: 0, y: -1), CGPoint(x: -0.8, y: -0.6), CGPoint(x: 0.6, y: -0.8)]
+        for d in dirs {
+            let h = CGPoint(x: pin.x + d.x * 420, y: pin.y + d.y * 420)
+            var br = BridgeSim(); br.reset(pin: pin)
+            var jr = JumpRopeSim(); jr.reset(pin: pin)
+            var cc = CableCarSim(); cc.reset(pin: pin)
+            for _ in 0..<400 { br.step(dt: 1 / 120, pin: pin, head: h); jr.step(dt: 1 / 120, pin: pin, head: h); cc.step(dt: 1 / 120, pin: pin, head: h) }
+            let w = br.scene(emerge: 1).walkerAngle
+            XCTAssertTrue(cos(w) >= -0.001, "walker upright for \(d): angle \(w)")
+            XCTAssertLessThanOrEqual(abs(jr.paperScene(emerge: 1).critterAngle), 0.5001, "critter near upright for \(d)")
+            XCTAssertLessThanOrEqual(abs(cc.scene(emerge: 1).carAngle), 0.5, "gondola hangs down for \(d)")
+        }
+    }
+
     func testPresetFamiliesAreGrouped() {
         XCTAssertEqual(PresetLibrary.presets(for: .beam).count, EnergyVariant.allCases.count)
         XCTAssertEqual(Set(PresetLibrary.presets(for: .beam).compactMap(\.variant)).count, EnergyVariant.allCases.count)

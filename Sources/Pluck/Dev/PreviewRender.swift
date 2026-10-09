@@ -209,7 +209,11 @@ enum PreviewRender {
         ) else { return 3 }
         ctx.setFillColor(CGColor(red: 0.13, green: 0.14, blue: 0.17, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        let pin = CGPoint(x: 120, y: 170)
+        // PLUCK_PREVIEW_DIR=left|up|down|diag pulls in another direction, to check nothing turns upside down.
+        let dirName = ProcessInfo.processInfo.environment["PLUCK_PREVIEW_DIR"] ?? "right"
+        let pullDir: CGPoint = { switch dirName { case "left": return CGPoint(x: -1, y: 0); case "up": return CGPoint(x: 0, y: 1); case "down": return CGPoint(x: 0, y: -1)
+            case "diag": return CGPoint(x: -0.8, y: -0.6); default: return CGPoint(x: 1, y: 0) } }()
+        let pin = (dirName == "left" || dirName == "diag") ? CGPoint(x: tile.width - 130, y: 170) : (dirName == "down" ? CGPoint(x: 120, y: tile.height - 90) : CGPoint(x: 120, y: dirName == "up" ? 70 : 170))
         for (r, row) in rows.enumerated() {
             for (c, chord) in chords.enumerated() {
                 let armed: CGFloat = c == 3 ? 1 : 0
@@ -228,7 +232,7 @@ enum PreviewRender {
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
                 } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread || row.0 == .pack || VectorRunners.make(row.0) != nil {
-                    let head = { (k: CGFloat) in CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))) }
+                    let head = { (k: CGFloat) in CGPoint(x: pin.x + pullDir.x * chord * k * (pullDir.y == 0 ? 1 : 0.55) + (pullDir.y != 0 ? 18 * k : 0), y: pin.y + pullDir.y * chord * k * (pullDir.x == 0 ? 0.62 : 0.55) + (pullDir.y == 0 ? 18 * k * CGFloat(sin(Double(k * 3))) : 0)) }
                     var t: CGFloat = 0
                     switch row.0 {
                     case .pearls:

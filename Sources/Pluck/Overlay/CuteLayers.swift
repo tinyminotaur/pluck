@@ -597,7 +597,13 @@ final class TrainLayers {
         }
         func update(_ c: TrainCar) {
             root.position = c.position
-            root.transform = CATransform3DMakeRotation(c.angle, 0, 0, 1)
+            // Cars run in the direction of travel but never turn over: a leftward heading mirrors the car instead.
+            let heading = c.facing >= 0 ? c.angle : c.angle + .pi
+            if cos(heading) >= 0 {
+                root.transform = CATransform3DMakeRotation(heading, 0, 0, 1)
+            } else {
+                root.transform = CATransform3DScale(CATransform3DMakeRotation(heading - .pi, 0, 0, 1), -1, 1, 1)
+            }
             let (w, h): (CGFloat, CGFloat) = c.kind == 0 ? (30, 16) : (24, 14)
             root.opacity = 1
             root.transform = CATransform3DScale(root.transform, 1.5, 1.5, 1)

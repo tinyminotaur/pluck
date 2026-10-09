@@ -595,6 +595,14 @@ public struct PaperRopeScene: Equatable, Sendable {
 }
 
 extension JumpRopeSim {
+    /// Characters may lean with the span a little, but never lie down or turn upside down.
+    static func uprightTilt(_ a: CGFloat) -> CGFloat {
+        var x = a.truncatingRemainder(dividingBy: 2 * .pi)
+        if x > .pi { x -= 2 * .pi }
+        if x < -.pi { x += 2 * .pi }
+        return max(-0.5, min(0.5, x))
+    }
+
     public func paperScene(emerge: CGFloat, headGlow: CGFloat = 0) -> PaperRopeScene {
         let e = max(0, min(1, emerge))
         let fade = releaseT >= 0 ? max(0, 1 - releaseT / 0.6) : 1
@@ -629,7 +637,7 @@ extension JumpRopeSim {
             handlePinSize: max(12, sol.pin * 1.25), handleHeadSize: max(12, max(sol.head, 6) * 1.25 * (1 + 0.12 * headGlow)),
             handleAngle: along, armed: headGlow,
             groundCenter: ax.mid, groundAngle: along, groundWidth: R * 3.2,
-            critterCenter: c, critterAngle: atan2(ax.up.y, ax.up.x) - .pi / 2, critterSize: R,
+            critterCenter: c, critterAngle: Self.uprightTilt(atan2(ax.up.y, ax.up.x) - .pi / 2), critterSize: R,
             squash: squash, lift: lift, earFlop: max(-0.7, min(0.7, earLag * 1.4)), blink: blink,
             alpha: e * fade * (reach > 0.02 ? 1 : 0), hopping: lift > 1
         )

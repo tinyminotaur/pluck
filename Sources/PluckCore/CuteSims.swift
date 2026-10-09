@@ -168,8 +168,11 @@ public struct BridgeSim: Sendable {
         var wpos = CGPoint(x: wp.x + up.x * (b.bodyRadius * 0.42 + 2.5 * abs(CGFloat(sin(Double(bobT))))), y: wp.y + up.y * (b.bodyRadius * 0.42 + 2.5 * abs(CGFloat(sin(Double(bobT))))))
         if b.fired { wpos.x += b.releaseDir.x * 300 * b.releaseT; wpos.y += b.releaseDir.y * 300 * b.releaseT + 120 * b.releaseT }
         let q = deck(min(1, ws + 0.01))
+        // The walker is always upright: a deck running leftward mirrors it instead of turning it over.
+        var slope = atan2(q.y - wp.y, q.x - wp.x), flip: CGFloat = 1
+        if cos(slope) < 0 { slope -= .pi; flip = -1 }
         return BridgeScene(planks: planks, railA: rail(b.bodyRadius * 0.55), railB: rail(b.bodyRadius * 0.9), walker: wpos,
-                           walkerAngle: atan2(q.y - wp.y, q.x - wp.x), walkerFacing: facing, walkerBob: abs(CGFloat(sin(Double(bobT)))),
+                           walkerAngle: slope, walkerFacing: facing * flip, walkerBob: abs(CGFloat(sin(Double(bobT)))),
                            walkerStep: CGFloat(sin(Double(bobT))), pin: b.pin, head: b.head, pinRadius: b.rp, headRadius: b.rh * (1 + 0.1 * headGlow),
                            alpha: e * (b.fired ? max(0.001, b.fade(0.9)) : 1) * (reach > 0.02 ? 1 : 0.0001))
     }
@@ -304,7 +307,7 @@ public struct WaterArcSim: Sendable {
 
 // MARK: - Toy train
 
-public struct TrainCar: Equatable, Sendable { public var position: CGPoint; public var angle: CGFloat; public var kind: Int }
+public struct TrainCar: Equatable, Sendable { public var position: CGPoint; public var angle: CGFloat; public var kind: Int; public var facing: CGFloat = 1 }
 
 public struct TrainScene: Equatable, Sendable {
     public var track: [CGPoint]
@@ -355,7 +358,7 @@ public struct ToyTrainSim: Sendable {
             if dirSign < 0 { ang += .pi }
             var pos = CGPoint(x: q.x + up.x * 8, y: q.y + up.y * 8)
             if b.fired { pos.x += b.releaseDir.x * 600 * b.releaseT * (1 + CGFloat(k) * 0.1); pos.y += b.releaseDir.y * 600 * b.releaseT }
-            cars.append(TrainCar(position: pos, angle: dirSign < 0 ? ang - .pi : ang, kind: k == 0 ? 0 : (k == 3 ? 2 : 1)))
+            cars.append(TrainCar(position: pos, angle: dirSign < 0 ? ang - .pi : ang, kind: k == 0 ? 0 : (k == 3 ? 2 : 1), facing: dirSign))
         }
         var smoke: [(CGPoint, CGFloat, CGFloat)] = []
         if let eng = cars.first {
@@ -502,7 +505,8 @@ public struct FishingSim: Sendable {
     public mutating func release(commit d: CGPoint?) { base.fire(d) }
 
     public func scene(emerge: CGFloat, headGlow: CGFloat = 0) -> FishingScene {
-        let b = base, ax = b.axes, up = b.up()
+        let b = base, ax = b.axes
+        let up = CGPoint(x: 0, y: 1)                                  // the rod and float always follow gravity
         let e = max(0, min(1, emerge)), reach = sm(30, 130, ax.chord)
         let rodLen = b.rp * 5.2
         // The rod leans back from the water, tip over the line.

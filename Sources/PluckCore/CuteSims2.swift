@@ -91,9 +91,9 @@ public struct NewtonsCradleSim: Sendable {
         let span = r * 2 * CGFloat(n)
         let mid = CGPoint(x: (b.pin.x + b.head.x) / 2, y: (b.pin.y + b.head.y) / 2)
         let stringLen = max(60, min(170, ax.chord * 0.5 + 20))
-        let hang = CGPoint(x: -up.x, y: -up.y)
+        let hang = CGPoint(x: 0, y: -1)                       // balls always hang straight down
         let H = stringLen * 0.55
-        let top0 = CGPoint(x: mid.x + up.x * H, y: mid.y + up.y * H)
+        let top0 = CGPoint(x: mid.x, y: mid.y + H)
         let omega: CGFloat = 4.2
         let ph = b.time * omega
         let amp: CGFloat = 0.62
@@ -102,7 +102,7 @@ public struct NewtonsCradleSim: Sendable {
         var balls: [(CGPoint, CGFloat)] = [], tops: [CGPoint] = []
         for i in 0..<n {
             let x = (CGFloat(i) - CGFloat(n - 1) / 2) * r * 2
-            let top = CGPoint(x: top0.x + ax.a.x * x, y: top0.y + ax.a.y * x)
+            let top = CGPoint(x: top0.x + x, y: top0.y)
             var th: CGFloat = 0
             if i == 0 { th = -swingL } else if i == n - 1 { th = swingR }
             // The ball hangs along `hang`, rotated by th about its top.
@@ -115,8 +115,10 @@ public struct NewtonsCradleSim: Sendable {
         if hit > 0.02, let c = balls.dropFirst(n / 2).first { clicks.append((c.0, e * hit)) }
         _ = span
         // The frame spans the two points: posts stand at the pin and head, and the bar runs between their tops.
-        let barA = CGPoint(x: b.pin.x + up.x * H, y: b.pin.y + up.y * H)
-        let barB = CGPoint(x: b.head.x + up.x * H, y: b.head.y + up.y * H)
+        let left = min(b.pin.x, b.head.x), right = max(b.pin.x, b.head.x)
+        let barHalf = max((right - left) / 2, span / 2 + 14)
+        let barA = CGPoint(x: top0.x - barHalf, y: top0.y)
+        let barB = CGPoint(x: top0.x + barHalf, y: top0.y)
         _ = span
         var shift = CGPoint.zero
         if b.fired { shift = CGPoint(x: b.releaseDir.x * 700 * b.releaseT, y: b.releaseDir.y * 700 * b.releaseT) }
@@ -270,11 +272,12 @@ public struct CableCarSim: Sendable {
         let p = cable(s, topY)
         let q = cable(min(1, s + 0.01), topY)
         let slope = atan2(q.y - p.y, q.x - p.x)
-        var car = CGPoint(x: p.x - up.x * b.bodyRadius * 1.1 * cos(swing) + ax.a.x * sin(swing) * b.bodyRadius * 1.1,
-                          y: p.y - up.y * b.bodyRadius * 1.1 * cos(swing) + ax.a.y * sin(swing) * b.bodyRadius * 1.1)
+        // The gondola always hangs straight down from its pulley (gravity), swinging a little.
+        let hangLen = b.bodyRadius * 1.1
+        var car = CGPoint(x: p.x + sin(swing) * hangLen, y: p.y - cos(swing) * hangLen)
         if b.fired { car.x += b.releaseDir.x * 900 * b.releaseT; car.y += b.releaseDir.y * 900 * b.releaseT }
         let cA = (0...32).map { cable(CGFloat($0) / 32, topY) }, cB = (0...32).map { cable(CGFloat($0) / 32, topY - 3.5) }
-        return CableScene(cableA: cA, cableB: cB, car: car, carAngle: atan2(up.y, up.x) - .pi / 2 + swing + slope * 0, carSwing: swing,
+        return CableScene(cableA: cA, cableB: cB, car: car, carAngle: swing + slope * 0, carSwing: swing,
                           carSize: b.bodyRadius * 0.9, pulley: p, pin: b.pin, head: b.head, pinRadius: b.rp, headRadius: b.rh * (1 + 0.1 * headGlow),
                           upDir: up, alpha: e * b.fade(0.9) * (reach > 0.02 ? 1 : 0.0001))
     }

@@ -27,8 +27,10 @@ final class TugLayers {
         root.opacity = Float(s.alpha)
         let p = polyline(s.rope)
         ropeShadow.path = p; rope.path = p; twist.path = p
-        fighterA.update(at: s.pin, size: s.pinSize, axis: s.axis, mirror: false, lean: s.pinLean, strain: s.strain)
-        fighterB.update(at: s.head, size: s.headSize, axis: s.axis, mirror: true, lean: s.headLean, strain: s.strain)
+        // Fighters always stand upright; they only mirror to face their opponent and lift their arms toward the rope.
+        let toHead = CGPoint(x: cos(s.axis), y: sin(s.axis))
+        fighterA.update(at: s.pin, size: s.pinSize, toward: toHead, lean: s.pinLean, strain: s.strain)
+        fighterB.update(at: s.head, size: s.headSize, toward: CGPoint(x: -toHead.x, y: -toHead.y), lean: s.headLean, strain: s.strain)
         // The flag on the rope.
         let f = s.flag, a = s.flagAngle
         let up = CGPoint(x: -sin(a), y: cos(a))
@@ -59,13 +61,20 @@ final class TugLayers {
             cheek.fillColor = Sprite.color(255, 143, 163, 0.85)
             for l in [earA, earB, footA, footB, body, belly, cheek, eyeA, eyeB, mouth, arm] { root.addSublayer(l) }
         }
-        func update(at p: CGPoint, size R: CGFloat, axis: CGFloat, mirror: Bool, lean: CGFloat, strain: CGFloat) {
+        func update(at p: CGPoint, size R: CGFloat, toward: CGPoint, lean: CGFloat, strain: CGFloat) {
             root.position = p
-            var t = CATransform3DMakeRotation(axis, 0, 0, 1)
-            if mirror { t = CATransform3DScale(t, -1, 1, 1) }
-            // Lean back about the feet.
-            t = CATransform3DTranslate(t, 0, -R, 0); t = CATransform3DRotate(t, lean, 0, 0, 1); t = CATransform3DTranslate(t, 0, R, 0)
-            root.transform = t
+            // Face the opponent by mirroring (never by rotating), then lean back about the feet.
+            let facing: CGFloat = toward.x >= 0 ? 1 : -1
+            var local = CATransform3DMakeTranslation(0, -R, 0)
+            local = CATransform3DRotate(local, lean, 0, 0, 1)
+            local = CATransform3DTranslate(local, 0, R, 0)
+            root.transform = CATransform3DConcat(local, CATransform3DMakeScale(facing, 1, 1))
+            // Arms reach along the line to the opponent (in the mirrored frame), within a comfortable range.
+            let armAngle = max(-0.9, min(0.9, atan2(toward.y, abs(toward.x))))
+            let shoulder = CGPoint(x: R * 0.55, y: -R * 0.05)
+            var at = CATransform3DMakeTranslation(shoulder.x, shoulder.y, 0)
+            at = CATransform3DRotate(at, armAngle, 0, 0, 1)
+            arm.transform = CATransform3DTranslate(at, -shoulder.x, -shoulder.y, 0)
             body.path = CGPath(ellipseIn: CGRect(x: -R, y: -R * 0.95, width: R * 2, height: R * 1.9), transform: nil)
             belly.path = CGPath(ellipseIn: CGRect(x: -R * 0.5, y: -R * 0.9, width: R, height: R * 0.8), transform: nil)
             if bear {
@@ -109,7 +118,8 @@ final class CradleLayers {
     func update(_ s: CradleScene) {
         root.opacity = Float(s.alpha)
         footA.update(at: s.pin, r: s.pinRadius * 0.8); footB.update(at: s.head, r: s.headRadius * 0.8)
-        legA.path = polyline([s.pin, s.barA]); legB.path = polyline([s.head, s.barB]); bar.path = polyline([s.barA, s.barB])
+        let pinIsLeft = s.pin.x <= s.head.x
+        legA.path = polyline([s.pin, pinIsLeft ? s.barA : s.barB]); legB.path = polyline([s.head, pinIsLeft ? s.barB : s.barA]); bar.path = polyline([s.barA, s.barB])
         let sp = CGMutablePath()
         for (i, b) in s.balls.enumerated() { sp.move(to: s.tops[i]); sp.addLine(to: b.0) }
         strings.path = sp
