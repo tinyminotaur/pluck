@@ -16,6 +16,11 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case kite
     case bubbles
     case beam
+    case lightning
+    case magnet
+    case slinky
+    case tincan
+    case thread
 
     public var name: String {
         switch self {
@@ -31,11 +36,16 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .kite: return "Kite"
         case .bubbles: return "Soap Bubbles"
         case .beam: return "Energy Beam"
+        case .lightning: return "Lightning"
+        case .magnet: return "Magnet"
+        case .slinky: return "Slinky"
+        case .tincan: return "Tin-Can Phone"
+        case .thread: return "Red Thread"
         }
     }
 
     /// Drawn with hand-made vector sprites instead of the glass shader.
-    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam }
+    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread }
 
     public var tagline: String {
         switch self {
@@ -51,6 +61,11 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .kite: return "A paper kite on a long string with a ribbon tail, flying from a wooden reel"
         case .bubbles: return "Iridescent soap bubbles drift between two big ones, then pop"
         case .beam: return "Charge an energy ball, pull, and a wave-motion beam blasts out; commit fires it"
+        case .lightning: return "Two terminals and a crackling arc that forks and flickers between them; commit discharges it"
+        case .magnet: return "Field lines stream from a heavy north pole to a light south pole; the surplus bows away"
+        case .slinky: return "A rainbow spring, wide at the heavy end and narrow at the light one, with a wave running along it"
+        case .tincan: return "Two tin cans on a taut string take turns talking; notes travel along it"
+        case .thread: return "A red thread of fate between two beating hearts, with little hearts drifting along it"
         }
     }
 }

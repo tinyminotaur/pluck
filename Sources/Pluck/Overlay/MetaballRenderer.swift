@@ -83,6 +83,11 @@ final class MetaballView: NSView {
     private var kitesim = KiteSim()
     private var bubblesim = BubbleSim()
     private var beamsim = BeamSim()
+    private var lightsim = LightningSim()
+    private var magsim = MagnetSim()
+    private var slinkysim = SlinkySim()
+    private var cansim = TinCanSim()
+    private var threadsim = ThreadSim()
     /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
     private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
@@ -213,6 +218,11 @@ final class MetaballView: NSView {
         kitesim = KiteSim(); kitesim.params.bodyRadius = radius * 0.7; kitesim.reset(pin: lockedPin)
         bubblesim = BubbleSim(); bubblesim.params.bodyRadius = radius * 0.75; bubblesim.reset(pin: lockedPin)
         beamsim = BeamSim(); beamsim.params.bodyRadius = radius * 0.7; beamsim.reset(pin: lockedPin)
+        lightsim = LightningSim(); lightsim.params.bodyRadius = radius * 0.7; lightsim.reset(pin: lockedPin)
+        magsim = MagnetSim(); magsim.params.bodyRadius = radius * 0.7; magsim.reset(pin: lockedPin)
+        slinkysim = SlinkySim(); slinkysim.params.bodyRadius = radius * 0.7; slinkysim.reset(pin: lockedPin)
+        cansim = TinCanSim(); cansim.params.bodyRadius = radius * 0.7; cansim.reset(pin: lockedPin)
+        threadsim = ThreadSim(); threadsim.params.bodyRadius = radius * 0.7; threadsim.reset(pin: lockedPin)
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -346,6 +356,11 @@ final class MetaballView: NSView {
             case .kite: kitesim.step(dt: h, pin: lockedPin, head: head)
             case .bubbles: bubblesim.step(dt: h, pin: lockedPin, head: head)
             case .beam: beamsim.step(dt: h, pin: lockedPin, head: head)
+            case .lightning: lightsim.step(dt: h, pin: lockedPin, head: head)
+            case .magnet: magsim.step(dt: h, pin: lockedPin, head: head)
+            case .slinky: slinkysim.step(dt: h, pin: lockedPin, head: head)
+            case .tincan: cansim.step(dt: h, pin: lockedPin, head: head)
+            case .thread: threadsim.step(dt: h, pin: lockedPin, head: head)
             case .liquid: break
             }
         }
@@ -365,6 +380,11 @@ final class MetaballView: NSView {
         case .kite: return kitesim.isFinished
         case .bubbles: return bubblesim.isFinished
         case .beam: return beamsim.isFinished
+        case .lightning: return lightsim.isFinished
+        case .magnet: return magsim.isFinished
+        case .slinky: return slinkysim.isFinished
+        case .tincan: return cansim.isFinished
+        case .thread: return threadsim.isFinished
         }
     }
 
@@ -418,7 +438,7 @@ final class MetaballView: NSView {
         case .pearls: return pearls.primitives(emerge: emerge, headGlow: glow)
         case .swarm: return swarm.primitives(emerge: emerge, headGlow: glow)
         case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
-        case .jumprope, .stars, .kite, .bubbles, .beam: return []
+        case .jumprope, .stars, .kite, .bubbles, .beam, .lightning, .magnet, .slinky, .tincan, .thread: return []
         case .liquid: return []
         }
     }
@@ -437,6 +457,16 @@ final class MetaballView: NSView {
             vectorHost.updateStars(starsim.scene(emerge: emerge, headGlow: glow))
         case .kite:
             vectorHost.updateKite(kitesim.scene(emerge: emerge, headGlow: glow))
+        case .lightning:
+            vectorHost.updateLightning(lightsim.scene(emerge: emerge, headGlow: glow))
+        case .magnet:
+            vectorHost.updateMagnet(magsim.scene(emerge: emerge, headGlow: glow))
+        case .slinky:
+            vectorHost.updateSlinky(slinkysim.scene(emerge: emerge, headGlow: glow))
+        case .tincan:
+            vectorHost.updateTinCan(cansim.scene(emerge: emerge, headGlow: glow))
+        case .thread:
+            vectorHost.updateThread(threadsim.scene(emerge: emerge, headGlow: glow))
         case .beam:
             vectorHost.updateBeam(beamsim.scene(emerge: emerge, headGlow: glow))
         case .bubbles:
@@ -775,6 +805,16 @@ final class MetaballView: NSView {
             bubblesim.release(commit: role != nil ? actionDirection() : nil)
         case .beam:
             beamsim.release(commit: role != nil ? actionDirection() : nil)
+        case .lightning:
+            lightsim.release(commit: role != nil ? actionDirection() : nil)
+        case .magnet:
+            magsim.release(commit: role != nil ? actionDirection() : nil)
+        case .slinky:
+            slinkysim.release(commit: role != nil ? actionDirection() : nil)
+        case .tincan:
+            cansim.release(commit: role != nil ? actionDirection() : nil)
+        case .thread:
+            threadsim.release(commit: role != nil ? actionDirection() : nil)
         }
     }
 

@@ -349,6 +349,31 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
                    ], style: .beam),
+        FeelPreset(id: "tesla-arc", name: "Tesla Arc", tagline: "A crackling arc jumps between two terminals",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .lightning),
+        FeelPreset(id: "bar-magnet", name: "Bar Magnet", tagline: "Field lines flow from a heavy north pole to a light south pole",
+                   themeID: "mercury", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .magnet),
+        FeelPreset(id: "rainbow-slinky", name: "Rainbow Slinky", tagline: "A rainbow spring that wobbles as you stretch it",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .slinky),
+        FeelPreset(id: "tin-can-phone", name: "Tin-Can Phone", tagline: "Two cans, one string, and a very long conversation",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .tincan),
+        FeelPreset(id: "red-thread", name: "Red Thread", tagline: "Two hearts joined by a thread, with little hearts drifting along it",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .thread),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.

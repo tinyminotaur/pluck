@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 12)
+        XCTAssertEqual(AnimationStyle.allCases.count, 17)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -296,5 +296,65 @@ final class DelightSimTests: XCTestCase {
         let tips = t.primitives(emerge: 1).filter { $0.kind == .cone }
         let nearHead = tips.filter { hypot($0.b.x - h.x, $0.b.y - h.y) < 70 }.count
         XCTAssertGreaterThan(nearHead, 20)       // many links wrapped close around the cursor
+    }
+
+    func testLightningBoltsSpanTheTerminalsAndFlashOnCommit() {
+        var l = LightningSim(); l.reset(pin: pin)
+        for i in 0..<300 { l.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 60), 450)) }
+        let sc = l.scene(emerge: 1)
+        XCTAssertFalse(sc.bolts.isEmpty)
+        XCTAssertGreaterThan(sc.pinRadius, sc.headRadius)
+        XCTAssertGreaterThan(sc.bolts[0].count, 20)
+        XCTAssertTrue(sc.bolts.allSatisfy { $0.allSatisfy { $0.x.isFinite && $0.y.isFinite } })
+        l.release(commit: nil)
+        l.step(dt: 1 / 120, pin: pin, head: head(1, 450))
+        XCTAssertGreaterThan(l.scene(emerge: 1).flash, 0.5)
+    }
+
+    func testMagnetHeavyPoleThrowsLinesTheLightOneCannotCatch() {
+        var m = MagnetSim(); m.reset(pin: pin)
+        for i in 0..<400 { m.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 60), 400)) }
+        let sc = m.scene(emerge: 1)
+        XCTAssertEqual(sc.lines.count, MagnetSim.Params().lines)
+        XCTAssertGreaterThan(sc.escaping, 0.1)          // the heavy pin has more lines than the light head can catch
+        XCTAssertLessThan(sc.escaping, 0.95)
+        XCTAssertGreaterThan(sc.pinRadius, sc.headRadius)
+    }
+
+    func testSlinkyTapersFromTheHeavyEndAndRecoils() {
+        var s = SlinkySim(); s.reset(pin: pin)
+        for i in 0..<400 { s.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 60), 500)) }
+        let sc = s.scene(emerge: 1)
+        XCTAssertGreaterThan(sc.coil.count, 300)
+        XCTAssertTrue(sc.coil.allSatisfy { $0.x.isFinite && $0.y.isFinite })
+        func amp(_ range: Range<Int>) -> CGFloat { range.map { abs(sc.coil[$0].y - (pin.y + 10 * CGFloat($0) / CGFloat(sc.coil.count))) }.max() ?? 0 }
+        let n = sc.coil.count
+        XCTAssertGreaterThan(amp(0..<(n / 5)), amp((n * 4 / 5)..<n))      // wider at the heavy pin than at the light head
+    }
+
+    func testTinCansPassNotesBackAndForth() {
+        var t = TinCanSim(); t.reset(pin: pin)
+        var sawFromPin = false, sawFromHead = false
+        for i in 0..<720 {
+            t.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500))
+            let sc = t.scene(emerge: 1)
+            if let n = sc.notes.first(where: { $0.alpha > 0.3 }) {
+                let mid = pin.x + 250
+                if (i / 120) % 4 < 2 { if n.position.x < mid + 10 { sawFromPin = true } } else if n.position.x > mid - 10 { sawFromHead = true }
+            }
+        }
+        XCTAssertTrue(sawFromPin && sawFromHead)
+    }
+
+    func testRedThreadHeartsFloatAlongAndBurstOnCommit() {
+        var r = ThreadSim(); r.reset(pin: pin)
+        for i in 0..<400 { r.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 60), 450)) }
+        let sc = r.scene(emerge: 1)
+        XCTAssertEqual(sc.hearts.count, ThreadSim.Params().hearts)
+        XCTAssertGreaterThan(sc.pinHeart.size, sc.headHeart.size)
+        XCTAssertGreaterThan(sc.thread.count, 20)
+        r.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<60 { r.step(dt: 1 / 120, pin: pin, head: head(1, 450)) }
+        XCTAssertTrue(r.scene(emerge: 1).hearts.allSatisfy { $0.position.x.isFinite })
     }
 }

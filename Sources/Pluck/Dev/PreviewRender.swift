@@ -178,6 +178,7 @@ enum PreviewRender {
             (.gravity, ThemeLibrary.moltenGold), (.pearls, ThemeLibrary.mercury), (.swarm, ThemeLibrary.aurora),
             (.tendrils, ThemeLibrary.neonJelly), (.jumprope, ThemeLibrary.sunsetLava),
             (.stars, ThemeLibrary.aurora), (.kite, ThemeLibrary.sunsetLava), (.bubbles, ThemeLibrary.mist), (.beam, ThemeLibrary.mist),
+            (.lightning, ThemeLibrary.aurora), (.magnet, ThemeLibrary.mercury), (.slinky, ThemeLibrary.neonJelly), (.tincan, ThemeLibrary.sunsetLava), (.thread, ThemeLibrary.sunsetLava),
         ]
         let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
         guard let ctx = CGContext(
@@ -204,7 +205,7 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
-                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam {
+                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread {
                     let head = { (k: CGFloat) in CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))) }
                     var t: CGFloat = 0
                     switch row.0 {
@@ -238,6 +239,26 @@ enum PreviewRender {
                         while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
                         if c == 3 { a.release(commit: CGPoint(x: 1, y: 0)); for _ in 0..<12 { a.step(dt: dt, pin: pin, head: head(1)) } }
                         vector = { ctx in let host = VectorStyleHost(); host.updateBeam(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .lightning:
+                        var a = LightningSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateLightning(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .magnet:
+                        var a = MagnetSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateMagnet(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .slinky:
+                        var a = SlinkySim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateSlinky(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .tincan:
+                        var a = TinCanSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateTinCan(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .thread:
+                        var a = ThreadSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateThread(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
                     case .jumprope:
                         var a = JumpRopeSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
                         while t < 2.4 + CGFloat(c) * 0.13 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }

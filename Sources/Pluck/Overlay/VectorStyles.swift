@@ -14,6 +14,11 @@ final class VectorStyleHost {
     private let kite = KiteLayers()
     private let bubbles = BubbleLayers()
     private let beam = BeamLayers()
+    private let lightning = LightningLayers()
+    private let magnet = MagnetLayers()
+    private let slinky = SlinkyLayers()
+    private let tincan = TinCanLayers()
+    private let thread = ThreadLayers()
 
     init() {
         root.masksToBounds = false
@@ -23,11 +28,13 @@ final class VectorStyleHost {
         root.addSublayer(stars.root)
         root.addSublayer(kite.root)
         root.addSublayer(bubbles.root)
+        for l in [lightning.root, magnet.root, slinky.root, tincan.root, thread.root] { root.addSublayer(l) }
+        beam.root.isHidden = true
         root.addSublayer(beam.root)
     }
 
     private func only(_ l: CALayer) {
-        for x in [fireflies.root, paper.root, stars.root, kite.root, bubbles.root, beam.root] { x.isHidden = x !== l }
+        for x in [fireflies.root, paper.root, stars.root, kite.root, bubbles.root, beam.root, lightning.root, magnet.root, slinky.root, tincan.root, thread.root] { x.isHidden = x !== l }
     }
 
     func hide() {
@@ -75,6 +82,20 @@ final class VectorStyleHost {
         beam.update(scene)
     }
 
+    func updateLightning(_ s: LightningScene) { run(s.alpha, lightning.root) { lightning.update(s) } }
+    func updateMagnet(_ s: MagnetScene) { run(s.alpha, magnet.root) { magnet.update(s) } }
+    func updateSlinky(_ s: SlinkyScene) { run(s.alpha, slinky.root) { slinky.update(s) } }
+    func updateTinCan(_ s: TinCanScene) { run(s.alpha, tincan.root) { tincan.update(s) } }
+    func updateThread(_ s: ThreadScene) { run(s.alpha, thread.root) { thread.update(s) } }
+
+    private func run(_ alpha: CGFloat, _ layer: CALayer, _ body: () -> Void) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        root.isHidden = alpha < 0.01
+        only(layer)
+        body()
+    }
+
     func updateBubbles(_ states: [BubbleState], alpha: CGFloat) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -86,7 +107,7 @@ final class VectorStyleHost {
 
 // MARK: - Sprite drawing helpers
 
-private enum Sprite {
+enum Sprite {
     static func color(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> CGColor {
         CGColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: a)
     }
