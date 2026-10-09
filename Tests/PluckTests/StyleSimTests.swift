@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 41)
+        XCTAssertEqual(AnimationStyle.allCases.count, 42)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -613,7 +613,7 @@ final class SpectrumAnalyzerTests: XCTestCase {
         XCTAssertEqual(Set(PresetLibrary.presets(for: .beam).compactMap(\.variant)).count, EnergyVariant.allCases.count)
         XCTAssertGreaterThanOrEqual(PresetLibrary.presets(for: .liquid).count, 10)
         XCTAssertEqual(PresetLibrary.presets(for: .crystal).count, 2)
-        for st in AnimationStyle.allCases { XCTAssertFalse(PresetLibrary.presets(for: st).isEmpty, "\(st) has at least one look") }
+        for st in AnimationStyle.allCases where st != .pack { XCTAssertFalse(PresetLibrary.presets(for: st).isEmpty, "\(st) has at least one look") }
     }
 
     func testReleaseBehaviorFollowsTheConcept() {

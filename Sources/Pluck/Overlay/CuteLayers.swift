@@ -12,7 +12,11 @@ protocol VectorRunner: AnyObject {
     func step(dt: CGFloat, pin: CGPoint, head: CGPoint)
     func release(commit: Bool, direction: CGPoint)
     func present(emerge: CGFloat, glow: CGFloat)
+    /// A runner may override how the head moves on release (community packs choose their own).
+    var releaseBehavior: ReleaseBehavior? { get }
 }
+
+extension VectorRunner { var releaseBehavior: ReleaseBehavior? { nil } }
 
 @MainActor
 final class SimRunner<Sim>: VectorRunner {
@@ -189,6 +193,10 @@ enum VectorRunners {
                              reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
                              release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
                              present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .pack:
+            let cfg = FeelLabConfig.shared
+            guard let installed = PackLibrary.shared.pack(id: cfg.effectivePackID), installed.isValid else { return nil }
+            return PackRunner(pack: installed, params: cfg.packParams(for: installed.id, defaults: installed.program?.params ?? []), theme: cfg.theme)
         case .beam:
             let l = EnergyLayers()
             var proto = EnergySim()

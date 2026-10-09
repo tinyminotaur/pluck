@@ -5,6 +5,7 @@ import SwiftUI
 /// Always-on guide + live blob tuning for Feel Lab.
 struct FeelGuideView: View {
     @ObservedObject private var config = FeelLabConfig.shared
+    @ObservedObject private var library = PackLibrary.shared
     @State private var axOK = Permissions.accessibilityTrusted
     @State private var lastResult = "—"
     @State private var poll: Task<Void, Never>?
@@ -12,7 +13,7 @@ struct FeelGuideView: View {
     @State private var styleFilter: String = "all"
 
     enum Tab: String, CaseIterable, Identifiable {
-        case looks, feel, trigger, presenter, advanced, help
+        case looks, feel, trigger, presenter, library, advanced, help
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -20,6 +21,7 @@ struct FeelGuideView: View {
             case .feel: return "Feel"
             case .trigger: return "Trigger"
             case .presenter: return "Presenter"
+            case .library: return "Library"
             case .advanced: return "Advanced"
             case .help: return "Help"
             }
@@ -47,6 +49,7 @@ struct FeelGuideView: View {
                     case .feel: feelTab
                     case .trigger: triggerTab
                     case .presenter: presenterTab
+                    case .library: libraryTab
                     case .advanced: advancedTab
                     case .help: helpTab
                     }
@@ -111,7 +114,7 @@ struct FeelGuideView: View {
         "stars": "star.fill", "kite": "wind", "bubbles": "bubbles.and.sparkles.fill", "beam": "bolt.horizontal.fill", "lightning": "bolt.fill", "magnet": "magnet", "slinky": "waveform.path", "tincan": "phone.bubble.fill", "thread": "heart.fill", "pingpong": "tennisball.fill", "bridge": "figure.walk", "planes": "paperplane.fill", "water": "drop.fill",
         "train": "tram.fill", "equalizer": "waveform", "dna": "link", "fishing": "fish.fill", "ribbon": "scribble.variable", "tugofwar": "figure.rower", "cradle": "circle.hexagongrid.fill", "rainbow": "cloud.rainbow.half.fill",
         "dandelion": "leaf.fill", "cablecar": "cablecar.fill", "signal": "wifi", "lasso": "lasso", "laser": "dot.radiowaves.left.and.right", "marker": "highlighter", "spotlight": "flashlight.on.fill",
-        "callout": "arrow.turn.right.up", "targetlock": "scope", "marquee": "rectangle.dashed", "jelly": "circle.dashed", "freehand": "lasso.badge.sparkles",
+        "callout": "arrow.turn.right.up", "targetlock": "scope", "pack": "shippingbox.fill", "marquee": "rectangle.dashed", "jelly": "circle.dashed", "freehand": "lasso.badge.sparkles",
     ]
 
     private var looksTab: some View {
@@ -290,6 +293,109 @@ struct FeelGuideView: View {
             }
         }
         .font(.callout)
+    }
+
+    // MARK: - Library (community packs)
+
+    private func pickAndInstall() {
+        let panel = NSOpenPanel()
+        panel.message = "Choose a .pluckpack file (or a pack folder)"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { _ = try library.install(from: url) } catch { library.lastMessage = error.localizedDescription }
+    }
+
+    private var libraryTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("Community animations", "Packs are small data files (shapes and tiny formulas), so adding one can never run code. They appear in Looks under Community.")
+            HStack(spacing: 8) {
+                Button("Add pack…") { pickAndInstall() }
+                Button("New pack from template") {
+                    if let dir = library.createTemplate() { NSWorkspace.shared.open(dir.appendingPathComponent("pack.json")) }
+                }
+                Button("Open folder") { NSWorkspace.shared.open(library.directory) }
+                Button("Reload") { library.reload() }
+            }
+            .controlSize(.small)
+            if !library.lastMessage.isEmpty { Text(library.lastMessage).font(.caption).foregroundStyle(.secondary) }
+            hint("Authors: edit a pack's pack.json in any text editor and save. Pluck reloads it instantly and shows any mistakes below.")
+
+            if library.packs.isEmpty {
+                hint("No packs installed yet.")
+            }
+            ForEach(library.packs) { p in packRow(p) }
+
+            Divider()
+            sectionTitle("Online library", "Browse a community library you trust. Pluck only contacts it when you press Refresh, and checks each download against its published checksum.")
+            HStack {
+                TextField("https://example.com/pluck/library.json", text: $config.libraryURL).textFieldStyle(.roundedBorder).font(.caption)
+                Button("Refresh") { Task { await library.refreshRemote(indexURL: config.libraryURL) } }.controlSize(.small)
+            }
+            if !library.remoteStatus.isEmpty { Text(library.remoteStatus).font(.caption).foregroundStyle(.secondary) }
+            ForEach(library.remote) { e in
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(e.name).font(.callout.weight(.semibold))
+                        Text([e.author, e.version].compactMap { $0 }.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                        if let t = e.tagline { Text(t).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                    Spacer()
+                    if library.pack(id: e.id) != nil { Text("Installed").font(.caption).foregroundStyle(.secondary) }
+                    else { Button("Install") { Task { await library.installRemote(e) } }.controlSize(.small) }
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+            }
+        }
+        .font(.callout)
+    }
+
+    private func packRow(_ p: PackLibrary.Installed) -> some View {
+        let selected = config.style == .pack && config.packID == p.id
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(p.name).font(.callout.weight(.semibold))
+                        if !p.isValid { Text("Needs fixing").font(.system(size: 9, weight: .semibold)).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Color.red.opacity(0.25))) }
+                    }
+                    Text([p.manifest?.author, p.manifest?.version, p.manifest?.license].compactMap { $0 }.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                    if let t = p.manifest?.tagline { Text(t).font(.caption2).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                if p.isValid {
+                    Button(selected ? "In use" : "Use") {
+                        if let preset = PresetLibrary.preset(id: "pack:\(p.id)") { config.apply(preset: preset) }
+                    }
+                    .controlSize(.small).disabled(selected)
+                }
+                Button { library.remove(id: p.id) } label: { Image(systemName: "trash") }.controlSize(.small).help("Move this pack to the Trash")
+            }
+            if !p.issues.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(p.issues.prefix(6).enumerated()), id: \.offset) { _, i in
+                        Text("• \(i.description)").font(.system(size: 10, design: .monospaced)).foregroundStyle(.red)
+                    }
+                }
+            }
+            if p.isValid, !(p.program?.params.isEmpty ?? true) {
+                DisclosureGroup("Settings") {
+                    VStack(spacing: 8) {
+                        ForEach(p.program?.params ?? [], id: \.name) { prm in
+                            let values = config.packParams(for: p.id, defaults: p.program?.params ?? [])
+                            simpleKnob(prm.label ?? prm.name, "", value: Binding(get: { values[prm.name] ?? prm.default }, set: { config.setPackParam(p.id, prm.name, $0) }), range: prm.min...prm.max, format: "%.2f")
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .font(.caption)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 9).fill(selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(selected ? Color.accentColor : Color.clear, lineWidth: 1.5))
     }
 
     private var advancedTab: some View {

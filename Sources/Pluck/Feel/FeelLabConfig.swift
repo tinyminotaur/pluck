@@ -112,6 +112,10 @@ final class FeelLabConfig: ObservableObject {
     @Published var presenterCount: Int { didSet { UserDefaults.standard.set(presenterCount, forKey: "pluck.feel.presenterCount") } }
     @Published var presenterRadius: Double { didSet { save("presenterRadius", presenterRadius) } }
     @Published var presenterSlotsRaw: String { didSet { saveString("presenterSlotsRaw", presenterSlotsRaw) } }
+    /// Community packs: the chosen pack for the Community style, per-pack slider values, and the online library address.
+    @Published var packID: String { didSet { saveString("packID", packID) } }
+    @Published var packParamsJSON: String { didSet { saveString("packParamsJSON", packParamsJSON) } }
+    @Published var libraryURL: String { didSet { saveString("libraryURL", libraryURL) } }
     @Published var audioReactive: Bool { didSet { saveBool("audioReactive", audioReactive) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
@@ -185,6 +189,9 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         soundEnabled = Self.loadBool("soundEnabled", false)
         audioReactive = Self.loadBool("audioReactive", false)
+        packID = UserDefaults.standard.string(forKey: "pluck.feel.packID") ?? ""
+        packParamsJSON = UserDefaults.standard.string(forKey: "pluck.feel.packParamsJSON") ?? "{}"
+        libraryURL = UserDefaults.standard.string(forKey: "pluck.feel.libraryURL") ?? ""
         interactionModeID = UserDefaults.standard.string(forKey: "pluck.feel.interactionModeID") ?? "actions"
         presenterCount = UserDefaults.standard.integer(forKey: "pluck.feel.presenterCount") == 8 ? 8 : 4
         presenterRadius = Self.load("presenterRadius", 64)
@@ -338,6 +345,20 @@ final class FeelLabConfig: ObservableObject {
     /// While a presenter visual is showing, this overrides style, colours and beam variant without touching the saved choice.
     var transientPreset: FeelPreset?
     var effectiveBeamVariantID: String { transientPreset?.variant ?? beamVariantID }
+    var effectivePackID: String { transientPreset?.style == .pack ? (transientPreset?.variant ?? packID) : packID }
+
+    /// Slider values for a pack, falling back to each parameter's default.
+    func packParams(for id: String, defaults: [PackParam]) -> [String: Double] {
+        let all = (try? JSONSerialization.jsonObject(with: Data(packParamsJSON.utf8))) as? [String: [String: Double]] ?? [:]
+        var out: [String: Double] = [:]
+        for p in defaults { out[p.name] = all[id]?[p.name] ?? p.default }
+        return out
+    }
+    func setPackParam(_ id: String, _ name: String, _ value: Double) {
+        var all = (try? JSONSerialization.jsonObject(with: Data(packParamsJSON.utf8))) as? [String: [String: Double]] ?? [:]
+        all[id, default: [:]][name] = value
+        if let d = try? JSONSerialization.data(withJSONObject: all), let s = String(data: d, encoding: .utf8) { packParamsJSON = s }
+    }
 
     /// The active theme (a built-in, or the last "Surprise me" palette).
     var theme: LiquidTheme {
@@ -369,7 +390,7 @@ final class FeelLabConfig: ObservableObject {
         themeID = preset.themeID
         styleID = preset.style.rawValue
         presetID = preset.id
-        if let v = preset.variant { beamVariantID = v }
+        if let v = preset.variant { if preset.style == .pack { packID = v } else { beamVariantID = v } }
     }
 
     /// Change only the colours, keeping the current feel.

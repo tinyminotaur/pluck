@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupStatusItem()
         startPermissionWatcher()
         AudioSpectrumController.shared.bind()
+        PackLibrary.shared.start()
 
         NotificationCenter.default.addObserver(
             forName: .pluckResetHard,

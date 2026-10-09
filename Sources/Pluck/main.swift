@@ -27,6 +27,30 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-style-commit") {
     exit(MainActor.assumeIsolated { PreviewRender.runStyleCommit(outputPath: path) })
 }
 
+// `Pluck --validate-pack <folder|pack.json>`: check a community pack and print any problems (exit code 1 if invalid).
+if let i = CommandLine.arguments.firstIndex(of: "--validate-pack") {
+    let arg = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "."
+    var url = URL(fileURLWithPath: arg)
+    if url.pathExtension != "json" { url = url.appendingPathComponent("pack.json") }
+    guard let data = try? Data(contentsOf: url) else { print("error: cannot read \(url.path)"); exit(2) }
+    let (manifest, decodeIssues) = PackDecoder.decode(data)
+    guard let manifest else { decodeIssues.forEach { print("error: \($0)") }; exit(1) }
+    let (_, issues) = PackProgram.compile(manifest)
+    if issues.isEmpty { print("ok: \(manifest.name) (\(manifest.id) \(manifest.version ?? "")) is a valid pack with \(manifest.layers.count) layers"); exit(0) }
+    issues.forEach { print("error: \($0)") }
+    exit(1)
+}
+
+// `Pluck --install-pack <file.pluckpack|folder>`: install a community pack headlessly (same checks as the app), then exit.
+if let i = CommandLine.arguments.firstIndex(of: "--install-pack") {
+    let arg = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : ""
+    let code: Int32 = MainActor.assumeIsolated {
+        do { let p = try PackLibrary.shared.install(from: URL(fileURLWithPath: arg)); print("installed: \(p.name)"); return 0 }
+        catch { print("refused: \(error.localizedDescription)"); return 1 }
+    }
+    exit(code)
+}
+
 // `Pluck --style-perf`: per-frame cost of every sprite style, then exit.
 if CommandLine.arguments.contains("--style-perf") {
     exit(MainActor.assumeIsolated { PreviewRender.runPerf() })

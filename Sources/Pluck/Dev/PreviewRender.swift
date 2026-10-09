@@ -169,6 +169,7 @@ enum PreviewRender {
 
     /// `Pluck --render-styles out.png`: the ferrofluid and crystal styles (headless Metal) at rest, pulled, far, and armed.
     static func runStyles(outputPath: String) -> Int32 {
+        PackLibrary.shared.start()
         guard let shapes = ShapeListMetal.shared else { return 2 }
         let tile = CGSize(width: 560, height: 340)
         let scale: CGFloat = 2
@@ -195,6 +196,7 @@ enum PreviewRender {
             (.tugofwar, ThemeLibrary.mist), (.cradle, ThemeLibrary.mist), (.rainbow, ThemeLibrary.mist), (.dandelion, ThemeLibrary.mist), (.cablecar, ThemeLibrary.mist), (.signal, ThemeLibrary.mist),
             (.lasso, ThemeLibrary.mist), (.laser, ThemeLibrary.mist), (.marker, ThemeLibrary.mist), (.spotlight, ThemeLibrary.mist), (.callout, ThemeLibrary.mist), (.targetlock, ThemeLibrary.mist),
             (.marquee, ThemeLibrary.mist), (.jelly, ThemeLibrary.mist), (.freehand, ThemeLibrary.mist),
+            (.pack, ThemeLibrary.mist), (.pack, ThemeLibrary.mist), (.pack, ThemeLibrary.mist),
         ]
         // PLUCK_STYLES=a,b,c renders only those styles (by raw value), to keep previews quick.
         let only = (ProcessInfo.processInfo.environment["PLUCK_STYLES"] ?? "").split(separator: ",").map(String.init)
@@ -225,7 +227,7 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
-                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread || VectorRunners.make(row.0) != nil {
+                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread || row.0 == .pack || VectorRunners.make(row.0) != nil {
                     let head = { (k: CGFloat) in CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))) }
                     var t: CGFloat = 0
                     switch row.0 {
@@ -270,12 +272,17 @@ enum PreviewRender {
                             host.updatePaper(a.paperScene(emerge: 1, headGlow: armed))
                             host.pruneHidden(); host.root.render(in: ctx)
                         }
-                    case .marquee, .jelly, .freehand, .lasso, .laser, .marker, .spotlight, .callout, .targetlock, .beam, .pingpong, .bridge, .planes, .water, .train, .equalizer, .dna, .fishing, .ribbon, .tugofwar, .cradle, .rainbow, .dandelion, .cablecar, .signal:
+                    case .pack, .marquee, .jelly, .freehand, .lasso, .laser, .marker, .spotlight, .callout, .targetlock, .beam, .pingpong, .bridge, .planes, .water, .train, .equalizer, .dna, .fishing, .ribbon, .tugofwar, .cradle, .rainbow, .dandelion, .cablecar, .signal:
                         if row.0 == .beam {
                             // Beam rows run through every energy variant in order, in charge-then-fire mode.
                             let beamIndex = rows[..<r].filter { $0.0 == .beam }.count
                             FeelLabConfig.shared.beamVariantID = EnergyVariant.allCases[beamIndex % EnergyVariant.allCases.count].rawValue
                             FeelLabConfig.shared.beamChargeMode = true
+                        }
+                        if row.0 == .pack {
+                            PackLibrary.shared.reload()
+                            let valid = PackLibrary.shared.packs.filter(\.isValid)
+                            if !valid.isEmpty { FeelLabConfig.shared.packID = valid[rows[..<r].filter { $0.0 == .pack }.count % valid.count].id }
                         }
                         let runner = VectorRunners.make(row.0)!
                         runner.reset(pin: pin, radius: 42)

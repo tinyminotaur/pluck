@@ -210,6 +210,18 @@ public struct FeelPreset: Identifiable, Sendable {
     public var style: AnimationStyle = .liquid
     /// Sub-style within the style, such as which anime energy attack the beam style uses.
     public var variant: String? = nil
+
+    public init(id: String, name: String, tagline: String, themeID: String, values: [String: Double], style: AnimationStyle = .liquid, variant: String? = nil) {
+        self.id = id; self.name = name; self.tagline = tagline; self.themeID = themeID; self.values = values; self.style = style; self.variant = variant
+    }
+}
+
+/// Presets contributed at run time (community packs). Set by the app whenever the pack library changes.
+public enum PresetRegistry {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var items: [FeelPreset] = []
+    public static func set(_ presets: [FeelPreset]) { lock.lock(); items = presets; lock.unlock() }
+    public static var all: [FeelPreset] { lock.lock(); defer { lock.unlock() }; return items }
 }
 
 public enum PresetLibrary {
@@ -555,9 +567,9 @@ public enum PresetLibrary {
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.
-    public static var everything: [FeelPreset] { all + styled }
+    public static var everything: [FeelPreset] { all + styled + PresetRegistry.all }
 
-    public static func preset(id: String) -> FeelPreset? { (all + styled).first { $0.id == id } }
+    public static func preset(id: String) -> FeelPreset? { everything.first { $0.id == id } }
 
     /// The presets that belong to one style (a style with several is a family: Blob, Beams, Crystal and so on).
     public static func presets(for style: AnimationStyle) -> [FeelPreset] { everything.filter { $0.style == style } }

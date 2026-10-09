@@ -82,3 +82,12 @@ The cursor guard also restores it automatically, and `~/Library/Logs/Pluck/gestu
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
+
+## Styles, presenter mode and community packs
+
+- **Styles**: a family-grouped picker in Feel Lab > Looks (Blob, Beams, Crystal, selection tools, presentation tools, and many playful scenes).
+- **Presenter mode** (Feel Lab > Presenter): hold, drag out past a ring in one of 4 or 8 directions, and the direction picks a *visual*
+  instead of an action; drag a little further and it comes to life between the two points. Release to finish it.
+- **Community packs** (Feel Lab > Library): animations are small JSON files with safe formulas, not code. See [docs/PACKS.md](docs/PACKS.md)
+  for the format, how to share them, and best practices for hosting a library. Handy commands:
+  `Pluck --validate-pack <folder>`, `Pluck --install-pack <file.pluckpack>`, `Pluck --style-perf`.

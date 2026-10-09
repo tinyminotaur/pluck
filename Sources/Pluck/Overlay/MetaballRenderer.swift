@@ -911,7 +911,7 @@ final class MetaballView: NSView {
     private func integrateRecoil(steps: Int, h: CGFloat, frameDt: CGFloat) {
         recoilElapsed += frameDt
         recoilPulse = max(0, recoilPulse - frameDt / 0.45)
-        switch activeStyle.releaseBehavior {
+        switch runner?.releaseBehavior ?? activeStyle.releaseBehavior {
         case .stay:
             // Not elastic: the head stays where it was released and the style plays its own finale.
             recoilVel = .zero
