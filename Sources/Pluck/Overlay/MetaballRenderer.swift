@@ -83,6 +83,7 @@ final class MetaballView: NSView {
     private var kitesim = KiteSim()
     private var bubblesim = BubbleSim()
     private var beamsim = BeamSim()
+    private var runner: VectorRunner?
     private var lightsim = LightningSim()
     private var magsim = MagnetSim()
     private var slinkysim = SlinkySim()
@@ -218,6 +219,8 @@ final class MetaballView: NSView {
         kitesim = KiteSim(); kitesim.params.bodyRadius = radius * 0.7; kitesim.reset(pin: lockedPin)
         bubblesim = BubbleSim(); bubblesim.params.bodyRadius = radius * 0.75; bubblesim.reset(pin: lockedPin)
         beamsim = BeamSim(); beamsim.params.bodyRadius = radius * 0.7; beamsim.reset(pin: lockedPin)
+        runner = VectorRunners.make(activeStyle)
+        if let r = runner { vectorHost.attach(r.layer); r.reset(pin: lockedPin, radius: radius) }
         lightsim = LightningSim(); lightsim.params.bodyRadius = radius * 0.7; lightsim.reset(pin: lockedPin)
         magsim = MagnetSim(); magsim.params.bodyRadius = radius * 0.7; magsim.reset(pin: lockedPin)
         slinkysim = SlinkySim(); slinkysim.params.bodyRadius = radius * 0.7; slinkysim.reset(pin: lockedPin)
@@ -362,6 +365,7 @@ final class MetaballView: NSView {
             case .tincan: cansim.step(dt: h, pin: lockedPin, head: head)
             case .thread: threadsim.step(dt: h, pin: lockedPin, head: head)
             case .liquid: break
+            default: runner?.step(dt: h, pin: lockedPin, head: head)
             }
         }
     }
@@ -385,6 +389,7 @@ final class MetaballView: NSView {
         case .slinky: return slinkysim.isFinished
         case .tincan: return cansim.isFinished
         case .thread: return threadsim.isFinished
+        default: return runner?.isFinished ?? true
         }
     }
 
@@ -440,6 +445,7 @@ final class MetaballView: NSView {
         case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
         case .jumprope, .stars, .kite, .bubbles, .beam, .lightning, .magnet, .slinky, .tincan, .thread: return []
         case .liquid: return []
+        default: return []
         }
     }
 
@@ -472,7 +478,7 @@ final class MetaballView: NSView {
         case .bubbles:
             vectorHost.updateBubbles(bubblesim.bubbleStates(emerge: emerge, headGlow: glow), alpha: min(1, emerge))
         default:
-            vectorHost.hide()
+            if let r = runner { vectorHost.present(r, emerge: emerge, glow: glow) } else { vectorHost.hide() }
         }
     }
 
@@ -815,6 +821,8 @@ final class MetaballView: NSView {
             cansim.release(commit: role != nil ? actionDirection() : nil)
         case .thread:
             threadsim.release(commit: role != nil ? actionDirection() : nil)
+        default:
+            runner?.release(commit: role != nil, direction: actionDirection())
         }
     }
 

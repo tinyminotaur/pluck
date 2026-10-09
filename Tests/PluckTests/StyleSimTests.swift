@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 17)
+        XCTAssertEqual(AnimationStyle.allCases.count, 26)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -356,5 +356,100 @@ final class DelightSimTests: XCTestCase {
         r.release(commit: CGPoint(x: 1, y: 0))
         for _ in 0..<60 { r.step(dt: 1 / 120, pin: pin, head: head(1, 450)) }
         XCTAssertTrue(r.scene(emerge: 1).hearts.allSatisfy { $0.position.x.isFinite })
+    }
+
+    func testPingPongBallTravelsBetweenThePaddles() {
+        var p = PingPongSim(); p.reset(pin: pin)
+        var minX = CGFloat.infinity, maxX = -CGFloat.infinity
+        for i in 0..<480 {
+            p.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500))
+            if i > 100 { let b = p.scene(emerge: 1).ball; minX = min(minX, b.x); maxX = max(maxX, b.x) }
+        }
+        XCTAssertLessThan(minX, pin.x + 60); XCTAssertGreaterThan(maxX, pin.x + 440)
+        XCTAssertEqual(p.scene(emerge: 1).trail.count, 16)
+    }
+
+    func testBridgeWalkerCrossesTheSpan() {
+        var b = BridgeSim(); b.reset(pin: pin)
+        var minX = CGFloat.infinity, maxX = -CGFloat.infinity
+        for i in 0..<1800 {
+            b.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500))
+            if i > 100, i % 10 == 0 { let w = b.scene(emerge: 1).walker; minX = min(minX, w.x); maxX = max(maxX, w.x) }
+        }
+        XCTAssertLessThan(minX, pin.x + 100); XCTAssertGreaterThan(maxX, pin.x + 400)
+        XCTAssertGreaterThan(b.scene(emerge: 1).planks.count, 10)
+    }
+
+    func testPaperPlanesFlyBothWays() {
+        var s = PaperPlanesSim(); s.reset(pin: pin)
+        for i in 0..<720 { s.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500)) }
+        let sc = s.scene(emerge: 1)
+        XCTAssertEqual(sc.planes.count, 5)
+        XCTAssertTrue(sc.planes.allSatisfy { $0.position.x.isFinite && $0.size > 4 })
+        XCTAssertTrue(sc.planes.contains { $0.trail.contains { $0.1 > 0.05 } })
+    }
+
+    func testWaterMovesFromTankToCupAsYouPull() {
+        var near = WaterArcSim(); near.reset(pin: pin)
+        var far = WaterArcSim(); far.reset(pin: pin)
+        for i in 0..<400 {
+            near.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 60))
+            far.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 600))
+        }
+        let a = near.scene(emerge: 1), b = far.scene(emerge: 1)
+        XCTAssertGreaterThan(a.tankLevel, b.tankLevel)         // the tank drains as you stretch
+        XCTAssertGreaterThan(b.cupLevel, a.cupLevel)           // and the cup fills
+        XCTAssertEqual(b.drops.count, 60)
+    }
+
+    func testTrainShuttlesAndSmokes() {
+        var t = ToyTrainSim(); t.reset(pin: pin)
+        var minX = CGFloat.infinity, maxX = -CGFloat.infinity
+        for i in 0..<1500 {
+            t.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500))
+            if i > 100, i % 10 == 0, let e = t.scene(emerge: 1).cars.first { minX = min(minX, e.position.x); maxX = max(maxX, e.position.x) }
+        }
+        XCTAssertGreaterThan(maxX - minX, 250)
+        XCTAssertEqual(t.scene(emerge: 1).cars.count, 4)
+        XCTAssertFalse(t.scene(emerge: 1).smoke.isEmpty)
+    }
+
+    func testEqualizerBassLivesAtTheHeavyEnd() {
+        var e = EqualizerSim(); e.reset(pin: pin)
+        var pinSum: CGFloat = 0, headSum: CGFloat = 0
+        for i in 0..<720 {
+            e.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500))
+            if i > 100, i % 6 == 0 { let b = e.scene(emerge: 1).bars; pinSum += b.prefix(6).map(\.height).reduce(0, +); headSum += b.suffix(6).map(\.height).reduce(0, +) }
+        }
+        XCTAssertGreaterThan(pinSum, headSum)
+    }
+
+    func testDNAHasPairedRungsAndTwoStrands() {
+        var d = DNASim(); d.reset(pin: pin)
+        for i in 0..<300 { d.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 500)) }
+        let sc = d.scene(emerge: 1)
+        XCTAssertEqual(sc.strandA.count, sc.strandB.count)
+        XCTAssertGreaterThan(sc.rungs.count, 10)
+        XCTAssertTrue(sc.rungs.allSatisfy { $0.pair >= 0 && $0.pair < 4 })
+    }
+
+    func testFishingFishLeapsNowAndThen() {
+        var f = FishingSim(); f.reset(pin: pin)
+        var leaped = false
+        for i in 0..<1200 {
+            f.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 400))
+            if f.scene(emerge: 1).fishAlpha > 0.5 { leaped = true }
+        }
+        XCTAssertTrue(leaped)
+        XCTAssertEqual(f.scene(emerge: 1).line.count, 27)
+    }
+
+    func testRibbonIsAnchoredAtBothEnds() {
+        var r = RibbonSim(); r.reset(pin: pin)
+        for i in 0..<400 { r.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 40), 450)) }
+        let sc = r.scene(emerge: 1)
+        XCTAssertLessThan(hypot(sc.spine.first!.x - pin.x, sc.spine.first!.y - pin.y), 2)
+        XCTAssertLessThan(hypot(sc.spine.last!.x - (pin.x + 450), sc.spine.last!.y - (pin.y + 10)), 2)
+        XCTAssertEqual(sc.spine.count, sc.width.count)
     }
 }

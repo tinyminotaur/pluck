@@ -4,7 +4,7 @@ import QuartzCore
 
 // Sprite renderers for the "relationship" styles: lightning, magnet field, slinky, tin-can phone, red thread.
 
-private func glowSprite(_ inner: CGColor, _ outer: CGColor, size: CGFloat = 64, stop: CGFloat = 0.35, mid: CGColor? = nil) -> CGImage? {
+func glowSprite(_ inner: CGColor, _ outer: CGColor, size: CGFloat = 64, stop: CGFloat = 0.35, mid: CGColor? = nil) -> CGImage? {
     Sprite.image(CGSize(width: size, height: size), scale: 3) { c in
         let cols = [inner, mid ?? inner, outer] as CFArray
         let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: cols, locations: [0, stop, 1])!
@@ -13,7 +13,7 @@ private func glowSprite(_ inner: CGColor, _ outer: CGColor, size: CGFloat = 64, 
     }
 }
 
-private func glossySphere(_ light: CGColor, _ dark: CGColor, rim: CGColor) -> CGImage? {
+func glossySphere(_ light: CGColor, _ dark: CGColor, rim: CGColor) -> CGImage? {
     Sprite.image(CGSize(width: 100, height: 100), scale: 3) { c in
         let r: CGFloat = 46, ctr = CGPoint(x: 50, y: 50)
         c.saveGState()
@@ -28,7 +28,7 @@ private func glossySphere(_ light: CGColor, _ dark: CGColor, rim: CGColor) -> CG
     }
 }
 
-private func heartPath() -> CGPath {
+func heartPath() -> CGPath {
     let p = CGMutablePath()
     p.move(to: CGPoint(x: 0, y: -1))
     p.addCurve(to: CGPoint(x: -1, y: 0.3), control1: CGPoint(x: -0.3, y: -0.75), control2: CGPoint(x: -1, y: -0.25))

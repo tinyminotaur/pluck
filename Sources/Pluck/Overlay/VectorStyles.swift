@@ -34,7 +34,25 @@ final class VectorStyleHost {
     }
 
     private func only(_ l: CALayer) {
-        for x in [fireflies.root, paper.root, stars.root, kite.root, bubbles.root, beam.root, lightning.root, magnet.root, slinky.root, tincan.root, thread.root] { x.isHidden = x !== l }
+        for x in root.sublayers ?? [] { x.isHidden = x !== l }
+    }
+
+    private var runnerLayer: CALayer?
+
+    /// A runner-based style: its layer replaces the previous runner's.
+    func attach(_ layer: CALayer) {
+        runnerLayer?.removeFromSuperlayer()
+        layer.isHidden = true
+        root.addSublayer(layer)
+        runnerLayer = layer
+    }
+
+    func present(_ runner: VectorRunner, emerge: CGFloat, glow: CGFloat) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        root.isHidden = emerge < 0.01
+        only(runner.layer)
+        runner.present(emerge: emerge, glow: glow)
     }
 
     func hide() {

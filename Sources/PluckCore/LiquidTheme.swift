@@ -374,6 +374,51 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
                    ], style: .thread),
+        FeelPreset(id: "pingpong-rally", name: "Ping-Pong Rally", tagline: "A glowing ball rallies between two paddles",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .pingpong),
+        FeelPreset(id: "rope-bridge", name: "Rope Bridge", tagline: "A little traveller paces a swaying plank bridge",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .bridge),
+        FeelPreset(id: "paper-planes", name: "Paper Planes", tagline: "Folded paper planes loop and glide between the points",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .planes),
+        FeelPreset(id: "water-arc", name: "Water Arc", tagline: "A jet of water arcs between two flasks",
+                   themeID: "deep-sea", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .water),
+        FeelPreset(id: "toy-train", name: "Toy Train", tagline: "A toy train shuttles between two stations",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .train),
+        FeelPreset(id: "equalizer", name: "Equalizer", tagline: "Two speakers and dancing bars; the heavy end carries the bass",
+                   themeID: "oil-slick", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .equalizer),
+        FeelPreset(id: "dna-helix", name: "DNA Helix", tagline: "A rotating double helix with colour-paired rungs",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .dna),
+        FeelPreset(id: "fishing-trip", name: "Fishing Trip", tagline: "A rod, a bobbing float, and a fish that sometimes leaps",
+                   themeID: "deep-sea", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .fishing),
+        FeelPreset(id: "ribbon-dance", name: "Ribbon Dance", tagline: "A long ribbon twirls and curls between the points",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .ribbon),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.

@@ -179,6 +179,8 @@ enum PreviewRender {
             (.tendrils, ThemeLibrary.neonJelly), (.jumprope, ThemeLibrary.sunsetLava),
             (.stars, ThemeLibrary.aurora), (.kite, ThemeLibrary.sunsetLava), (.bubbles, ThemeLibrary.mist), (.beam, ThemeLibrary.mist),
             (.lightning, ThemeLibrary.aurora), (.magnet, ThemeLibrary.mercury), (.slinky, ThemeLibrary.neonJelly), (.tincan, ThemeLibrary.sunsetLava), (.thread, ThemeLibrary.sunsetLava),
+            (.pingpong, ThemeLibrary.mist), (.bridge, ThemeLibrary.mist), (.planes, ThemeLibrary.mist), (.water, ThemeLibrary.mist), (.train, ThemeLibrary.mist),
+            (.equalizer, ThemeLibrary.mist), (.dna, ThemeLibrary.mist), (.fishing, ThemeLibrary.mist), (.ribbon, ThemeLibrary.mist),
         ]
         let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
         guard let ctx = CGContext(
@@ -205,7 +207,7 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
-                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread {
+                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread || VectorRunners.make(row.0) != nil {
                     let head = { (k: CGFloat) in CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))) }
                     var t: CGFloat = 0
                     switch row.0 {
@@ -267,6 +269,12 @@ enum PreviewRender {
                             host.updatePaper(a.paperScene(emerge: 1, headGlow: armed))
                             host.root.render(in: ctx)
                         }
+                    case .pingpong, .bridge, .planes, .water, .train, .equalizer, .dna, .fishing, .ribbon:
+                        let runner = VectorRunners.make(row.0)!
+                        runner.reset(pin: pin, radius: 42)
+                        while t < 2.6 + CGFloat(c) * 0.37 { runner.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        if c == 3 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<14 { runner.step(dt: dt, pin: pin, head: head(1)) } }
+                        vector = { ctx in let host = VectorStyleHost(); host.attach(runner.layer); host.present(runner, emerge: 1, glow: armed); host.root.render(in: ctx) }
                     default:
                         var a = TendrilSim(); a.params.bodyRadius = 28; a.reset(pin: pin)
                         while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }

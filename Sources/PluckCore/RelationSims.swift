@@ -7,7 +7,7 @@ import Foundation
 
 private func smooth(_ a: CGFloat, _ b: CGFloat, _ x: CGFloat) -> CGFloat { StyleHash.smoothstep(a, b, x) }
 
-private struct Axes {
+struct Axes {
     var a: CGPoint, n: CGPoint, chord: CGFloat
     init(pin: CGPoint, head: CGPoint) {
         let dx = head.x - pin.x, dy = head.y - pin.y

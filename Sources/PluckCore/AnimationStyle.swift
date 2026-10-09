@@ -21,6 +21,15 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case slinky
     case tincan
     case thread
+    case pingpong
+    case bridge
+    case planes
+    case water
+    case train
+    case equalizer
+    case dna
+    case fishing
+    case ribbon
 
     public var name: String {
         switch self {
@@ -41,11 +50,20 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .slinky: return "Slinky"
         case .tincan: return "Tin-Can Phone"
         case .thread: return "Red Thread"
+        case .pingpong: return "Ping-Pong"
+        case .bridge: return "Rope Bridge"
+        case .planes: return "Paper Planes"
+        case .water: return "Water Arc"
+        case .train: return "Toy Train"
+        case .equalizer: return "Equalizer"
+        case .dna: return "DNA"
+        case .fishing: return "Fishing"
+        case .ribbon: return "Ribbon Dance"
         }
     }
 
     /// Drawn with hand-made vector sprites instead of the glass shader.
-    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread }
+    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon }
 
     public var tagline: String {
         switch self {
@@ -66,6 +84,15 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .slinky: return "A rainbow spring, wide at the heavy end and narrow at the light one, with a wave running along it"
         case .tincan: return "Two tin cans on a taut string take turns talking; notes travel along it"
         case .thread: return "A red thread of fate between two beating hearts, with little hearts drifting along it"
+        case .pingpong: return "A glowing ball rallies between two paddles, trailing light"
+        case .bridge: return "A little traveller paces a swaying plank bridge between the two posts"
+        case .planes: return "Folded paper planes loop and glide from one point to the other"
+        case .water: return "A jet arcs from one flask to the other; the water levels are the mass"
+        case .train: return "A toy train shuttles between two stations, puffing smoke"
+        case .equalizer: return "Two speakers and a row of dancing bars; the heavy end carries the bass"
+        case .dna: return "A rotating double helix with colour-paired rungs"
+        case .fishing: return "A rod, a bobbing float and a fish that sometimes leaps"
+        case .ribbon: return "A long ribbon twirls and curls between the two points"
         }
     }
 }
