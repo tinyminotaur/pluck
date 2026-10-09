@@ -22,6 +22,7 @@ def main():
     ap.add_argument("--name", required=True, help="Display name, e.g. Twang")
     ap.add_argument("--slug", help="lowercase id for keys/urls (default: name lowercased)")
     ap.add_argument("--bundle", help="bundle id (default: co.tinyminotaur.<slug>)")
+    ap.add_argument("--keep-repo-url", action="store_true", help="leave github.com/tinyminotaur/pluck links alone (use until the GitHub repo is renamed; GitHub redirects after)")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     if not re.fullmatch(r"[A-Z][A-Za-z0-9]+", a.name):
@@ -31,9 +32,10 @@ def main():
     upper = slug.upper()
 
     # Ordered, most specific first.
+    KEEP = "\u0000KEEPREPO\u0000"
     subs = [
         ("com.pluck.app", bundle),
-        ("tinyminotaur/pluck", f"tinyminotaur/{slug}"),
+        ("tinyminotaur/pluck", KEEP if a.keep_repo_url else f"tinyminotaur/{slug}"),
         ("Pluck", name),
         ("PLUCK", upper),
         ("pluck", slug),
@@ -54,6 +56,7 @@ def main():
             t = s
             for old, new in subs:
                 t = t.replace(old, new)
+            t = t.replace(KEEP, "tinyminotaur/pluck")
             if t != s:
                 if re.search(rf"\b{slug}(ed|ing|s)\b", t):
                     warnings.append(os.path.relpath(path, ROOT))
