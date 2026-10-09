@@ -1,13 +1,13 @@
 #!/bin/bash
-# Creates a stable local code-signing identity "Pluck Dev" once.
+# Creates a stable local code-signing identity "Twang Dev" once.
 # Ad-hoc signatures change every rebuild → macOS Accessibility resets every time.
 # Signing with the same certificate keeps TCC grants across rebuilds.
 set -euo pipefail
 
-CERT_NAME="Pluck Dev"
+CERT_NAME="Twang Dev"
 KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
 SIGNING_DIR="$(cd "$(dirname "$0")/.." && pwd)/signing"
-P12_PASS='pluck-local-dev'
+P12_PASS='twang-local-dev'
 mkdir -p "$SIGNING_DIR"
 
 if security find-identity -v -p codesigning 2>/dev/null | grep -F "\"$CERT_NAME\"" >/dev/null; then
@@ -17,10 +17,10 @@ fi
 
 echo "Creating stable codesigning identity: $CERT_NAME"
 
-CNF="$SIGNING_DIR/pluck-dev.cnf"
-KEY="$SIGNING_DIR/pluck-dev.key"
-CRT="$SIGNING_DIR/pluck-dev.crt"
-P12="$SIGNING_DIR/pluck-dev.p12"
+CNF="$SIGNING_DIR/twang-dev.cnf"
+KEY="$SIGNING_DIR/twang-dev.key"
+CRT="$SIGNING_DIR/twang-dev.crt"
+P12="$SIGNING_DIR/twang-dev.p12"
 
 cat > "$CNF" <<'EOF'
 [req]
@@ -29,8 +29,8 @@ x509_extensions = v3_req
 prompt = no
 
 [req_distinguished_name]
-CN = Pluck Dev
-O = Pluck Local Signing
+CN = Twang Dev
+O = Twang Local Signing
 C = US
 
 [v3_req]

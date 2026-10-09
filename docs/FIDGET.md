@@ -1,4 +1,4 @@
-# Pluck as a desktop fidget toy
+# Twang as a desktop fidget toy
 
 Goal: something you can play with one-handed in a meeting — silent, discreet, instantly
 re-graspable, and deeply satisfying — while still being a real gesture launcher.
@@ -20,17 +20,17 @@ re-graspable, and deeply satisfying — while still being a real gesture launche
 | Facets crystallize with stretch; flash on release | `drawOptical` (`facetEff`) | Crystallize with stretch, Facets |
 | Idle breathing while held still | slosh `breathing` term | Idle breathing |
 | Slack in the tether so it bows, sags and whips | `slack` in `stepPhysics` | Whip response |
-| Trackpad haptic: tick when a direction latches, ratchet click every ~56 pt of stretch | `PluckSession.pointerMoved`, `Haptics` | Trackpad haptic ticks |
+| Trackpad haptic: tick when a direction latches, ratchet click every ~56 pt of stretch | `TwangSession.pointerMoved`, `Haptics` | Trackpad haptic ticks |
 | Sharp, snap-on glints that sweep across facets as the pointer moves the light | shader `glint` | Facets |
-| Cursor returns immediately on release; overlay stops eating clicks | `PluckSession.finishVisual`, `OverlayController.commit` | — |
-| Re-grab during a recoil | `PluckSession.begin` | — |
+| Cursor returns immediately on release; overlay stops eating clicks | `TwangSession.finishVisual`, `OverlayController.commit` | — |
+| Re-grab during a recoil | `TwangSession.begin` | — |
 
 Physics is a fixed 240 Hz step (≤4 substeps per frame) so the feel is identical on 60/120 Hz displays.
 
 | Direction labels (pills with SF Symbol glyphs), armed pop, slice arc, cancel ring, commit confirmation flash | `MetaballView.drawCompass`, `updateCompassUI`, `LabelLayout` | — |
 | Stir: circling the pin builds slosh + glint energy that outlasts the motion | `stir` in `MetaballView` | Slosh amount |
 | Menu-bar quick toggles: Meeting Mode, Trackpad Haptics | `AppDelegate` | — |
-| macOS CI: build, tests, Metal compile, real-Metal preview render uploaded as an artifact | `.github/workflows/ci.yml`, `Pluck --render-preview` | — |
+| macOS CI: build, tests, Metal compile, real-Metal preview render uploaded as an artifact | `.github/workflows/ci.yml`, `Twang --render-preview` | — |
 
 ## Ideas not built yet (ordered by delight per effort)
 
@@ -39,7 +39,7 @@ Physics is a fixed 240 Hz step (≤4 substeps per frame) so the feel is identica
 - **Pin-pull "pop":** pull past a maximum stretch and the tether snaps into 2–3 droplets that merge back (pinch-off; Rayleigh–Plateau limit ≈ length/diameter π).
 - **Meeting mode:** smaller (`restRadius` ~36), dimmer tint, no label bloom, auto-cancel after a few seconds idle — less conspicuous on a shared screen. Excluded automatically while screen sharing (SCStream/`sharingType`).
 - **Surface rewards:** a rare shimmer variant (golden/rainbow sheen obsidian) on long sessions or streaks of clean directional flicks.
-- **Gentle idle prompt:** when Pluck has not been used for a while, a barely visible ripple near the menu bar icon invites a poke.
+- **Gentle idle prompt:** when Twang has not been used for a while, a barely visible ripple near the menu bar icon invites a poke.
 - **Left-hand / button swap** and keyboard-only fidget (hold ⌥, mouse move) for people who can't chord.
 
 ## Safety notes
@@ -52,7 +52,7 @@ held toy never strands the cursor.
 
 - **Fling momentum** knob: how much release speed carries the head past the pin.
 - **Meeting mode** toggle: 65 % size, 80 % opacity.
-- `RecoilSpring` (PluckCore) holds the snap-back math with unit tests.
+- `RecoilSpring` (TwangCore) holds the snap-back math with unit tests.
 
 ## Open question: trackpads
 

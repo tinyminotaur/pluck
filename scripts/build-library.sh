@@ -1,10 +1,10 @@
 #!/bin/bash
-# Zip every pack in packs/examples (or the folder given) into dist/packs/*.pluckpack and write dist/packs/library.json
-# with sha256 hashes. Upload the folder anywhere that serves static files over https, then point Pluck at library.json.
+# Zip every pack in packs/examples (or the folder given) into dist/packs/*.twangpack and write dist/packs/library.json
+# with sha256 hashes. Upload the folder anywhere that serves static files over https, then point Twang at library.json.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="${1:-$ROOT/packs/examples}"
-BASE_URL="${PACK_BASE_URL:-https://example.com/pluck/packs}"
+BASE_URL="${PACK_BASE_URL:-https://example.com/twang/packs}"
 OUT="$ROOT/dist/packs"
 rm -rf "$OUT"; mkdir -p "$OUT"
 entries=()
@@ -12,8 +12,8 @@ for dir in "$SRC"/*/; do
   [[ -f "$dir/pack.json" ]] || continue
   id=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["id"])' "$dir/pack.json")
   ver=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("version","1.0.0"))' "$dir/pack.json")
-  "$ROOT/.build/release/Pluck" --validate-pack "$dir" >/dev/null
-  file="$id-$ver.pluckpack"
+  "$ROOT/.build/release/Twang" --validate-pack "$dir" >/dev/null
+  file="$id-$ver.twangpack"
   (cd "$dir" && zip -qr -X "$OUT/$file" . -x '.*')
   entries+=("$(python3 - "$dir/pack.json" "$OUT/$file" "$BASE_URL/$file" <<'PY'
 import hashlib, json, os, sys

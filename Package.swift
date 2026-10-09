@@ -2,26 +2,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "Pluck",
+    name: "Twang",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Pluck", targets: ["Pluck"]),
-        .library(name: "PluckCore", targets: ["PluckCore"]),
+        .executable(name: "Twang", targets: ["Twang"]),
+        .library(name: "TwangCore", targets: ["TwangCore"]),
     ],
     targets: [
         .target(
-            name: "PluckCore",
-            path: "Sources/PluckCore"
+            name: "TwangCore",
+            path: "Sources/TwangCore"
         ),
         .executableTarget(
-            name: "Pluck",
-            dependencies: ["PluckCore"],
-            path: "Sources/Pluck"
+            name: "Twang",
+            dependencies: ["TwangCore"],
+            path: "Sources/Twang"
         ),
         .testTarget(
-            name: "PluckTests",
-            dependencies: ["PluckCore"],
-            path: "Tests/PluckTests"
+            name: "TwangTests",
+            dependencies: ["TwangCore"],
+            path: "Tests/TwangTests"
         ),
     ]
 )

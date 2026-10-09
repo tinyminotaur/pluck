@@ -3,25 +3,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-BUNDLE_ID="com.pluck.app"
-CERT_NAME="Pluck Dev"
+BUNDLE_ID="co.tinyminotaur.twang"
+CERT_NAME="Twang Dev"
 
 # Stable identity so Accessibility / Input Monitoring survive rebuilds.
 "$ROOT/scripts/ensure-signing-identity.sh"
 
 swift build -c release
-BIN="$(swift build -c release --show-bin-path)/Pluck"
-APP="$ROOT/build/Pluck.app"
+BIN="$(swift build -c release --show-bin-path)/Twang"
+APP="$ROOT/build/Twang.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Pluck"
+cp "$BIN" "$APP/Contents/MacOS/Twang"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 echo -n 'APPL????' > "$APP/Contents/PkgInfo"
-chmod +x "$APP/Contents/MacOS/Pluck"
+chmod +x "$APP/Contents/MacOS/Twang"
 
-ENTITLEMENTS="$ROOT/Resources/Pluck.entitlements"
+ENTITLEMENTS="$ROOT/Resources/Twang.entitlements"
 
-# Prefer stable "Pluck Dev"; fall back to any Apple Development identity if present.
+# Prefer stable "Twang Dev"; fall back to any Apple Development identity if present.
 SIGN_ID="$CERT_NAME"
 if ! security find-identity -v -p codesigning 2>/dev/null | grep -F "\"$CERT_NAME\"" >/dev/null; then
   SIGN_ID=$(security find-identity -v -p codesigning 2>/dev/null | grep -E 'Apple Development|Developer ID Application' | head -1 | sed -E 's/.*"(.+)".*/\1/' || true)
@@ -39,7 +39,7 @@ echo "Signing with: $SIGN_ID"
 codesign --force --sign "$SIGN_ID" \
   --identifier "$BUNDLE_ID" \
   --entitlements "$ENTITLEMENTS" \
-  "$APP/Contents/MacOS/Pluck"
+  "$APP/Contents/MacOS/Twang"
 
 codesign --force --sign "$SIGN_ID" \
   --identifier "$BUNDLE_ID" \

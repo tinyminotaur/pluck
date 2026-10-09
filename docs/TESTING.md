@@ -12,14 +12,14 @@ Headless rendering checks (no input or permissions):
 
 ```bash
 swift build -c release
-.build/release/Pluck --render-styles /tmp/styles.png      # eyeball every style; PLUCK_STYLES=tugofwar,rainbow filters
-PLUCK_PREVIEW_DIR=left .build/release/Pluck --render-styles /tmp/left.png   # pull leftward (also up, down, diag)
-.build/release/Pluck --style-perf                          # per-frame cost; keep every style well under 1 ms
+.build/release/Twang --render-styles /tmp/styles.png      # eyeball every style; TWANG_STYLES=tugofwar,rainbow filters
+TWANG_PREVIEW_DIR=left .build/release/Twang --render-styles /tmp/left.png   # pull leftward (also up, down, diag)
+.build/release/Twang --style-perf                          # per-frame cost; keep every style well under 1 ms
 ```
 
 ## Manual checklist (about 10 minutes)
 
-Pluck only listens, so it cannot lock your keyboard or mouse. Safety nets: **Esc** cancels, **⌃⌥⌘P** quits, an idle gesture ends
+Twang only listens, so it cannot lock your keyboard or mouse. Safety nets: **Esc** cancels, **⌃⌥⌘P** quits, an idle gesture ends
 after 12 s, and menu bar > *Reset Pointer / Gesture* restores the cursor.
 
 1. First launch: Accessibility prompt appears; after granting, Settings opens once and the menu-bar drop shows "Listening".
@@ -31,6 +31,6 @@ after 12 s, and menu bar > *Reset Pointer / Gesture* restores the cursor.
 7. Presenter mode: choose directions, drag out, the choice locks until release, the visual comes alive, the name fades.
 8. Pull in every direction (left, up, down): no character or object appears upside down.
 9. Settings > Library: template creates a pack; edit it and watch it hot-reload; break it and see the error.
-10. Menu bar > Launch at Login toggles; Settings > General > Ignore these apps stops Pluck in that app.
-11. With "real actions" off, nothing reads the clipboard (Activity Monitor shows no pasteboard polling in `Pluck`).
+10. Menu bar > Launch at Login toggles; Settings > General > Ignore these apps stops Twang in that app.
+11. With "real actions" off, nothing reads the clipboard (Activity Monitor shows no pasteboard polling in `Twang`).
 12. Reduce Motion (System Settings): no springs or wobble.

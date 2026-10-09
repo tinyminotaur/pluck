@@ -1,5 +1,5 @@
 {
-  "format": 1, "id": "orbit-ribbons", "name": "Orbit Ribbons", "version": "1.0.0", "author": "Pluck", "license": "CC0-1.0",
+  "format": 1, "id": "orbit-ribbons", "name": "Orbit Ribbons", "version": "1.0.0", "author": "Twang", "license": "CC0-1.0",
   "tagline": "Colourful ribbons and stars weave around the span",
   "theme": "oil-slick",
   "params": [ { "name": "wiggle", "label": "Wiggle", "default": 0.6, "min": 0, "max": 1 } ],

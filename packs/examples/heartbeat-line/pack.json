@@ -1,5 +1,5 @@
 {
-  "format": 1, "id": "heartbeat-line", "name": "Heartbeat Line", "version": "1.0.0", "author": "Pluck", "license": "CC0-1.0",
+  "format": 1, "id": "heartbeat-line", "name": "Heartbeat Line", "version": "1.0.0", "author": "Twang", "license": "CC0-1.0",
   "tagline": "A neon pulse trace runs between the points",
   "theme": "aurora",
   "params": [ { "name": "rate", "label": "Heart rate", "default": 0.9, "min": 0.3, "max": 2 } ],

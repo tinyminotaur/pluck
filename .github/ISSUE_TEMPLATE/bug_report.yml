@@ -8,7 +8,7 @@ body:
     validations: { required: true }
   - type: input
     id: version
-    attributes: { label: Pluck version (Settings > Help), placeholder: "0.1.0" }
+    attributes: { label: Twang version (Settings > Help), placeholder: "0.1.0" }
   - type: dropdown
     id: trigger
     attributes:
@@ -20,4 +20,4 @@ body:
     validations: { required: true }
   - type: textarea
     id: log
-    attributes: { label: Log (optional), description: "If the diagnostic log was on: ~/Library/Logs/Pluck/gesture.log" }
+    attributes: { label: Log (optional), description: "If the diagnostic log was on: ~/Library/Logs/Twang/gesture.log" }

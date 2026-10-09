@@ -3,7 +3,7 @@ description: Share an animation pack with the community library
 labels: [pack]
 body:
   - type: markdown
-    attributes: { value: "Attach your `.pluckpack` (or link a repo). Run `Pluck --validate-pack <folder>` first. See docs/PACKS.md." }
+    attributes: { value: "Attach your `.twangpack` (or link a repo). Run `Twang --validate-pack <folder>` first. See docs/PACKS.md." }
   - type: input
     id: name
     attributes: { label: Pack name }

@@ -1,5 +1,5 @@
 {
-  "format": 1, "id": "confetti-cannon", "name": "Confetti Cannon", "version": "1.0.0", "author": "Pluck", "license": "CC0-1.0",
+  "format": 1, "id": "confetti-cannon", "name": "Confetti Cannon", "version": "1.0.0", "author": "Twang", "license": "CC0-1.0",
   "tagline": "A cannon at the pin fires streams of confetti toward the target",
   "theme": "neon-jelly",
   "params": [ { "name": "spread", "label": "Spread", "default": 0.7, "min": 0.1, "max": 1.5 } ],

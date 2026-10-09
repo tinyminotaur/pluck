@@ -1,4 +1,4 @@
-# Pluck
+# Twang
 
 A playful pointer gesture for macOS. Hold a trigger, stretch a shape from where you are to where you point, and let go.
 The shape can be a blob of liquid obsidian, a crystal, a kite on a string, a laser pointer, a lasso, an anime energy beam,
@@ -24,16 +24,16 @@ blocks or sends any of them, so it can't get in your way.
 
 ## Install
 
-Download the latest `Pluck.zip` from [Releases](../../releases), unzip, and drag **Pluck.app** to Applications.
+Download the latest `Twang.zip` from [Releases](../../releases), unzip, and drag **Twang.app** to Applications.
 macOS 14 (Sonoma) or later. On first launch, grant **Accessibility** when asked (that is the only required permission).
 Until releases are notarized, right-click the app and choose *Open* the first time.
 
 Or build it yourself:
 
 ```bash
-git clone https://github.com/tinyminotaur/pluck && cd pluck
+git clone https://github.com/tinyminotaur/pluck twang && cd twang
 swift build && swift test            # the logic is unit-tested
-./scripts/build.sh && open build/Pluck.app
+./scripts/build.sh && open build/Twang.app
 ```
 
 `scripts/build.sh` signs with a stable local identity so macOS remembers the Accessibility grant between rebuilds
@@ -48,14 +48,14 @@ swift build && swift test            # the logic is unit-tested
 | Two-button chord | Hold one mouse button, press the other, stretch, release |
 | Press-and-hold (optional) | ⌥ + press and hold without moving, then drag |
 
-**Esc** cancels. **⌃⌥⌘P** quits Pluck. A gesture also ends after 12 seconds without movement.
+**Esc** cancels. **⌃⌥⌘P** quits Twang. A gesture also ends after 12 seconds without movement.
 If the pointer ever feels stuck: menu bar > **Reset Pointer / Gesture**.
 
 ## Privacy and safety
 
 - No telemetry, no analytics, no accounts. Nothing is sent anywhere unless you press a button (refresh the online
   library, install a pack), and then only over HTTPS with a checksum.
-- Pluck does not read your clipboard, files or windows unless you switch on "real actions (beta)".
+- Twang does not read your clipboard, files or windows unless you switch on "real actions (beta)".
 - Community packs are data, not code: they cannot run programs, read files or use the network.
 - The optional audio-reactive Equalizer asks for Screen Recording to hear system audio; only 24 level numbers are used.
 
@@ -63,9 +63,9 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
 ## Project layout
 
-- `Sources/PluckCore`: pure, tested logic (gesture math, physics models, pack format and formulas, themes and presets)
-- `Sources/Pluck`: the app (input, overlay and rendering, Settings, pack library)
-- `docs/`: [architecture](docs/ARCHITECTURE.md), [packs](docs/PACKS.md), [testing](docs/TESTING.md), [releasing](docs/RELEASING.md), design research
+- `Sources/TwangCore`: pure, tested logic (gesture math, physics models, pack format and formulas, themes and presets)
+- `Sources/Twang`: the app (input, overlay and rendering, Settings, pack library)
+- `docs/`: [architecture](docs/ARCHITECTURE.md), [packs](docs/PACKS.md), [testing](docs/TESTING.md), [releasing](docs/RELEASING.md)
 - `packs/`: example and community animation packs
 
 Contributions are welcome, especially animation packs: see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -75,12 +75,12 @@ Contributions are welcome, especially animation packs: see [CONTRIBUTING.md](CON
 For development, with no input, cursor or permissions needed:
 
 ```bash
-Pluck --render-styles out.png         # contact sheet of the styles (PLUCK_STYLES=a,b filters)
-Pluck --render-preview out.png        # the standard liquid look grid
-Pluck --style-perf                    # per-frame cost of every sprite style
-Pluck --sim-report                    # liquid physics extent and draw cost
-Pluck --validate-pack <folder>        # check a community pack
-Pluck --install-pack <file.pluckpack> # install a pack with the app's safety checks
+Twang --render-styles out.png         # contact sheet of the styles (TWANG_STYLES=a,b filters)
+Twang --render-preview out.png        # the standard liquid look grid
+Twang --style-perf                    # per-frame cost of every sprite style
+Twang --sim-report                    # liquid physics extent and draw cost
+Twang --validate-pack <folder>        # check a community pack
+Twang --install-pack <file.twangpack> # install a pack with the app's safety checks
 ```
 
 ## Licence
