@@ -6,3 +6,11 @@ xcuserdata/
 .DS_Store
 *.p12
 *.key
+
+# Local tooling and outputs
+.claude/
+.swiftpm/
+*.log
+preview.png
+out.png
+/dist/

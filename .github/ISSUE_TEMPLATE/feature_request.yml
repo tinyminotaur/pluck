@@ -1,0 +1,11 @@
+name: Feature or animation idea
+description: Suggest something new
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes: { label: The idea, description: "What should it do or look like? A sketch or reference helps." }
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes: { label: Why it would be good }

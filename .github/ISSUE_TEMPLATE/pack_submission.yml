@@ -1,0 +1,24 @@
+name: Pack submission
+description: Share an animation pack with the community library
+labels: [pack]
+body:
+  - type: markdown
+    attributes: { value: "Attach your `.pluckpack` (or link a repo). Run `Pluck --validate-pack <folder>` first. See docs/PACKS.md." }
+  - type: input
+    id: name
+    attributes: { label: Pack name }
+    validations: { required: true }
+  - type: input
+    id: license
+    attributes: { label: Licence (must be open, e.g. CC-BY-4.0, CC0-1.0, MIT), placeholder: "CC-BY-4.0" }
+    validations: { required: true }
+  - type: textarea
+    id: about
+    attributes: { label: What it looks like, description: "Add a short screen recording or screenshot." }
+  - type: checkboxes
+    id: ok
+    attributes:
+      label: Confirm
+      options:
+        - label: I made this (or have the right to share it) and I'm happy for it to be redistributed under the licence above
+          required: true
