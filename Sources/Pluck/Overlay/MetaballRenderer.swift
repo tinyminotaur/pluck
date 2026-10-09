@@ -79,6 +79,10 @@ final class MetaballView: NSView {
     private var swarm = SwarmSim()
     private var tendrils = TendrilSim()
     private var jumprope = JumpRopeSim()
+    private var starsim = StarSim()
+    private var kitesim = KiteSim()
+    private var bubblesim = BubbleSim()
+    private var beamsim = BeamSim()
     /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
     private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
@@ -205,6 +209,10 @@ final class MetaballView: NSView {
         swarm = SwarmSim(); swarm.params.bodyRadius = radius * 0.62; swarm.reset(pin: lockedPin)
         tendrils = TendrilSim(); tendrils.params.bodyRadius = radius * 0.66; tendrils.reset(pin: lockedPin)
         jumprope = JumpRopeSim(); jumprope.params.bodyRadius = radius * 0.72; jumprope.reset(pin: lockedPin)
+        starsim = StarSim(); starsim.params.bodyRadius = radius * 0.72; starsim.reset(pin: lockedPin)
+        kitesim = KiteSim(); kitesim.params.bodyRadius = radius * 0.7; kitesim.reset(pin: lockedPin)
+        bubblesim = BubbleSim(); bubblesim.params.bodyRadius = radius * 0.75; bubblesim.reset(pin: lockedPin)
+        beamsim = BeamSim(); beamsim.params.bodyRadius = radius * 0.7; beamsim.reset(pin: lockedPin)
         seedOrganicShape()
         accumulator = 0
         recoiling = false
@@ -334,6 +342,10 @@ final class MetaballView: NSView {
             case .swarm: swarm.step(dt: h, pin: lockedPin, head: head)
             case .tendrils: tendrils.step(dt: h, pin: lockedPin, head: head)
             case .jumprope: jumprope.step(dt: h, pin: lockedPin, head: head)
+            case .stars: starsim.step(dt: h, pin: lockedPin, head: head)
+            case .kite: kitesim.step(dt: h, pin: lockedPin, head: head)
+            case .bubbles: bubblesim.step(dt: h, pin: lockedPin, head: head)
+            case .beam: beamsim.step(dt: h, pin: lockedPin, head: head)
             case .liquid: break
             }
         }
@@ -349,6 +361,10 @@ final class MetaballView: NSView {
         case .swarm: return swarm.isFinished
         case .tendrils: return tendrils.isFinished
         case .jumprope: return jumprope.isFinished
+        case .stars: return starsim.isFinished
+        case .kite: return kitesim.isFinished
+        case .bubbles: return bubblesim.isFinished
+        case .beam: return beamsim.isFinished
         }
     }
 
@@ -402,7 +418,7 @@ final class MetaballView: NSView {
         case .pearls: return pearls.primitives(emerge: emerge, headGlow: glow)
         case .swarm: return swarm.primitives(emerge: emerge, headGlow: glow)
         case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
-        case .jumprope: return jumprope.primitives(emerge: emerge, headGlow: glow)
+        case .jumprope, .stars, .kite, .bubbles, .beam: return []
         case .liquid: return []
         }
     }
@@ -417,6 +433,14 @@ final class MetaballView: NSView {
                                        alpha: min(1, emerge), headGlow: glow, time: time)
         case .jumprope:
             vectorHost.updatePaper(jumprope.paperScene(emerge: emerge, headGlow: glow))
+        case .stars:
+            vectorHost.updateStars(starsim.scene(emerge: emerge, headGlow: glow))
+        case .kite:
+            vectorHost.updateKite(kitesim.scene(emerge: emerge, headGlow: glow))
+        case .beam:
+            vectorHost.updateBeam(beamsim.scene(emerge: emerge, headGlow: glow))
+        case .bubbles:
+            vectorHost.updateBubbles(bubblesim.bubbleStates(emerge: emerge, headGlow: glow), alpha: min(1, emerge))
         default:
             vectorHost.hide()
         }
@@ -481,8 +505,8 @@ final class MetaballView: NSView {
         let ringR = GestureMath.deadZone + 4
         var rect = CGRect(x: lockedPin.x - ringR, y: lockedPin.y - ringR, width: ringR * 2, height: ringR * 2)
         for bud in budGeometry(pinR: bulbPin) {
-            let half = bud.radius * 1.6 + 10
-            rect = rect.union(CGRect(x: bud.center.x - half, y: bud.center.y - half, width: half * 2, height: half * 2))
+            let hx: CGFloat = 330, hy: CGFloat = 60
+            rect = rect.union(CGRect(x: bud.center.x - hx, y: bud.center.y - hy, width: hx * 2, height: hy * 2))
         }
         return rect
     }
@@ -743,6 +767,14 @@ final class MetaballView: NSView {
             tendrils.release(commit: role != nil ? actionDirection() : nil)
         case .jumprope:
             jumprope.release(commit: role != nil ? actionDirection() : nil)
+        case .stars:
+            starsim.release(commit: role != nil ? actionDirection() : nil)
+        case .kite:
+            kitesim.release(commit: role != nil ? actionDirection() : nil)
+        case .bubbles:
+            bubblesim.release(commit: role != nil ? actionDirection() : nil)
+        case .beam:
+            beamsim.release(commit: role != nil ? actionDirection() : nil)
         }
     }
 
@@ -1136,37 +1168,33 @@ final class MetaballView: NSView {
         let pinR = bulbPin
         for bud in budGeometry(pinR: pinR) {
             let fit = bud.radius / (Self.budBaseRadius * (cfg.meetingMode ? 0.8 : 1))
-            let textFade = smoothstep01((fit - 0.4) / 0.5)   // text appears once the bud is big enough to hold it
-            guard textFade > 0.01 else { continue }
-            let light = NSColor.white
-            let titleFont = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
-            let attrs: (NSColor) -> [NSAttributedString.Key: Any] = { [.font: titleFont, .foregroundColor: $0] }
-            let title = NSAttributedString(string: bud.item.title, attributes: attrs(light))
-            let shadow = NSAttributedString(string: bud.item.title, attributes: attrs(NSColor(calibratedWhite: 0, alpha: 0.55)))
+            let fade = smoothstep01((fit - 0.3) / 0.6)
+            guard fade > 0.01 else { continue }
+            let titleFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            let title = NSAttributedString(string: bud.item.title, attributes: [.font: titleFont, .foregroundColor: NSColor.white])
             let tSize = title.size()
-            let glyph = Self.glyph(for: bud.item.role, color: light)
-
-            if activeStyle != .liquid {
-                // The head is spiky or faceted in these styles: give the text a quiet dark disc to sit on.
-                ctx.saveGState()
-                ctx.setFillColor(NSColor(calibratedWhite: 0.02, alpha: 0.62 * textFade).cgColor)
-                let r = bud.radius * 0.95
-                ctx.fillEllipse(in: CGRect(x: bud.center.x - r, y: bud.center.y - r, width: r * 2, height: r * 2))
-                ctx.restoreGState()
-            }
+            let glyph = Self.glyph(for: bud.item.role, color: .white)
+            let glyphW: CGFloat = glyph != nil ? 16 : 0
+            let w = tSize.width + glyphW + (glyph != nil ? 6 : 0) + 22, h: CGFloat = 28
+            // Beside the cursor, never on it: to the right and a little above, flipping to the left near the edge.
+            let gap = max(bulbHead, 14) + 16
+            var cx = bud.center.x + gap + w / 2
+            if cx + w / 2 > bounds.maxX - 8 { cx = bud.center.x - gap - w / 2 }
+            var cy = bud.center.y + 10
+            cy = min(max(cy, bounds.minY + 8 + h / 2), bounds.maxY - 8 - h / 2)
+            let rect = CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h)
+            let s = 0.85 + 0.15 * min(1.2, fit)
             ctx.saveGState()
-            ctx.translateBy(x: bud.center.x, y: bud.center.y)
-            let s = min(1.25, max(0.5, fit))
-            ctx.scaleBy(x: s, y: s)
-            let hasGlyph = glyph != nil
-            let top = ((hasGlyph ? 15 : 0) + tSize.height) / 2
-            // Faint inset shadow first (normal blend), then the light itself (screen blend).
-            ctx.setAlpha(textFade * 0.9)
-            shadow.draw(at: CGPoint(x: -tSize.width / 2, y: top - (hasGlyph ? 15 : 0) - tSize.height - 0.8))
-            ctx.setBlendMode(.screen)
-            ctx.setAlpha(textFade)
-            if let glyph { glyph.draw(in: CGRect(x: -7, y: top - 14, width: 14, height: 14)) }
-            title.draw(at: CGPoint(x: -tSize.width / 2, y: top - (hasGlyph ? 15 : 0) - tSize.height))
+            ctx.translateBy(x: cx, y: cy); ctx.scaleBy(x: s, y: s); ctx.translateBy(x: -cx, y: -cy)
+            ctx.setAlpha(fade)
+            let pill = NSBezierPath(roundedRect: rect, xRadius: h / 2, yRadius: h / 2)
+            ctx.setShadow(offset: CGSize(width: 0, height: -2), blur: 6, color: NSColor(calibratedWhite: 0, alpha: 0.35).cgColor)
+            NSColor(calibratedWhite: 0.05, alpha: 0.78).setFill(); pill.fill()
+            ctx.setShadow(offset: .zero, blur: 0, color: nil)
+            tint.withAlphaComponent(0.7).setStroke(); pill.lineWidth = 1.2; pill.stroke()
+            var x = rect.minX + 11
+            if let glyph { glyph.draw(in: CGRect(x: x, y: cy - 8, width: 16, height: 16)); x += glyphW + 6 }
+            title.draw(at: CGPoint(x: x, y: cy - tSize.height / 2))
             ctx.restoreGState()
         }
     }
@@ -1218,10 +1246,7 @@ final class MetaballView: NSView {
         for d in drops where circles.count < ObsidianBlobMetal.maxCircles - 3 {
             circles.append(.init(center: local(d.p), radius: Float(d.r)))
         }
-        // Action buds: each direction is a liquid bud on the pin, big enough to hold its label.
-        for bud in budGeometry(pinR: pinR) where circles.count < ObsidianBlobMetal.maxCircles - 2 {
-            circles.append(.init(center: local(bud.center), radius: Float(bud.radius), emphasis: Float(bud.glow)))
-        }
+        // The action label is a separate pill beside the cursor (see drawCompass); it never sits on the head.
         circles.append(.init(center: local(anchor), radius: Float(pinR)))
         circles.append(.init(center: local(head), radius: Float(headR)))
 

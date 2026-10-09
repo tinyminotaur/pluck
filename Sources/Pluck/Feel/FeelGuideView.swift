@@ -106,6 +106,7 @@ struct FeelGuideView: View {
     private static let styleIcons: [String: String] = [
         "liquid": "drop.fill", "ferro": "bolt.fill", "crystal": "diamond.fill", "gravity": "moon.stars.fill",
         "pearls": "circle.grid.3x3.fill", "swarm": "sparkles", "tendrils": "leaf.fill", "jumprope": "figure.jumprope",
+        "stars": "star.fill", "kite": "wind", "bubbles": "bubbles.and.sparkles.fill", "beam": "bolt.horizontal.fill",
     ]
 
     private var looksTab: some View {

@@ -177,6 +177,7 @@ enum PreviewRender {
             (.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst), (.crystal, ThemeLibrary.frost),
             (.gravity, ThemeLibrary.moltenGold), (.pearls, ThemeLibrary.mercury), (.swarm, ThemeLibrary.aurora),
             (.tendrils, ThemeLibrary.neonJelly), (.jumprope, ThemeLibrary.sunsetLava),
+            (.stars, ThemeLibrary.aurora), (.kite, ThemeLibrary.sunsetLava), (.bubbles, ThemeLibrary.mist), (.beam, ThemeLibrary.mist),
         ]
         let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
         guard let ctx = CGContext(
@@ -203,7 +204,7 @@ enum PreviewRender {
                         t += dt
                     }
                     prims = f.primitives(emerge: 1, headGlow: armed)
-                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope {
+                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam {
                     let head = { (k: CGFloat) in CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))) }
                     var t: CGFloat = 0
                     switch row.0 {
@@ -220,6 +221,23 @@ enum PreviewRender {
                                                  alpha: 1, headGlow: armed, time: t)
                             host.root.render(in: ctx)
                         }
+                    case .stars:
+                        var a = StarSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateStars(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .kite:
+                        var a = KiteSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateKite(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
+                    case .bubbles:
+                        var a = BubbleSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateBubbles(a.bubbleStates(emerge: 1, headGlow: armed), alpha: 1); host.root.render(in: ctx) }
+                    case .beam:
+                        var a = BeamSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
+                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                        if c == 3 { a.release(commit: CGPoint(x: 1, y: 0)); for _ in 0..<12 { a.step(dt: dt, pin: pin, head: head(1)) } }
+                        vector = { ctx in let host = VectorStyleHost(); host.updateBeam(a.scene(emerge: 1, headGlow: armed)); host.root.render(in: ctx) }
                     case .jumprope:
                         var a = JumpRopeSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
                         while t < 2.4 + CGFloat(c) * 0.13 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }

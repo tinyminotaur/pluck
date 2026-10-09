@@ -144,7 +144,7 @@ final class StyleSimTests: XCTestCase {
     }
 
     func testStylesCoverAllCases() {
-        XCTAssertEqual(AnimationStyle.allCases.count, 8)
+        XCTAssertEqual(AnimationStyle.allCases.count, 12)
         for s in AnimationStyle.allCases { XCTAssertFalse(s.name.isEmpty); XCTAssertFalse(s.tagline.isEmpty) }
     }
 }
@@ -236,5 +236,65 @@ final class DelightSimTests: XCTestCase {
         XCTAssertGreaterThan(maxLift, 15)       // it actually leaves the ground
         XCTAssertGreaterThan(grounded, 100)     // and spends time landed
         XCTAssertTrue(j.primitives(emerge: 1).allSatisfy { $0.a.x.isFinite && $0.a.y.isFinite })
+    }
+
+    func testStarsDrawAConstellationThatScattersOnCommit() {
+        var st = StarSim(); st.reset(pin: pin)
+        for i in 0..<400 { st.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 80), 500)) }
+        let sc = st.scene(emerge: 1)
+        XCTAssertGreaterThan(sc.pin.size, sc.headStar.size)       // the pinned star is the big one
+        XCTAssertEqual(sc.lines.count, sc.stars.count + 1)
+        XCTAssertTrue(sc.shooting.isEmpty)
+        st.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<40 { st.step(dt: 1 / 120, pin: pin, head: head(1, 500)) }
+        XCTAssertEqual(st.scene(emerge: 1).shooting.count, 1)
+    }
+
+    func testKiteTailTrailsAndReleaseFliesAway() {
+        var k = KiteSim(); k.reset(pin: pin)
+        for i in 0..<600 { k.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 80), 450)) }
+        let sc = k.scene(emerge: 1)
+        XCTAssertEqual(sc.tail.count, KiteSim.Params().tailLinks)
+        XCTAssertTrue(sc.tail.allSatisfy { $0.x.isFinite && $0.y.isFinite })
+        XCTAssertGreaterThan(sc.spoolSize, 8)
+        k.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<120 { k.step(dt: 1 / 120, pin: pin, head: head(1, 450)) }
+        XCTAssertGreaterThan(k.scene(emerge: 1).kite.x, pin.x + 450)
+    }
+
+    func testBubblesPopOnCommit() {
+        var b = BubbleSim(); b.reset(pin: pin)
+        for i in 0..<400 { b.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 80), 500)) }
+        XCTAssertTrue(b.bubbleStates(emerge: 1).allSatisfy { $0.pop == 0 })
+        b.release(commit: nil)
+        for _ in 0..<60 { b.step(dt: 1 / 120, pin: pin, head: head(1, 500)) }
+        XCTAssertTrue(b.bubbleStates(emerge: 1).allSatisfy { $0.pop > 0.9 })
+        XCTAssertEqual(b.count, BubbleSim.Params().bubbles)
+    }
+
+    func testBeamFiresAlongThePullAndFlashesOnCommit() {
+        var b = BeamSim(); b.reset(pin: pin)
+        for i in 0..<400 { b.step(dt: 1 / 120, pin: pin, head: head(min(1, CGFloat(i) / 80), 500)) }
+        let sc = b.scene(emerge: 1)
+        XCTAssertGreaterThan(sc.beamAmount, 0.9)
+        XCTAssertEqual(sc.centerline.count, sc.halfWidth.count)
+        XCTAssertGreaterThan(sc.halfWidth.max() ?? 0, 4)
+        XCTAssertGreaterThan(sc.centerline.last!.x, pin.x + 400)
+        XCTAssertEqual(sc.flash, 0)
+        b.release(commit: CGPoint(x: 1, y: 0))
+        for _ in 0..<10 { b.step(dt: 1 / 120, pin: pin, head: head(1, 500)) }
+        let fired = b.scene(emerge: 1)
+        XCTAssertGreaterThan(fired.flash, 0.5)
+        XCTAssertFalse(fired.rings.isEmpty)
+    }
+
+    func testTendrilsCoilAroundTheHeadWhenFar() {
+        var t = TendrilSim(); t.reset(pin: pin)
+        let h = head(1, 420)
+        for _ in 0..<600 { t.step(dt: 1 / 120, pin: pin, head: h) }
+        XCTAssertGreaterThan(t.gripAmount, 0.9)
+        let tips = t.primitives(emerge: 1).filter { $0.kind == .cone }
+        let nearHead = tips.filter { hypot($0.b.x - h.x, $0.b.y - h.y) < 70 }.count
+        XCTAssertGreaterThan(nearHead, 20)       // many links wrapped close around the cursor
     }
 }

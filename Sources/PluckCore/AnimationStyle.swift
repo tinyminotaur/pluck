@@ -12,6 +12,10 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case swarm
     case tendrils
     case jumprope
+    case stars
+    case kite
+    case bubbles
+    case beam
 
     public var name: String {
         switch self {
@@ -23,11 +27,15 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .swarm: return "Fireflies"
         case .tendrils: return "Tendrils"
         case .jumprope: return "Jump Rope"
+        case .stars: return "Stars"
+        case .kite: return "Kite"
+        case .bubbles: return "Soap Bubbles"
+        case .beam: return "Energy Beam"
         }
     }
 
     /// Drawn with hand-made vector sprites instead of the glass shader.
-    public var isVector: Bool { self == .swarm || self == .jumprope }
+    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam }
 
     public var tagline: String {
         switch self {
@@ -36,9 +44,13 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .crystal: return "A crystal grows toward you, branching and evolving; it shatters on commit"
         case .gravity: return "Two bodies: the heavy pin pulls harder, grains orbit and stream between them"
         case .pearls: return "A beaded necklace on rope physics: it sags, swings and flings its pearls"
-        case .swarm: return "Real fireflies with flapping wings and glowing lanterns drift between two jar lights"
+        case .swarm: return "Soft twinkling glow-wisps drift between two bright lights, trailing sparkles"
         case .tendrils: return "Tentacles reach for the cursor, undulating and tapering to fine tips"
         case .jumprope: return "A papercraft scene: a bunny hops a striped paper rope at the middle of the span"
+        case .stars: return "A constellation draws itself between two guiding stars; commit sends a shooting star"
+        case .kite: return "A paper kite on a long string with a ribbon tail, flying from a wooden reel"
+        case .bubbles: return "Iridescent soap bubbles drift between two big ones, then pop"
+        case .beam: return "Charge an energy ball, pull, and a wave-motion beam blasts out; commit fires it"
         }
     }
 }

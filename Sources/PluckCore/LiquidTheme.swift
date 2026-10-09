@@ -329,6 +329,26 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.3, "reachGain": 2.0,
                     "idleLife": 0.5, "glassOpacity": 0.97, "shadowStrength": 0.35,
                    ], style: .jumprope),
+        FeelPreset(id: "constellation", name: "Constellation", tagline: "Pull between two guiding stars and the sky draws itself",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .stars),
+        FeelPreset(id: "paper-kite", name: "Paper Kite", tagline: "A paper kite on a long string with a ribbon tail",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 44, "magnetPull": 55, "magnetWeight": 0.75, "magnetStick": 0.25, "reachGain": 2.0,
+                    "idleLife": 0.6, "glassOpacity": 0.97, "shadowStrength": 0.3,
+                   ], style: .kite),
+        FeelPreset(id: "soap-bubbles", name: "Soap Bubbles", tagline: "Shimmering bubbles that wobble, drift and pop",
+                   themeID: "mist", values: [
+                    "restRadius": 48, "magnetPull": 50, "magnetWeight": 0.7, "magnetStick": 0.2, "reachGain": 2.0,
+                    "idleLife": 0.7, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .bubbles),
+        FeelPreset(id: "wave-motion", name: "Wave-Motion Beam", tagline: "Charge up, pull, and blast: an anime energy beam",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.
