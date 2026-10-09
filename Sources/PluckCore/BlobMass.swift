@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// Tunable mass model for the liquid tether. Feel Lab edits these live.
+/// Tunable mass model for the liquid tether. The settings window edits these live.
 public struct BlobMassParams: Equatable, Sendable {
     /// Resting blob radius when pin ≈ head (points). Drives total conserved area.
     public var restRadius: CGFloat

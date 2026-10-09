@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Private API: it can disappear or change in any macOS release. Everything is looked up with
 /// `dlopen`/`dlsym`, so if anything is missing Pluck simply reports `isAvailable == false` and
-/// carries on. Off by default (see `FeelLabConfig.threeFingerEnabled`).
+/// carries on. Off by default (see `PluckConfig.threeFingerEnabled`).
 final class MultitouchMonitor: @unchecked Sendable {
     static let shared = MultitouchMonitor()
 

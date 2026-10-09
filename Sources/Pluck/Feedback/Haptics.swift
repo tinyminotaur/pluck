@@ -8,7 +8,7 @@ enum Haptics {
     private static var lastTick: CFTimeInterval = 0
 
     static func tick(_ pattern: NSHapticFeedbackManager.FeedbackPattern = .alignment) {
-        guard FeelLabConfig.shared.hapticsEnabled else { return }
+        guard PluckConfig.shared.hapticsEnabled else { return }
         let now = CACurrentMediaTime()
         guard now - lastTick > 0.04 else { return }
         lastTick = now

@@ -10,14 +10,14 @@ import UniformTypeIdentifiers
 @MainActor
 enum LiveSmoke {
     static func run(outputPath: String, style: String = "liquid") -> Never {
-        let savedStyle = FeelLabConfig.shared.styleID, savedTheme = FeelLabConfig.shared.themeID
-        FeelLabConfig.shared.styleID = style
+        let savedStyle = PluckConfig.shared.styleID, savedTheme = PluckConfig.shared.themeID
+        PluckConfig.shared.styleID = style
         switch style {
-        case "ferro": FeelLabConfig.shared.themeID = ThemeLibrary.ferrofluid.id
-        case "crystal": FeelLabConfig.shared.themeID = ThemeLibrary.amethyst.id
+        case "ferro": PluckConfig.shared.themeID = ThemeLibrary.ferrofluid.id
+        case "crystal": PluckConfig.shared.themeID = ThemeLibrary.amethyst.id
         default: break
         }
-        defer { FeelLabConfig.shared.styleID = savedStyle; FeelLabConfig.shared.themeID = savedTheme }
+        defer { PluckConfig.shared.styleID = savedStyle; PluckConfig.shared.themeID = savedTheme }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let size = CGSize(width: 1000, height: 560)
@@ -41,7 +41,7 @@ enum LiveSmoke {
         view.pointerTarget = pin
         view.emerge = 1
         view.bloom = 1
-        view.items = FeelLab.context.items
+        view.items = Playground.context.items
         view.startPhysics()
         view.debugRecordFrames = true
         print("LiveSmoke: screen \(Int(screen.frame.width))x\(Int(screen.frame.height)) scale \(screen.backingScaleFactor) | window \(Int(window.frame.width))x\(Int(window.frame.height)) visible=\(window.isVisible) occluded=\(!window.occlusionState.contains(.visible)) | liveMetal path=\(view.debugLiveMetal)")
@@ -92,8 +92,8 @@ enum LiveSmoke {
                         print("LiveSmoke: style prims \(pr.count) | beads \(tight.count)" + (tight.first.map { " first bead at (\(Int($0.a.x)),\(Int($0.a.y)) r=\(String(format: "%.1f", Double($0.ra)))" } ?? ""))
                     }
                     view.stopPhysics()
-                    FeelLabConfig.shared.styleID = savedStyle
-                    FeelLabConfig.shared.themeID = savedTheme
+                    PluckConfig.shared.styleID = savedStyle
+                    PluckConfig.shared.themeID = savedTheme
                     exit(0)
                 }
             }

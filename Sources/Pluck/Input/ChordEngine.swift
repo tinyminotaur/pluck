@@ -64,7 +64,7 @@ final class ChordEngine {
         held = physicalHeld()
         installNSEvent()
         installPanicHotkey()
-        configSub = FeelLabConfig.shared.$threeFingerEnabled
+        configSub = PluckConfig.shared.$threeFingerEnabled
             .receive(on: DispatchQueue.main)
             .sink { [weak self] on in self?.setThreeFinger(on) }
         NSLog("Pluck: SAFE listen-only NSEvent driver (no event tap)")
@@ -184,7 +184,7 @@ final class ChordEngine {
 
         // Trackpad trigger: modifier + press and hold (without moving). A normal quick click or
         // drag never matures, so ordinary use is unaffected.
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         if button == .left, !gestureActive, cfg.trackpadTriggerEnabled,
            modifiers.contains(cfg.trackpadModifier.flag), !isDown(.right) {
             beginHoldWatch(at: location, holdSeconds: cfg.trackpadHoldMs / 1000)
@@ -230,7 +230,7 @@ final class ChordEngine {
 
     private func handleFlags(_ held: ModifierSet) {
         lastModifiers = held
-        let trigger = FeelLabConfig.shared.modifierTrigger
+        let trigger = PluckConfig.shared.modifierTrigger
         if gestureActive, gestureSource == .modifier {
             // Releasing the modifier commits, exactly like releasing a mouse button.
             if !trigger.shouldContinue(held: held) {
@@ -251,7 +251,7 @@ final class ChordEngine {
 
     private func beginModifierWatch(_ trigger: ModifierTrigger) {
         guard modTimer == nil else { return }
-        let seconds = FeelLabConfig.shared.modifierHoldMs / 1000
+        let seconds = PluckConfig.shared.modifierHoldMs / 1000
         modArm = HoldArm(
             holdSeconds: seconds,
             moveTolerance: trigger.requiresStillness ? 8 : .greatestFiniteMagnitude
@@ -294,7 +294,7 @@ final class ChordEngine {
 
     private func holdMatured() {
         holdTimer = nil
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         guard holdArm.isReady(at: CACurrentMediaTime()),
               !gestureActive,
               isDown(.left),
@@ -370,7 +370,7 @@ final class ChordEngine {
 
         // Rest-to-arm: three fingers must stay put for the hold time. If they start moving first,
         // it is an ordinary three-finger drag and we never take over.
-        let seconds = FeelLabConfig.shared.threeFingerHoldMs / 1000
+        let seconds = PluckConfig.shared.threeFingerHoldMs / 1000
         touchArm = HoldArm(holdSeconds: seconds, moveTolerance: 8)
         touchArm.press(at: Self.mouseLocation(), time: now)
         touchTimer = Timer.scheduledTimer(withTimeInterval: seconds + 0.01, repeats: false) { [weak self] _ in

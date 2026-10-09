@@ -199,7 +199,7 @@ public enum ThemeLibrary {
 }
 
 /// A named combination of feel knobs and a theme that performs one distinct way. Values are keyed by the
-/// Feel Lab knob names; a preset applies on top of `PresetLibrary.baseline`, so switching presets always
+/// Settings knob names; a preset applies on top of `PresetLibrary.baseline`, so switching presets always
 /// returns every knob to a known state first.
 public struct FeelPreset: Identifiable, Sendable {
     public let id: String

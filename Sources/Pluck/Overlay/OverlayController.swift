@@ -41,7 +41,7 @@ final class OverlayController {
         let view = MetaballView(frame: NSRect(origin: .zero, size: screen.frame.size))
         view.reducedMotion = reducedMotion
         view.items = context.items
-        view.tintColor = FeelLabConfig.shared.tintColor
+        view.tintColor = PluckConfig.shared.tintColor
         view.pin = toView(pin)
         view.head = toView(pin)
         view.pointerTarget = toView(pin)
@@ -90,7 +90,7 @@ final class OverlayController {
 
     /// The drawn head position for a raw global pointer position.
     private func headTarget(for pointer: CGPoint) -> CGPoint {
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         // Exact by default: the blob's end is the pointer, so the cursor never appears to jump when it comes back.
         let virtual = cfg.reachExact ? pointer : GestureMath.reachHead(
             pin: gesturePin, pointer: pointer,

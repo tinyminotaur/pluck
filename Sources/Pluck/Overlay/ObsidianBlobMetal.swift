@@ -645,7 +645,7 @@ enum ObsidianPalette {
     }
 
     /// Beer-Lambert absorption: thick glass eats blue and green first, so the core goes black and the
-    /// thin edges stay amber. `depth` is the Feel Lab "absorption" knob.
+    /// thin edges stay amber. `depth` is the "absorption" setting.
     static func absorb(depth: Float) -> SIMD3<Float> {
         SIMD3(0.85 + 0.8 * depth, 1.9 + 1.2 * depth, 3.2 + 1.4 * depth)
     }

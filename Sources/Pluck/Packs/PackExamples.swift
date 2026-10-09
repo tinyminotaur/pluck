@@ -5,7 +5,7 @@ enum PackExamples {
     static let readme = """
     # Your Pluck animation
 
-    Edit `pack.json` and save: Pluck reloads it automatically (open Feel Lab > Library to see any errors).
+    Edit `pack.json` and save: Pluck reloads it automatically (open Settings > Library to see any errors).
 
     - `layers` are drawn in order. Types: `path`, `shape`, `text`, `image`.
     - Any number can be a plain value or an expression such as `"sin(s*10 - t*4) * 20 * pull"`.

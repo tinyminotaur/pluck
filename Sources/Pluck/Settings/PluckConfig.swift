@@ -26,10 +26,10 @@ enum TriggerModifier: Int, CaseIterable, Identifiable {
     }
 }
 
-/// Live-tunable Feel Lab knobs. Persisted in UserDefaults; blob reads them every frame.
+/// Live-tunable settings. Persisted in UserDefaults; blob reads them every frame.
 @MainActor
-final class FeelLabConfig: ObservableObject {
-    static let shared = FeelLabConfig()
+final class PluckConfig: ObservableObject {
+    static let shared = PluckConfig()
 
     private let defaults = UserDefaults.standard
     private let prefix = "pluck.feel."
@@ -118,6 +118,10 @@ final class FeelLabConfig: ObservableObject {
     @Published var libraryURL: String { didSet { saveString("libraryURL", libraryURL) } }
     /// Overall size of everything drawn, relative to the screen (1 = the original size).
     @Published var sizeScale: Double { didSet { save("sizeScale", sizeScale) } }
+    /// Opt-in beta: run real actions (copy, share, search, save, tile windows) instead of only drawing.
+    @Published var realActions: Bool { didSet { RealActions.enabled = realActions; NotificationCenter.default.post(name: .pluckRealActionsChanged, object: nil) } }
+    /// Opt-in: keep a small local log of why gestures begin and end.
+    @Published var diagnosticsEnabled: Bool { didSet { Diagnostics.enabled = diagnosticsEnabled } }
     @Published var audioReactive: Bool { didSet { saveBool("audioReactive", audioReactive) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
@@ -191,6 +195,8 @@ final class FeelLabConfig: ObservableObject {
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         soundEnabled = Self.loadBool("soundEnabled", false)
         audioReactive = Self.loadBool("audioReactive", false)
+        realActions = RealActions.enabled
+        diagnosticsEnabled = Diagnostics.enabled
         sizeScale = Self.load("sizeScale", 1.25)
         packID = UserDefaults.standard.string(forKey: "pluck.feel.packID") ?? ""
         packParamsJSON = UserDefaults.standard.string(forKey: "pluck.feel.packParamsJSON") ?? "{}"
@@ -374,7 +380,7 @@ final class FeelLabConfig: ObservableObject {
     }
 
     /// Knob name -> property, so presets can set knobs by name.
-    private static let knobPaths: [String: ReferenceWritableKeyPath<FeelLabConfig, Double>] = [
+    private static let knobPaths: [String: ReferenceWritableKeyPath<PluckConfig, Double>] = [
         "restRadius": \.restRadius, "stretchPull": \.stretchPull, "neckFloor": \.neckFloor,
         "pinMass": \.pinMass, "headMass": \.headMass, "pinMinFraction": \.pinMinFraction,
         "headMinFraction": \.headMinFraction, "responsiveness": \.responsiveness, "damping": \.damping,

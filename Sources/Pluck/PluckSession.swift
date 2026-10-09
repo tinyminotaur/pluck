@@ -42,15 +42,22 @@ final class PluckSession: ObservableObject {
         CGPoint(x: p.x, y: -p.y)
     }
 
+    private var listening = false
+
     func startListening() {
         engine.start()
-        if !FeelLab.enabled {
-            clipboardHistory.start()
-        }
+        listening = true
+        applyRealActions()
+    }
+
+    /// The clipboard watcher only runs while real actions are switched on (and we are listening).
+    func applyRealActions() {
+        if listening && RealActions.enabled { clipboardHistory.start() } else { clipboardHistory.stop() }
     }
 
     func stopListening() {
         if isActive { cancel() }
+        listening = false
         engine.stop()
         showCursor()
         CursorGuard.forceVisible()
@@ -91,14 +98,14 @@ final class PluckSession: ObservableObject {
         bloomProgress = 0
         lastRing = 0
 
-        presenterMode = FeelLabConfig.shared.presenterMode
+        presenterMode = PluckConfig.shared.presenterMode
         presenterIndex = nil
         presenterEngaged = false
         // Hide the system cursor first so the blob is the only pointer you see. (Presenter mode keeps it until a visual starts.)
         if !presenterMode { hideCursor() }
 
         let ctx = presenterMode ? GrabContext(kind: .clipboard, nucleusTitle: "", items: [])
-            : (FeelLab.enabled ? FeelLab.context : ContextResolver.resolve(at: location))
+            : (RealActions.enabled ? ContextResolver.resolve(at: location) : Playground.context)
         context = ctx
         overlay.show(pin: location, context: ctx, reducedMotion: reducedMotion)
         if presenterMode { pushPresenter() }
@@ -148,10 +155,10 @@ final class PluckSession: ObservableObject {
         pointer = location
         if presenterMode {
             let engaged = presenterEngaged && presenterIndex != nil
-            let title = presenterIndex.flatMap { FeelLabConfig.shared.presenterPreset(forSector: $0)?.name }
+            let title = presenterIndex.flatMap { PluckConfig.shared.presenterPreset(forSector: $0)?.name }
             if engaged { Haptics.tick(.levelChange); Sounds.commit() }
             finishVisual(commitRole: engaged ? .north : nil) {
-                if FeelLab.enabled { NotificationCenter.default.post(name: .pluckFeelResult, object: engaged ? "Presenter: \(title ?? "")" : "Canceled") }
+                if !RealActions.enabled { NotificationCenter.default.post(name: .pluckGestureResult, object: engaged ? "Presenter: \(title ?? "")" : "Canceled") }
             }
             presenterMode = false; presenterIndex = nil; presenterEngaged = false
             return
@@ -163,12 +170,12 @@ final class PluckSession: ObservableObject {
             available: available, current: capturedRole
         )
         let ctx = context
-        let resultTitle = FeelLab.title(for: role)
+        let resultTitle = Playground.title(for: role)
         if role != nil { Haptics.tick(.levelChange); Sounds.commit() }
 
         finishVisual(commitRole: role) {
-            if FeelLab.enabled {
-                NotificationCenter.default.post(name: .pluckFeelResult, object: resultTitle)
+            if !RealActions.enabled {
+                NotificationCenter.default.post(name: .pluckGestureResult, object: resultTitle)
                 return
             }
             if let role, let item = ctx?.items.first(where: { $0.role == role }) {
@@ -183,8 +190,8 @@ final class PluckSession: ObservableObject {
             return
         }
         finishVisual(commitRole: nil) {
-            if FeelLab.enabled {
-                NotificationCenter.default.post(name: .pluckFeelResult, object: "Canceled")
+            if !RealActions.enabled {
+                NotificationCenter.default.post(name: .pluckGestureResult, object: "Canceled")
             }
         }
     }
@@ -200,7 +207,7 @@ final class PluckSession: ObservableObject {
         context = nil
         capturedRole = nil
         presenterMode = false; presenterIndex = nil; presenterEngaged = false
-        FeelLabConfig.shared.transientPreset = nil
+        PluckConfig.shared.transientPreset = nil
         engine.gestureDidEnd()
     }
 
@@ -233,12 +240,12 @@ final class PluckSession: ObservableObject {
     }
 
     private func presenterNames() -> [String] {
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         return (0..<cfg.presenterCount).map { cfg.presenterPreset(forSector: $0)?.name ?? "None" }
     }
 
     private func pushPresenter() {
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         overlay.setPresenter(
             .init(count: cfg.presenterCount, radius: CGFloat(cfg.presenterRadius), names: presenterNames(), armed: presenterIndex, engaged: presenterEngaged),
             preset: presenterIndex.flatMap { cfg.presenterPreset(forSector: $0) }
@@ -248,7 +255,7 @@ final class PluckSession: ObservableObject {
     /// Presenter mode: dragging past the radius picks a direction and locks it until release; a little further brings
     /// its visual to life, and it stays alive even if the pointer comes back inside.
     private func handlePresenterMove() {
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         let before = PresenterMath.Selection(index: presenterIndex, engaged: presenterEngaged)
         let after = PresenterMath.advance(before, pin: pin, pointer: pointer, count: cfg.presenterCount, radius: CGFloat(cfg.presenterRadius))
         if after.index != before.index, after.index != nil { Haptics.tick(.alignment); Sounds.latch() }

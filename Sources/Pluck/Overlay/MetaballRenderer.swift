@@ -194,7 +194,7 @@ final class MetaballView: NSView {
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
-    private var cfg: FeelLabConfig { FeelLabConfig.shared }
+    private var cfg: PluckConfig { PluckConfig.shared }
     private var mass: BlobMassParams { cfg.massParams }
     private var particleCount: Int { cfg.resolvedParticleCount }
 

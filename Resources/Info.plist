@@ -20,13 +20,13 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026</string>
+	<string>Copyright © 2026 Pluck contributors. Licensed under the Apache License 2.0.</string>
 	<key>NSAccessibilityUsageDescription</key>
-	<string>Pluck needs Accessibility to read what’s under the pointer and run Keep, Go, Give, and Ask actions.</string>
-	<key>NSInputMonitoringUsageDescription</key>
-	<string>Pluck needs Input Monitoring to notice when you hold both mouse buttons and show the liquid gesture without leaking clicks into other apps.</string>
+	<string>Pluck needs Accessibility to notice your trigger (holding a modifier, a trackpad gesture, or a mouse chord) and to draw over other apps. It only listens; it never blocks or sends mouse or keyboard input.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Pluck uses Apple Events to open links and run a few system actions.</string>
+	<string>Only if you turn on the optional real actions, Pluck uses Apple Events to open links and run a few system actions.</string>
 </dict>
 </plist>

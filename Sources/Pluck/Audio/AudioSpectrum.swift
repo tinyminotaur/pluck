@@ -6,7 +6,7 @@ import ScreenCaptureKit
 
 /// Live system-audio spectrum for the Equalizer style.
 ///
-/// This is strictly opt-in (a Feel Lab toggle, off by default) and only runs while the Equalizer style is selected.
+/// This is strictly opt-in (a Settings toggle, off by default) and only runs while the Equalizer style is selected.
 /// It uses ScreenCaptureKit's audio-only path, which needs macOS's Screen Recording permission; the system shows its
 /// own prompt and its own recording indicator. Pluck's own sounds are excluded, nothing is recorded or stored, and
 /// only 24 band levels leave this file. If the permission is missing the Equalizer simply animates on its own.
@@ -127,7 +127,7 @@ final class AudioSpectrumController {
     private var bag = Set<AnyCancellable>()
 
     func bind() {
-        let cfg = FeelLabConfig.shared
+        let cfg = PluckConfig.shared
         cfg.$audioReactive.combineLatest(cfg.$styleID)
             .removeDuplicates { $0 == $1 }
             .sink { [weak self] on, style in self?.apply(on: on, style: style) }
@@ -144,5 +144,5 @@ final class AudioSpectrumController {
     }
 
     /// Called when the app regains focus, in case the permission was granted in System Settings meanwhile.
-    func refresh() { let c = FeelLabConfig.shared; apply(on: c.audioReactive, style: c.styleID) }
+    func refresh() { let c = PluckConfig.shared; apply(on: c.audioReactive, style: c.styleID) }
 }

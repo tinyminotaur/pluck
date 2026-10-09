@@ -14,7 +14,7 @@ enum Sounds {
     static func commit() { play("Pop", volume: 0.20) }
 
     private static func play(_ name: String, volume: Float) {
-        guard FeelLabConfig.shared.soundEnabled else { return }
+        guard PluckConfig.shared.soundEnabled else { return }
         let now = CACurrentMediaTime()
         guard now - lastPlay > 0.05 else { return }
         lastPlay = now

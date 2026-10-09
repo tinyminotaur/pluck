@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Single place for Accessibility. No Input Monitoring automation.
+/// Single place for the Accessibility permission (the only one Pluck needs).
 struct SetupView: View {
     var onReady: () -> Void
 
@@ -13,7 +13,7 @@ struct SetupView: View {
             Label("Set up Pluck", systemImage: "drop.fill")
                 .font(.title2.weight(.semibold))
 
-            Text("Feel Lab only needs Accessibility. Pluck listens to mouse chords — it never blocks your keyboard or mouse.")
+            Text("Pluck needs one permission: Accessibility, so it can notice your trigger and draw over other apps. It only listens, and never blocks or sends mouse or keyboard input.")
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -24,7 +24,7 @@ struct SetupView: View {
                     Spacer()
                     Text(axOK ? "On" : "Off").foregroundStyle(.secondary)
                 }
-                Text("So Pluck can see left+right chords and draw the overlay.")
+                Text("macOS shows this under System Settings > Privacy & Security > Accessibility.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 if !axOK {
@@ -42,7 +42,7 @@ struct SetupView: View {
             HStack {
                 Spacer()
                 Button("Quit") { NSApp.terminate(nil) }
-                Button("Start Feel Lab") { onReady() }
+                Button("Get started") { onReady() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!axOK)
             }

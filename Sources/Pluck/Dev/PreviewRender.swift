@@ -23,7 +23,7 @@ enum PreviewRender {
         ]
         let lightSet: [SIMD2<Float>] = [SIMD2(-0.45, 0.8), SIMD2(0.6, 0.6), SIMD2(-0.2, -0.7)]
         let rows: [(light: SIMD2<Float>, theme: LiquidTheme)] = themes.map { ts in ts.map { (SIMD2<Float>(-0.45, 0.8), $0) } }
-            ?? lightSet.map { ($0, FeelLabConfig.shared.theme) }
+            ?? lightSet.map { ($0, PluckConfig.shared.theme) }
         let lights = rows.map(\.light)
 
         let W = Int(tile.width * scale) * scenes.count
@@ -73,7 +73,7 @@ enum PreviewRender {
 
                 let stretchT = min(1, max(0, (len - 40) / 200))
                 let eased = stretchT * stretchT * (3 - 2 * stretchT)
-                // Facets are off while the liquid is being tuned (FeelLabConfig.facetsEnabled).
+                // Facets are off while the liquid is being tuned (PluckConfig.facetsEnabled).
                 let facet: Float = 0
                 _ = eased
 
@@ -140,11 +140,11 @@ enum PreviewRender {
         ) else { return 3 }
         ctx.setFillColor(CGColor(red: 0.16, green: 0.17, blue: 0.2, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        let saved = FeelLabConfig.shared.themeID
-        defer { FeelLabConfig.shared.themeID = saved }
-        let items = FeelLab.context.items
+        let saved = PluckConfig.shared.themeID
+        defer { PluckConfig.shared.themeID = saved }
+        let items = Playground.context.items
         for (r, theme) in themes.enumerated() {
-            FeelLabConfig.shared.themeID = theme.id
+            PluckConfig.shared.themeID = theme.id
             for (c, col) in cols.enumerated() {
                 let view = MetaballView(frame: NSRect(origin: .zero, size: tile))
                 view.debugPose(pin: CGPoint(x: 170, y: 190), pointer: col.pointer, armed: col.armed, items: items, seconds: 1.6)
@@ -280,13 +280,13 @@ enum PreviewRender {
                         if row.0 == .beam {
                             // Beam rows run through every energy variant in order, in charge-then-fire mode.
                             let beamIndex = rows[..<r].filter { $0.0 == .beam }.count
-                            FeelLabConfig.shared.beamVariantID = EnergyVariant.allCases[beamIndex % EnergyVariant.allCases.count].rawValue
-                            FeelLabConfig.shared.beamChargeMode = true
+                            PluckConfig.shared.beamVariantID = EnergyVariant.allCases[beamIndex % EnergyVariant.allCases.count].rawValue
+                            PluckConfig.shared.beamChargeMode = true
                         }
                         if row.0 == .pack {
                             PackLibrary.shared.reload()
                             let valid = PackLibrary.shared.packs.filter(\.isValid)
-                            if !valid.isEmpty { FeelLabConfig.shared.packID = valid[rows[..<r].filter { $0.0 == .pack }.count % valid.count].id }
+                            if !valid.isEmpty { PluckConfig.shared.packID = valid[rows[..<r].filter { $0.0 == .pack }.count % valid.count].id }
                         }
                         let runner = VectorRunners.make(row.0)!
                         runner.reset(pin: pin, radius: 42)
@@ -398,14 +398,14 @@ enum PreviewRender {
         ) else { return 3 }
         ctx.setFillColor(CGColor(red: 0.13, green: 0.14, blue: 0.17, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        let savedStyle = FeelLabConfig.shared.styleID, savedTheme = FeelLabConfig.shared.themeID
-        defer { FeelLabConfig.shared.styleID = savedStyle; FeelLabConfig.shared.themeID = savedTheme }
+        let savedStyle = PluckConfig.shared.styleID, savedTheme = PluckConfig.shared.themeID
+        defer { PluckConfig.shared.styleID = savedStyle; PluckConfig.shared.themeID = savedTheme }
         for (r, combo) in combos.enumerated() {
-            FeelLabConfig.shared.styleID = combo.0.rawValue
-            FeelLabConfig.shared.themeID = combo.1.id
+            PluckConfig.shared.styleID = combo.0.rawValue
+            PluckConfig.shared.themeID = combo.1.id
             let view = MetaballView(frame: NSRect(origin: .zero, size: tile))
             view.debugPose(pin: CGPoint(x: 110, y: 150), pointer: CGPoint(x: 440, y: 160), armed: .east,
-                           items: FeelLab.context.items, seconds: 2.2)
+                           items: Playground.context.items, seconds: 2.2)
             let pre = view.debugStylePrims()
             print("style \(combo.0.rawValue): before commit \(pre.count) prims | circles \(pre.filter { $0.kind == .circle }.count) (tight \(pre.filter { $0.blend == .tight }.count)) cones \(pre.filter { $0.kind == .cone }.count) shards \(pre.filter { $0.kind == .shard }.count)")
             view.debugCommit(role: .east)
@@ -441,7 +441,7 @@ enum PreviewRender {
         ) else { return 3 }
         ctx.setFillColor(CGColor(red: 0.16, green: 0.17, blue: 0.2, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        let items = FeelLab.context.items
+        let items = Playground.context.items
         let view = MetaballView(frame: NSRect(origin: .zero, size: tile))
         let pin = CGPoint(x: 120, y: 130)
         view.debugPose(pin: pin, pointer: CGPoint(x: 330, y: 130), armed: .east, items: items, seconds: 1.4)

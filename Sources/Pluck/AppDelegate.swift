@@ -2,12 +2,14 @@ import AppKit
 import PluckCore
 import SwiftUI
 
+/// The menu-bar app: owns the status item, the listening session and the first-run flow.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let session = PluckSession()
     private var listening = false
     private var permissionWatcher: Timer?
+    private static let onboardedKey = "pluck.onboarded"
 
     func applicationDidBecomeActive(_ notification: Notification) { AudioSpectrumController.shared.refresh() }
 
@@ -20,25 +22,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AudioSpectrumController.shared.bind()
         PackLibrary.shared.start()
 
-        NotificationCenter.default.addObserver(
-            forName: .pluckResetHard,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        NotificationCenter.default.addObserver(forName: .pluckResetHard, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.session.engine.resetHard() }
         }
+        NotificationCenter.default.addObserver(forName: .pluckRealActionsChanged, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.session.applyRealActions() }
+        }
 
-        FeelLab.enabled = true
-        FeelGuideController.shared.show()
-
+        let firstRun = !UserDefaults.standard.bool(forKey: Self.onboardedKey)
         if Permissions.accessibilityTrusted {
             startListening()
+            // A menu-bar app should not throw a window at you on every launch: only the very first time.
+            if firstRun { SettingsWindowController.shared.show() }
         } else {
             SetupWindowController.shared.show { [weak self] in
                 self?.startListening()
-                FeelGuideController.shared.show()
+                SettingsWindowController.shared.show()
             }
         }
+        UserDefaults.standard.set(true, forKey: Self.onboardedKey)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -46,11 +48,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopListening()
     }
 
+    // MARK: Menu bar
+
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "drop.fill", accessibilityDescription: "Pluck")
-            button.toolTip = "Pluck Feel Lab — safe listen-only"
+            button.toolTip = "Pluck"
         }
         let menu = NSMenu()
         menu.delegate = self
@@ -60,97 +64,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-
-        menu.addItem(disabled("Mode: Feel Lab · listen-only (safe)"))
-        menu.addItem(disabled("Accessibility: \(Permissions.accessibilityTrusted ? "On" : "Off")"))
-
-        menu.addItem(.separator())
-
-        let guide = NSMenuItem(title: "Show Feel Lab Guide", action: #selector(showGuide), keyEquivalent: "l")
-        guide.target = self
-        menu.addItem(guide)
+        let cfg = PluckConfig.shared
 
         if !Permissions.accessibilityTrusted {
-            let setup = NSMenuItem(title: "Set Up Accessibility…", action: #selector(openSetup), keyEquivalent: "")
-            setup.target = self
-            menu.addItem(setup)
+            menu.addItem(disabled("Needs the Accessibility permission"))
+            menu.addItem(action("Set Up Accessibility…", #selector(openSetup)))
+        } else {
+            menu.addItem(disabled(listening ? "Listening" : "Not listening"))
         }
-
-        let listen = NSMenuItem(
-            title: listening ? "Stop Listening" : "Start Listening",
-            action: #selector(toggleListening),
-            keyEquivalent: ""
-        )
-        listen.target = self
-        menu.addItem(listen)
-
         menu.addItem(.separator())
-        let meeting = NSMenuItem(title: "Meeting Mode (small, dim)", action: #selector(toggleMeeting), keyEquivalent: "m")
-        meeting.target = self
-        meeting.state = FeelLabConfig.shared.meetingMode ? .on : .off
-        menu.addItem(meeting)
-        let haptics = NSMenuItem(title: "Trackpad Haptics", action: #selector(toggleHaptics), keyEquivalent: "")
-        haptics.target = self
-        haptics.state = FeelLabConfig.shared.hapticsEnabled ? .on : .off
-        menu.addItem(haptics)
-        let sounds = NSMenuItem(title: "Soft Sounds", action: #selector(toggleSounds), keyEquivalent: "")
-        sounds.target = self
-        sounds.state = FeelLabConfig.shared.soundEnabled ? .on : .off
-        menu.addItem(sounds)
 
-        let presetMenu = NSMenu()
-        for p in PresetLibrary.everything {
-            let item = NSMenuItem(title: p.name, action: #selector(selectPreset(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = p.id
-            item.toolTip = p.tagline
-            item.state = FeelLabConfig.shared.presetID == p.id ? .on : .off
-            presetMenu.addItem(item)
-        }
-        let presetItem = NSMenuItem(title: "Feel Preset", action: nil, keyEquivalent: "")
-        presetItem.submenu = presetMenu
-        menu.addItem(presetItem)
+        let settings = action("Settings…", #selector(showSettings), key: ",")
+        menu.addItem(settings)
+        menu.addItem(action(listening ? "Stop Listening" : "Start Listening", #selector(toggleListening)))
+        menu.addItem(.separator())
 
-        let styleMenu = NSMenu()
+        // Looks: each style, with its looks underneath when it has several.
+        let looks = NSMenu()
         for st in AnimationStyle.allCases {
-            let item = NSMenuItem(title: st.name, action: #selector(selectStyle(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = st.rawValue
-            item.toolTip = st.tagline
-            item.state = FeelLabConfig.shared.styleID == st.rawValue ? .on : .off
-            styleMenu.addItem(item)
+            let presets = PresetLibrary.presets(for: st)
+            guard !presets.isEmpty else { continue }
+            if presets.count == 1 {
+                looks.addItem(presetItem(presets[0], title: st.name))
+            } else {
+                let sub = NSMenu()
+                for p in presets { sub.addItem(presetItem(p, title: p.name)) }
+                let parent = NSMenuItem(title: st.name, action: nil, keyEquivalent: "")
+                parent.submenu = sub
+                parent.state = cfg.style == st ? .on : .off
+                looks.addItem(parent)
+            }
         }
-        let styleItem = NSMenuItem(title: "Animation Style", action: nil, keyEquivalent: "")
-        styleItem.submenu = styleMenu
-        menu.addItem(styleItem)
+        let looksItem = NSMenuItem(title: "Looks", action: nil, keyEquivalent: "")
+        looksItem.submenu = looks
+        menu.addItem(looksItem)
 
-        let themeMenu = NSMenu()
+        let themes = NSMenu()
         for t in ThemeLibrary.all {
             let item = NSMenuItem(title: t.name, action: #selector(selectTheme(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = t.id
-            item.toolTip = t.tagline
-            item.state = FeelLabConfig.shared.themeID == t.id ? .on : .off
-            themeMenu.addItem(item)
+            item.target = self; item.representedObject = t.id; item.toolTip = t.tagline
+            item.state = cfg.themeID == t.id ? .on : .off
+            themes.addItem(item)
         }
-        themeMenu.addItem(.separator())
-        let surprise = NSMenuItem(title: "Surprise Me (random colours)", action: #selector(surpriseTheme), keyEquivalent: "")
+        themes.addItem(.separator())
+        let surprise = NSMenuItem(title: "Surprise Me", action: #selector(surpriseTheme), keyEquivalent: "")
         surprise.target = self
-        surprise.state = FeelLabConfig.shared.themeID == "custom" ? .on : .off
-        themeMenu.addItem(surprise)
-        let themeItem = NSMenuItem(title: "Colour Theme", action: nil, keyEquivalent: "")
-        themeItem.submenu = themeMenu
+        surprise.state = cfg.themeID == "custom" ? .on : .off
+        themes.addItem(surprise)
+        let themeItem = NSMenuItem(title: "Colours", action: nil, keyEquivalent: "")
+        themeItem.submenu = themes
         menu.addItem(themeItem)
-        menu.addItem(.separator())
-
-        let reset = NSMenuItem(title: "Reset Pointer / Gesture", action: #selector(resetHard), keyEquivalent: "")
-        reset.target = self
-        menu.addItem(reset)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Pluck", action: #selector(quit), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
+        menu.addItem(toggle("Presenter Mode", #selector(togglePresenter), on: cfg.presenterMode))
+        menu.addItem(toggle("Meeting Mode (smaller, dimmer)", #selector(toggleMeeting), on: cfg.meetingMode))
+        menu.addItem(toggle("Trackpad Haptics", #selector(toggleHaptics), on: cfg.hapticsEnabled))
+        menu.addItem(toggle("Soft Sounds", #selector(toggleSounds), on: cfg.soundEnabled))
+        menu.addItem(toggle("Launch at Login", #selector(toggleLogin), on: LoginItem.isEnabled))
+
+        menu.addItem(.separator())
+        menu.addItem(action("Reset Pointer / Gesture", #selector(resetHard)))
+        menu.addItem(action("Quit Pluck", #selector(quit), key: "q"))
+    }
+
+    private func presetItem(_ p: FeelPreset, title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(selectPreset(_:)), keyEquivalent: "")
+        item.target = self; item.representedObject = p.id; item.toolTip = p.tagline
+        item.state = PluckConfig.shared.presetID == p.id ? .on : .off
+        return item
+    }
+
+    private func action(_ title: String, _ sel: Selector, key: String = "") -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: sel, keyEquivalent: key)
+        item.target = self
+        return item
+    }
+
+    private func toggle(_ title: String, _ sel: Selector, on: Bool) -> NSMenuItem {
+        let item = action(title, sel)
+        item.state = on ? .on : .off
+        return item
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
@@ -159,57 +152,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    @objc private func showGuide() { FeelGuideController.shared.show() }
+    // MARK: Actions
 
-    @objc private func openSetup() {
-        SetupWindowController.shared.show { [weak self] in
-            self?.startListening()
+    @objc private func showSettings() { SettingsWindowController.shared.show() }
+    @objc private func openSetup() { SetupWindowController.shared.show { [weak self] in self?.startListening() } }
+    @objc private func toggleListening() { if listening { stopListening() } else { startListening() } }
+    @objc private func toggleMeeting() { PluckConfig.shared.meetingMode.toggle() }
+    @objc private func togglePresenter() { PluckConfig.shared.interactionModeID = PluckConfig.shared.presenterMode ? "actions" : "presenter" }
+    @objc private func toggleSounds() { PluckConfig.shared.soundEnabled.toggle() }
+    @objc private func toggleHaptics() { PluckConfig.shared.hapticsEnabled.toggle() }
+    @objc private func surpriseTheme() { PluckConfig.shared.surpriseMe() }
+    @objc private func resetHard() { session.engine.resetHard() }
+
+    @objc private func toggleLogin() {
+        if let problem = LoginItem.set(!LoginItem.isEnabled) {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't change the login item"
+            alert.informativeText = problem
+            alert.runModal()
         }
-    }
-
-    @objc private func toggleListening() {
-        if listening { stopListening() } else { startListening() }
-    }
-
-    @objc private func toggleMeeting() {
-        FeelLabConfig.shared.meetingMode.toggle()
     }
 
     @objc private func selectPreset(_ sender: NSMenuItem) {
-        if let id = sender.representedObject as? String, let p = PresetLibrary.preset(id: id) {
-            FeelLabConfig.shared.apply(preset: p)
-        }
-    }
-
-    @objc private func selectStyle(_ sender: NSMenuItem) {
-        if let id = sender.representedObject as? String { FeelLabConfig.shared.styleID = id }
+        if let id = sender.representedObject as? String, let p = PresetLibrary.preset(id: id) { PluckConfig.shared.apply(preset: p) }
     }
 
     @objc private func selectTheme(_ sender: NSMenuItem) {
-        if let id = sender.representedObject as? String, let t = ThemeLibrary.theme(id: id) {
-            FeelLabConfig.shared.apply(theme: t)
-        }
+        if let id = sender.representedObject as? String, let t = ThemeLibrary.theme(id: id) { PluckConfig.shared.apply(theme: t) }
     }
 
-    @objc private func surpriseTheme() { FeelLabConfig.shared.surpriseMe() }
-
-    @objc private func toggleSounds() {
-        FeelLabConfig.shared.soundEnabled.toggle()
+    @objc private func quit() {
+        stopListening()
+        NSApp.terminate(nil)
     }
 
-    @objc private func toggleHaptics() {
-        FeelLabConfig.shared.hapticsEnabled.toggle()
-    }
-
-    @objc private func resetHard() {
-        session.engine.resetHard()
-    }
+    // MARK: Listening
 
     private func startListening() {
-        guard Permissions.accessibilityTrusted else {
-            openSetup()
-            return
-        }
+        guard Permissions.accessibilityTrusted else { openSetup(); return }
         session.startListening()
         listening = true
     }
@@ -230,10 +210,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 lastAX = ax
             }
         }
-    }
-
-    @objc private func quit() {
-        stopListening()
-        NSApp.terminate(nil)
     }
 }

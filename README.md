@@ -1,93 +1,88 @@
 # Pluck
 
-A macOS menu-bar gesture utility: grab a blob of liquid obsidian, stretch it toward a direction, let go to act.
-Four directions, one gesture, no settings to open first.
+A playful pointer gesture for macOS. Hold a trigger, stretch a shape from where you are to where you point, and let go.
+The shape can be a blob of liquid obsidian, a crystal, a kite on a string, a laser pointer, a lasso, an anime energy beam,
+or one of 40+ other animations, and anyone can add more.
 
-- **Keep** (up): copy or keep what you are holding
-- **Go** (right): the forward action
-- **Give** (down): share or hand off
-- **Ask** (left): look up or get info
+It lives in the menu bar and only draws over your screen: it listens to your mouse, keyboard and trackpad but never
+blocks or sends any of them, so it can't get in your way.
 
-Nothing is drawn at rest except the liquid itself. Move into a direction and that action's glyph and name appears
-inside the head of the liquid. Release to commit (the head pinches off as a droplet and flies to the action);
-release near the pin to cancel.
+> **Status: first public preview (0.1).** The gesture, looks and animation library are solid; the optional "real actions"
+> (copy, share, tile windows) are a beta and off by default.
 
-> Status: **Feel Lab**. The gesture, physics and look are being tuned, so actions do not run yet. See
-> [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and [docs/ACTIONS.md](docs/ACTIONS.md) for what each
-> direction will do.
+## What you can do
+
+- **Stretch things.** Hold ⌥ (or Hyper, or rest three fingers, or hold both mouse buttons), move, and let go.
+  Whatever you pick follows your cursor anywhere on screen, and drains or fills with real mass as you pull.
+- **Choose a look.** 40+ styles in Settings > Looks: liquid blobs, ferrofluid, crystals, tug of war, paper planes,
+  fireworks of anime beams (charge, aim, fire), a marquee and lasso for "selecting" things, a laser pointer, spotlight and
+  highlighter for presenting, and more. Each has colour themes.
+- **Presenter mode.** Hold, then drag out in one of 4 or 8 directions to pick a visual (lasso up, train down...).
+  Drag a little further and it comes to life between the two points. Let go to finish.
+- **Add your own.** Animations are small JSON "packs" with safe formulas, no code. Settings > Library has a template,
+  hot-reload, and an online library. See [docs/PACKS.md](docs/PACKS.md).
+
+## Install
+
+Download the latest `Pluck.zip` from [Releases](../../releases), unzip, and drag **Pluck.app** to Applications.
+macOS 14 (Sonoma) or later. On first launch, grant **Accessibility** when asked (that is the only required permission).
+Until releases are notarized, right-click the app and choose *Open* the first time.
+
+Or build it yourself:
+
+```bash
+git clone https://github.com/tinyminotaur/pluck && cd pluck
+swift build && swift test            # the logic is unit-tested
+./scripts/build.sh && open build/Pluck.app
+```
+
+`scripts/build.sh` signs with a stable local identity so macOS remembers the Accessibility grant between rebuilds
+(it creates one the first time). To make a distributable zip or dmg, see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Triggers
 
-Pluck is **listen-only** (no event tap, it never synthesizes input), so it can never lock your mouse or keyboard.
-
 | Trigger | How |
 |---|---|
-| Hold ⌥ or Hyper (no click) | Hold the modifier (⌥ needs the pointer still for ~250 ms), move to stretch, release the modifier to commit |
-| Three fingers (experimental, off by default) | Rest three fingers on the trackpad without moving, then drag; lift to commit |
+| Hold ⌥ or Hyper (no click) | Hold the modifier (⌥ needs the pointer still for ~250 ms), move, release the modifier |
+| Three fingers (optional) | Rest three fingers on the trackpad without moving, then drag; lift to finish |
 | Two-button chord | Hold one mouse button, press the other, stretch, release |
-| Press-and-hold (off by default) | ⌥ + press and hold without moving, then drag |
+| Press-and-hold (optional) | ⌥ + press and hold without moving, then drag |
 
-Escape cancels. **⌃⌥⌘P** quits Pluck. A gesture also ends after 12 s without movement.
+**Esc** cancels. **⌃⌥⌘P** quits Pluck. A gesture also ends after 12 seconds without movement.
+If the pointer ever feels stuck: menu bar > **Reset Pointer / Gesture**.
 
-## Animation styles
+## Privacy and safety
 
-Beyond the liquid, two completely different styles respond to your movement (pick one in the Feel Lab guide or the
-menu bar under **Animation Style**, or choose a preset that sets it):
+- No telemetry, no analytics, no accounts. Nothing is sent anywhere unless you press a button (refresh the online
+  library, install a pack), and then only over HTTPS with a checksum.
+- Pluck does not read your clipboard, files or windows unless you switch on "real actions (beta)".
+- Community packs are data, not code: they cannot run programs, read files or use the network.
+- The optional audio-reactive Equalizer asks for Screen Recording to hear system audio; only 24 level numbers are used.
 
-- **Ferrofluid**: mirror-black chrome that bristles into a fan of spikes aimed at the cursor (the magnet), a
-  smaller mass at the cursor that bristles back, and iron filings strung along curved field lines. The fan swings
-  around with lag and overshoot as you move.
-- **Crystal**: a crystal rosette grows a faceted needle toward the cursor; the distance you travel seeds branches,
-  which sprout sub-branches, so the formation keeps evolving while you hold. Commit shatters it; cancel retracts it.
+Details: [docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
-## Looks and feels
+## Project layout
 
-The Feel Lab window (menu bar drop → Show Feel Lab Guide) has 14 feel presets (physics and colours together) and
-12 colour themes with gradient palettes, plus a "Surprise me" random palette. The menu bar has the same under
-**Feel Preset** and **Colour Theme**. Hundreds of live knobs are underneath, saved between launches.
+- `Sources/PluckCore`: pure, tested logic (gesture math, physics models, pack format and formulas, themes and presets)
+- `Sources/Pluck`: the app (input, overlay and rendering, Settings, pack library)
+- `docs/`: [architecture](docs/ARCHITECTURE.md), [packs](docs/PACKS.md), [testing](docs/TESTING.md), [releasing](docs/RELEASING.md), design research
+- `packs/`: example and community animation packs
 
-## Requirements
+Contributions are welcome, especially animation packs: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-macOS 14+. Accessibility (to listen for the trigger).
+## Headless tools
 
-## Build and run
-
-```bash
-swift build && swift test
-./scripts/build.sh && open build/Pluck.app     # signed with a stable local identity so Accessibility sticks
-```
-
-Headless tools (no input, no cursor, no permissions):
+For development, with no input, cursor or permissions needed:
 
 ```bash
-.build/release/Pluck --render-compass out.png   # the live view with its action label
-.build/release/Pluck --render-pinch out.png     # the commit pinch-off over time
-.build/release/Pluck --render-themes out.png    # every theme
-.build/release/Pluck --render-styles out.png    # ferrofluid and crystal
-.build/release/Pluck --render-style-commit out.png   # their commit animations
-.build/release/Pluck --live-smoke out.png ferro     # real display link: frame pacing + capture (liquid|ferro|crystal)
-.build/release/Pluck --render-preview out.png   # the standard look grid
-.build/release/Pluck --sim-report               # physics extent and draw cost
+Pluck --render-styles out.png         # contact sheet of the styles (PLUCK_STYLES=a,b filters)
+Pluck --render-preview out.png        # the standard liquid look grid
+Pluck --style-perf                    # per-frame cost of every sprite style
+Pluck --sim-report                    # liquid physics extent and draw cost
+Pluck --validate-pack <folder>        # check a community pack
+Pluck --install-pack <file.pluckpack> # install a pack with the app's safety checks
 ```
 
-## Layout
-
-- `Sources/PluckCore`: pure, tested logic: gesture math, the dumbbell shape model, themes and presets, triggers
-- `Sources/Pluck`: the app: Metal renderer, physics view, input engine, Feel Lab UI, cursor guard
-- `docs/`: handoff notes, the action schema, design research
-
-If the pointer ever feels stuck: menu bar drop → **Reset Pointer / Gesture**, or `pkill -x Pluck`.
-The cursor guard also restores it automatically, and `~/Library/Logs/Pluck/gesture.log` records why gestures end.
-
-## License
+## Licence
 
 Apache License 2.0. See [LICENSE](LICENSE).
-
-## Styles, presenter mode and community packs
-
-- **Styles**: a family-grouped picker in Feel Lab > Looks (Blob, Beams, Crystal, selection tools, presentation tools, and many playful scenes).
-- **Presenter mode** (Feel Lab > Presenter): hold, drag out past a ring in one of 4 or 8 directions, and the direction picks a *visual*
-  instead of an action; drag a little further and it comes to life between the two points. Release to finish it.
-- **Community packs** (Feel Lab > Library): animations are small JSON files with safe formulas, not code. See [docs/PACKS.md](docs/PACKS.md)
-  for the format, how to share them, and best practices for hosting a library. Handy commands:
-  `Pluck --validate-pack <folder>`, `Pluck --install-pack <file.pluckpack>`, `Pluck --style-perf`.
