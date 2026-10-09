@@ -229,7 +229,8 @@ public struct SlinkySim: Sendable {
         let chord = hypot(head.x - pin.x, head.y - pin.y)
         mass.update(chord: chord, dt: dt, params: params.dumbbell, bodyRadius: params.bodyRadius)
         // Stretching or letting go rings the spring: a damped oscillation of the wave amplitude.
-        waveV += ((chord - prev) / max(dt, 1e-4) * 0.0007) * (1 / 60) * 60
+        let chordSpeed: CGFloat = (chord - prev) / max(dt, 1e-4)
+        waveV += chordSpeed * 0.0007
         var d = CGPoint(x: wave, y: 0), v = CGPoint(x: waveV, y: 0)
         RecoilSpring.step(x: &d, v: &v, omega: 9, zeta: 0.12, h: dt)
         wave = max(-1.5, min(1.5, d.x)); waveV = v.x
