@@ -77,7 +77,8 @@ enum VectorRunners {
         case .equalizer:
             let l = EqualizerLayers()
             return SimRunner(sim: EqualizerSim(), layer: l.root,
-                             reset: { $0.base.bodyRadius = $2 * 0.7; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             reset: { $0.base.bodyRadius = $2 * 0.7; $0.reset(pin: $1) },
+                             step: { $0.spectrum = AudioSpectrum.shared.snapshot(); $0.step(dt: $1, pin: $2, head: $3) },
                              release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
                              present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
         case .dna:
@@ -98,6 +99,87 @@ enum VectorRunners {
                              reset: { $0.base.bodyRadius = $2 * 0.7; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
                              release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
                              present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .tugofwar:
+            let l = TugLayers()
+            return SimRunner(sim: TugOfWarSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 1.0; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .cradle:
+            let l = CradleLayers()
+            return SimRunner(sim: NewtonsCradleSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .rainbow:
+            let l = RainbowLayers()
+            return SimRunner(sim: RainbowSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .dandelion:
+            let l = DandelionLayers()
+            return SimRunner(sim: DandelionSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 1.0; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .cablecar:
+            let l = CableCarLayers()
+            return SimRunner(sim: CableCarSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .signal:
+            let l = SignalLayers()
+            return SimRunner(sim: SignalSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .lasso:
+            let l = LassoLayers()
+            return SimRunner(sim: LassoSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .laser:
+            let l = LaserLayers()
+            return SimRunner(sim: LaserPointerSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .marker:
+            let l = MarkerLayers()
+            return SimRunner(sim: HighlighterSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .spotlight:
+            let l = SpotlightLayers()
+            return SimRunner(sim: SpotlightSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .callout:
+            let l = CalloutLayers()
+            return SimRunner(sim: CalloutArrowSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .targetlock:
+            let l = TargetLockLayers()
+            return SimRunner(sim: TargetLockSim(), layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.8; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
+        case .beam:
+            let l = EnergyLayers()
+            var proto = EnergySim()
+            proto.variant = EnergyVariant(rawValue: FeelLabConfig.shared.beamVariantID) ?? .kamehameha
+            proto.chargeThenFire = FeelLabConfig.shared.beamChargeMode
+            return SimRunner(sim: proto, layer: l.root,
+                             reset: { $0.base.bodyRadius = $2 * 0.7; $0.reset(pin: $1) }, step: { $0.step(dt: $1, pin: $2, head: $3) },
+                             release: { $0.release(commit: $1 ? $2 : nil) }, finished: { $0.isFinished },
+                             present: { l.update($0.scene(emerge: $1, headGlow: $2)) })
         default:
             return nil
         }
@@ -106,26 +188,26 @@ enum VectorRunners {
 
 // MARK: - Shared drawing helpers
 
-private let paperWhite = Sprite.color(255, 250, 238)
+let paperWhite = Sprite.color(255, 250, 238)
 
-private func circlePath(_ c: CGPoint, _ r: CGFloat) -> CGPath {
+func circlePath(_ c: CGPoint, _ r: CGFloat) -> CGPath {
     CGPath(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2), transform: nil)
 }
 
-private func polyline(_ pts: [CGPoint]) -> CGPath {
+func polyline(_ pts: [CGPoint]) -> CGPath {
     let p = CGMutablePath()
     if let f = pts.first { p.move(to: f); for q in pts.dropFirst() { p.addLine(to: q) } }
     return p
 }
 
-@MainActor private func paperShape(_ fill: CGColor?, border: CGFloat = 2.4, depth: CGFloat = 1.8) -> CAShapeLayer {
+@MainActor func paperShape(_ fill: CGColor?, border: CGFloat = 2.4, depth: CGFloat = 1.8) -> CAShapeLayer {
     let l = CAShapeLayer()
     l.fillColor = fill; l.strokeColor = paperWhite; l.lineWidth = border; l.lineJoin = .round; l.lineCap = .round
     if depth > 0 { PaperRopeLayers.paperShadow(l, depth: depth) }
     return l
 }
 
-@MainActor private func lineLayer(_ color: CGColor, _ width: CGFloat, depth: CGFloat = 0) -> CAShapeLayer {
+@MainActor func lineLayer(_ color: CGColor, _ width: CGFloat, depth: CGFloat = 0) -> CAShapeLayer {
     let l = CAShapeLayer()
     l.fillColor = nil; l.strokeColor = color; l.lineWidth = width; l.lineCap = .round; l.lineJoin = .round
     if depth > 0 { PaperRopeLayers.paperShadow(l, depth: depth) }
@@ -133,7 +215,7 @@ private func polyline(_ pts: [CGPoint]) -> CGPath {
 }
 
 @MainActor
-private final class DotPool {
+final class DotPool {
     private let parent: CALayer
     private let image: CGImage?
     private(set) var layers: [CALayer] = []
@@ -149,13 +231,13 @@ private final class DotPool {
     func hide(from i: Int) { for j in max(0, i)..<layers.count { layers[j].isHidden = true } }
 }
 
-private let softDot: CGImage? = Sprite.image(CGSize(width: 16, height: 16), scale: 3) { c in
+let softDot: CGImage? = Sprite.image(CGSize(width: 16, height: 16), scale: 3) { c in
     Sprite.radial(c, center: CGPoint(x: 8, y: 8), radius: 7.5, inner: Sprite.color(255, 255, 255, 1), outer: Sprite.color(255, 255, 255, 0))
 }
 
 /// A paper disc with stitching: the stand-in for a "point" in the paper styles.
 @MainActor
-private final class PaperDisc {
+final class PaperDisc {
     let root = CALayer()
     private let disc = paperShape(nil, border: 2.8, depth: 2.2)
     private let stitch = lineLayer(Sprite.color(255, 255, 255, 0.85), 1.6)

@@ -102,7 +102,7 @@ public struct StarSim: Sendable {
 
     public mutating func release(commit direction: CGPoint?) {
         releaseT = 0
-        if let d = direction { releaseDir = d }
+        releaseDir = direction ?? .zero
     }
 
     public func scene(emerge: CGFloat, headGlow: CGFloat = 0) -> StarScene {
@@ -253,7 +253,7 @@ public struct KiteSim: Sendable {
 
     public mutating func release(commit direction: CGPoint?) {
         releaseT = 0
-        if let d = direction { releaseDir = d }
+        releaseDir = direction ?? .zero
     }
 
     public func scene(emerge: CGFloat, headGlow: CGFloat = 0) -> KiteScene {
@@ -380,144 +380,5 @@ public struct BubbleSim: Sendable {
                                    wobble: w, wobbleAngle: ang, alpha: e * (0.5 + 0.5 * max(reach, 0.4)), pop: popOf(i), hue: CGFloat(i % 6) / 6))
         }
         return out
-    }
-}
-
-// MARK: - Energy beam (anime "kamehameha")
-
-public struct BeamScene: Equatable, Sendable {
-    public var orb: CGPoint
-    public var orbRadius: CGFloat
-    public var charge: CGFloat
-    public var motes: [(CGPoint, CGFloat, CGFloat)]            // position, alpha, size
-    public var arcs: [[CGPoint]]
-    public var centerline: [CGPoint]
-    public var halfWidth: [CGFloat]
-    public var beamAmount: CGFloat
-    public var impact: CGPoint
-    public var impactRadius: CGFloat
-    public var sparks: [(CGPoint, CGFloat, CGFloat)]
-    public var rings: [(CGFloat, CGFloat)]                       // radius, alpha (around the impact)
-    public var flash: CGFloat
-    public var phase: CGFloat
-    public var spin: CGFloat
-    public var alpha: CGFloat
-
-    public static func == (a: BeamScene, b: BeamScene) -> Bool {
-        a.orb == b.orb && a.orbRadius == b.orbRadius && a.centerline == b.centerline && a.halfWidth == b.halfWidth
-            && a.flash == b.flash && a.alpha == b.alpha
-    }
-}
-
-/// Kamehameha: the pin is a charging ball of energy (crackling, with motes spiralling in), and the head is where
-/// the beam lands. Pull away and a beam bursts out: a white-hot core, a cyan body and a wide glow, rippling and
-/// streaming toward the target, throwing sparks where it hits. The orb shrinks as its energy goes into the beam
-/// (mass relation). Commit fires: the beam swells, flashes and a shockwave rolls out.
-public struct BeamSim: Sendable {
-    public struct Params: Equatable, Sendable {
-        public var bodyRadius: CGFloat = 30
-        public var motes: Int = 14
-        public var sparks: Int = 18
-        public var dumbbell = DumbbellMass.Params()
-        public init() {}
-    }
-    public var params: Params
-    private var mass = MassFlow()
-    private var pin = CGPoint.zero, head = CGPoint.zero
-    private var time: CGFloat = 0
-    private var releaseT: CGFloat = -1
-    private var releaseDir = CGPoint(x: 1, y: 0)
-    public init(params: Params = Params()) { self.params = params }
-    public var isFinished: Bool { releaseT > 0.8 }
-
-    public mutating func reset(pin: CGPoint) {
-        self.pin = pin; head = pin; time = 0; releaseT = -1; mass = MassFlow()
-        mass.sol = DumbbellMass.solve(params.dumbbell, length: 0)
-    }
-
-    public mutating func step(dt: CGFloat, pin newPin: CGPoint, head newHead: CGPoint) {
-        guard dt > 0 else { return }
-        time += dt; pin = newPin; head = newHead
-        mass.update(chord: hypot(head.x - pin.x, head.y - pin.y), dt: dt, params: params.dumbbell, bodyRadius: params.bodyRadius)
-        if releaseT >= 0 { releaseT += dt }
-    }
-
-    public mutating func release(commit direction: CGPoint?) {
-        releaseT = 0
-        if let d = direction { releaseDir = d }
-    }
-
-    public func scene(emerge: CGFloat, headGlow: CGFloat = 0) -> BeamScene {
-        let e = max(0, min(1, emerge))
-        let dx = head.x - pin.x, dy = head.y - pin.y
-        let chord = hypot(dx, dy)
-        let dir = chord > 1 ? CGPoint(x: dx / chord, y: dy / chord) : CGPoint(x: 1, y: 0)
-        let nrm = CGPoint(x: -dir.y, y: dir.x)
-        let sol = mass.sol
-        let fired = releaseT >= 0
-        let tt = fired ? releaseT : 0
-        let beamAmt = StyleHash.smoothstep(40, 150, chord) * (fired ? max(0, 1 - tt / 0.75) : 1)
-        let surge: CGFloat = fired ? (1 + 1.6 * CGFloat(sin(Double(min(1, tt / 0.2) * .pi / 2)))) * max(0, 1 - tt / 0.7) + 0.0 : 1
-        let fade = fired ? max(0, 1 - tt / 0.8) : 1
-        let flash = fired ? max(0, 1 - tt / 0.35) : 0
-        let R = max(10, sol.pin * 0.95)
-        // Charge builds with the pull (and a pulse), crackling at full strength.
-        let charge = min(1, 0.25 + chord / 260)
-
-        // Charge motes spiral into the orb.
-        var motes: [(CGPoint, CGFloat, CGFloat)] = []
-        for i in 0..<params.motes {
-            let period = 0.7 + 0.5 * StyleHash.unit(i, 121)
-            let age = (time / period + StyleHash.unit(i, 122)).truncatingRemainder(dividingBy: 1)
-            let r = R * (3.4 - 2.9 * age)
-            let ang = 6.28 * StyleHash.unit(i, 123) + age * 5.5 * (i % 2 == 0 ? 1 : -1)
-            motes.append((CGPoint(x: pin.x + cos(ang) * r, y: pin.y + sin(ang) * r), e * fade * sin(.pi * age) * (0.5 + 0.5 * charge),
-                          1.6 + 2.2 * StyleHash.unit(i, 124)))
-        }
-        // Lightning crackles around the orb, re-rolled ~20 times a second.
-        let bucket = Int(time * 20)
-        var arcs: [[CGPoint]] = []
-        for k in 0..<5 {
-            let a0 = 6.28 * StyleHash.unit(k + bucket * 7, 125)
-            var pts: [CGPoint] = []
-            for j in 0...5 {
-                let r = R * (0.9 + 0.55 * CGFloat(j) / 5) + (StyleHash.unit(k * 11 + j + bucket * 13, 126) - 0.5) * R * 0.3
-                let a = a0 + (StyleHash.unit(k * 5 + j + bucket * 3, 127) - 0.5) * 0.9
-                pts.append(CGPoint(x: pin.x + cos(a) * r, y: pin.y + sin(a) * r))
-            }
-            arcs.append(pts)
-        }
-        // Beam centreline and ripple.
-        let n = 36
-        var line: [CGPoint] = [], hw: [CGFloat] = []
-        let base = (sol.pin * 0.55 + 4) * surge
-        let startOffset = R * 0.7
-        let len = max(1, chord - startOffset)
-        for j in 0...n {
-            let s = CGFloat(j) / CGFloat(n)
-            let wob = CGFloat(sin(Double(s * 14 - time * 32))) * 0.12 + CGFloat(sin(Double(s * 31 - time * 51))) * 0.05
-            let env = StyleHash.smoothstep(0, 0.07, s) * (0.8 + 0.2 * CGFloat(sin(Double(.pi * s)))) * (1 + 0.35 * StyleHash.smoothstep(0.85, 1, s))
-            let sway = CGFloat(sin(Double(s * 6 - time * 9))) * 2.2 * s * (fired ? 2 : 1)
-            line.append(CGPoint(x: pin.x + dir.x * (startOffset + len * s) + nrm.x * sway, y: pin.y + dir.y * (startOffset + len * s) + nrm.y * sway))
-            hw.append(max(0, base * (1 + wob) * env * beamAmt))
-        }
-        // Sparks flying back from the impact.
-        var sparks: [(CGPoint, CGFloat, CGFloat)] = []
-        for i in 0..<params.sparks {
-            let period = 0.45 + 0.35 * StyleHash.unit(i, 131)
-            let age = (time / period + StyleHash.unit(i, 132)).truncatingRemainder(dividingBy: 1)
-            let spread = (StyleHash.unit(i + Int(time / period + StyleHash.unit(i, 132)) * 17, 133) - 0.5) * 2.4
-            let a = atan2(-dir.y, -dir.x) + spread
-            let d = 18 + 90 * age * (0.6 + StyleHash.unit(i, 134))
-            sparks.append((CGPoint(x: head.x + cos(a) * d, y: head.y + sin(a) * d - 20 * age * age), e * beamAmt * (1 - age) * fade,
-                           1.4 + 2.4 * StyleHash.unit(i, 135)))
-        }
-        let rings: [(CGFloat, CGFloat)] = fired
-            ? [(sol.head * 1.5 + 420 * min(1, tt / 0.6), max(0, 1 - tt / 0.6)), (sol.head + 260 * min(1, tt / 0.6), max(0, 0.7 - tt / 0.7))] : []
-        _ = releaseDir
-        return BeamScene(orb: pin, orbRadius: R * (1 + 0.06 * CGFloat(sin(Double(time * 11))) * charge) * (fired ? 1 + 0.3 * flash : 1),
-                         charge: charge, motes: motes, arcs: arcs, centerline: line, halfWidth: hw, beamAmount: beamAmt,
-                         impact: head, impactRadius: max(sol.head * 1.2, 12) * (1 + 0.15 * headGlow) * (0.7 + 0.5 * beamAmt) * (fired ? 1 + flash : 1),
-                         sparks: sparks, rings: rings, flash: flash, phase: time, spin: time * 2.2, alpha: e * (fired ? max(0.001, fade) : 1))
     }
 }

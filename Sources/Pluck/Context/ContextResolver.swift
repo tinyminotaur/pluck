@@ -41,9 +41,9 @@ enum ContextResolver {
 
     private static func textContext(_ text: String) -> GrabContext {
         let items: [CompassItem] = [
-            CompassItem(role: .north, title: "Copy", subtitle: nil, actionID: "text.copy"),
+            CompassItem(role: .south, title: "Copy", subtitle: nil, actionID: "text.copy"),
             CompassItem(role: .east, title: "Search", subtitle: nil, actionID: "text.search"),
-            CompassItem(role: .south, title: "Share", subtitle: nil, actionID: "text.share"),
+            CompassItem(role: .north, title: "Share", subtitle: nil, actionID: "text.share"),
             CompassItem(role: .west, title: "Look Up", subtitle: nil, actionID: "text.lookup"),
         ]
         // Short selections can offer Translate as a note in Ask subtitle; keep 4 roles only.
@@ -57,9 +57,9 @@ enum ContextResolver {
             kind: .link(url),
             nucleusTitle: url.host ?? url.absoluteString,
             items: [
-                CompassItem(role: .north, title: "Copy Link", subtitle: nil, actionID: "link.copy"),
+                CompassItem(role: .south, title: "Copy Link", subtitle: nil, actionID: "link.copy"),
                 CompassItem(role: .east, title: "Open", subtitle: "New tab", actionID: "link.open"),
-                CompassItem(role: .south, title: "Share", subtitle: nil, actionID: "link.share"),
+                CompassItem(role: .north, title: "Share", subtitle: nil, actionID: "link.share"),
                 CompassItem(role: .west, title: "Copy Text", subtitle: nil, actionID: "link.copyText"),
             ]
         )
@@ -70,22 +70,23 @@ enum ContextResolver {
             kind: .file(url),
             nucleusTitle: url.lastPathComponent,
             items: [
-                CompassItem(role: .north, title: "Copy", subtitle: nil, actionID: "file.copy"),
+                CompassItem(role: .south, title: "Copy", subtitle: nil, actionID: "file.copy"),
                 CompassItem(role: .east, title: "Quick Look", subtitle: nil, actionID: "file.quicklook"),
-                CompassItem(role: .south, title: "Share", subtitle: nil, actionID: "file.share"),
+                CompassItem(role: .north, title: "Share", subtitle: nil, actionID: "file.share"),
                 CompassItem(role: .west, title: "Get Info", subtitle: nil, actionID: "file.info"),
             ]
         )
     }
 
     private static func imageContext(_ url: URL?) -> GrabContext {
-        var items = [
-            CompassItem(role: .north, title: "Copy Image", subtitle: nil, actionID: "image.copy"),
-            CompassItem(role: .east, title: "Quick Look", subtitle: nil, actionID: "image.quicklook"),
-            CompassItem(role: .south, title: "Save", subtitle: "Downloads", actionID: "image.save"),
-        ]
+        // North shares (up arrow), south saves (download arrow). Without a file there is nothing to share or save.
+        var items: [CompassItem] = [CompassItem(role: .east, title: "Quick Look", subtitle: nil, actionID: "image.quicklook")]
         if url != nil {
-            items.append(CompassItem(role: .west, title: "Get Info", subtitle: nil, actionID: "image.info"))
+            items.append(CompassItem(role: .north, title: "Share", subtitle: nil, actionID: "image.share"))
+            items.append(CompassItem(role: .south, title: "Save", subtitle: "Downloads", actionID: "image.save"))
+            items.append(CompassItem(role: .west, title: "Copy Image", subtitle: nil, actionID: "image.copy"))
+        } else {
+            items.append(CompassItem(role: .south, title: "Copy Image", subtitle: nil, actionID: "image.copy"))
         }
         return GrabContext(
             kind: .image(url),
@@ -125,7 +126,7 @@ enum ContextResolver {
                 if inTextField {
                     items.append(CompassItem(role: .east, title: "Paste", subtitle: nucleus, actionID: "clip.pasteCurrent"))
                 }
-                items.append(CompassItem(role: .north, title: "Keep", subtitle: "Already on clipboard", actionID: "clip.keep"))
+                items.append(CompassItem(role: .south, title: "Keep", subtitle: "Already on clipboard", actionID: "clip.keep"))
             } else {
                 items.append(CompassItem(role: .west, title: "Empty", subtitle: "Copy something first", actionID: "clip.empty"))
             }

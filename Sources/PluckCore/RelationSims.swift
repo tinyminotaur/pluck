@@ -408,7 +408,7 @@ public struct ThreadSim: Sendable {
     }
     public mutating func release(commit direction: CGPoint?) {
         releaseT = 0
-        if let d = direction { releaseDir = d }
+        releaseDir = direction ?? .zero
     }
 
     private func beat(_ t: CGFloat) -> CGFloat {

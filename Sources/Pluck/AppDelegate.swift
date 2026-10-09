@@ -9,12 +9,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var listening = false
     private var permissionWatcher: Timer?
 
+    func applicationDidBecomeActive(_ notification: Notification) { AudioSpectrumController.shared.refresh() }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         // Compile the Metal shader now, not on the first gesture (that compile was a visible first-frame hitch).
         _ = ObsidianBlobMetal.shared
         setupStatusItem()
         startPermissionWatcher()
+        AudioSpectrumController.shared.bind()
 
         NotificationCenter.default.addObserver(
             forName: .pluckResetHard,

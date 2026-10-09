@@ -82,7 +82,6 @@ final class MetaballView: NSView {
     private var starsim = StarSim()
     private var kitesim = KiteSim()
     private var bubblesim = BubbleSim()
-    private var beamsim = BeamSim()
     private var runner: VectorRunner?
     private var lightsim = LightningSim()
     private var magsim = MagnetSim()
@@ -218,7 +217,6 @@ final class MetaballView: NSView {
         starsim = StarSim(); starsim.params.bodyRadius = radius * 0.72; starsim.reset(pin: lockedPin)
         kitesim = KiteSim(); kitesim.params.bodyRadius = radius * 0.7; kitesim.reset(pin: lockedPin)
         bubblesim = BubbleSim(); bubblesim.params.bodyRadius = radius * 0.75; bubblesim.reset(pin: lockedPin)
-        beamsim = BeamSim(); beamsim.params.bodyRadius = radius * 0.7; beamsim.reset(pin: lockedPin)
         runner = VectorRunners.make(activeStyle)
         if let r = runner { vectorHost.attach(r.layer); r.reset(pin: lockedPin, radius: radius) }
         lightsim = LightningSim(); lightsim.params.bodyRadius = radius * 0.7; lightsim.reset(pin: lockedPin)
@@ -358,7 +356,6 @@ final class MetaballView: NSView {
             case .stars: starsim.step(dt: h, pin: lockedPin, head: head)
             case .kite: kitesim.step(dt: h, pin: lockedPin, head: head)
             case .bubbles: bubblesim.step(dt: h, pin: lockedPin, head: head)
-            case .beam: beamsim.step(dt: h, pin: lockedPin, head: head)
             case .lightning: lightsim.step(dt: h, pin: lockedPin, head: head)
             case .magnet: magsim.step(dt: h, pin: lockedPin, head: head)
             case .slinky: slinkysim.step(dt: h, pin: lockedPin, head: head)
@@ -383,7 +380,6 @@ final class MetaballView: NSView {
         case .stars: return starsim.isFinished
         case .kite: return kitesim.isFinished
         case .bubbles: return bubblesim.isFinished
-        case .beam: return beamsim.isFinished
         case .lightning: return lightsim.isFinished
         case .magnet: return magsim.isFinished
         case .slinky: return slinkysim.isFinished
@@ -453,6 +449,7 @@ final class MetaballView: NSView {
     private func presentVector() {
         let glow: CGFloat = captured != nil ? min(1, max(0, armedPos[captured ?? .north] ?? 0)) : 0
         guard emerge > 0.01 else { vectorHost.hide(); return }
+        vectorHost.entrance(pin: lockedPin, amount: emerge)
         switch activeStyle {
         case .swarm:
             vectorHost.updateFireflies(swarm.fireflyStates(emerge: emerge), pin: swarm.pinLantern, head: swarm.headLantern,
@@ -473,8 +470,6 @@ final class MetaballView: NSView {
             vectorHost.updateTinCan(cansim.scene(emerge: emerge, headGlow: glow))
         case .thread:
             vectorHost.updateThread(threadsim.scene(emerge: emerge, headGlow: glow))
-        case .beam:
-            vectorHost.updateBeam(beamsim.scene(emerge: emerge, headGlow: glow))
         case .bubbles:
             vectorHost.updateBubbles(bubblesim.bubbleStates(emerge: emerge, headGlow: glow), alpha: min(1, emerge))
         default:
@@ -809,8 +804,6 @@ final class MetaballView: NSView {
             kitesim.release(commit: role != nil ? actionDirection() : nil)
         case .bubbles:
             bubblesim.release(commit: role != nil ? actionDirection() : nil)
-        case .beam:
-            beamsim.release(commit: role != nil ? actionDirection() : nil)
         case .lightning:
             lightsim.release(commit: role != nil ? actionDirection() : nil)
         case .magnet:
@@ -870,23 +863,39 @@ final class MetaballView: NSView {
     }
 
     private func integrateRecoil(steps: Int, h: CGFloat, frameDt: CGFloat) {
-        // Underdamped spring toward the pin. Bounce knob: 0 = tight, 1 = very wobbly.
-        let bounce = CGFloat(cfg.recoilBounce)
-        let zeta = RecoilSpring.zeta(bounce: bounce)
-        let omega = RecoilSpring.omega(period: 0.30)
-        var x = CGPoint(x: head.x - lockedPin.x, y: head.y - lockedPin.y)
-        var v = recoilVel
-        for _ in 0..<steps {
-            RecoilSpring.step(x: &x, v: &v, omega: omega, zeta: zeta, h: h)
-        }
-        recoilVel = v
-        head = CGPoint(x: lockedPin.x + x.x, y: lockedPin.y + x.y)
         recoilElapsed += frameDt
         recoilPulse = max(0, recoilPulse - frameDt / 0.45)
-        let off = hypot(x.x, x.y)
-        let speed = hypot(v.x, v.y)
-        if recoilElapsed > 0.22, off < 2, speed < 40 { recoilSettled = true }
-        if recoilElapsed > 0.8 { recoilSettled = true }
+        switch activeStyle.releaseBehavior {
+        case .stay:
+            // Not elastic: the head stays where it was released and the style plays its own finale.
+            recoilVel = .zero
+            if recoilElapsed > 0.05 { recoilSettled = true }
+            return
+        case .ease:
+            // Drawn back smoothly, critically damped: no overshoot.
+            var x = CGPoint(x: head.x - lockedPin.x, y: head.y - lockedPin.y)
+            var v = recoilVel
+            let omega = RecoilSpring.omega(period: 0.5)
+            for _ in 0..<steps { RecoilSpring.step(x: &x, v: &v, omega: omega, zeta: 1.0, h: h) }
+            recoilVel = v
+            head = CGPoint(x: lockedPin.x + x.x, y: lockedPin.y + x.y)
+            if recoilElapsed > 0.25, hypot(x.x, x.y) < 3 { recoilSettled = true }
+            if recoilElapsed > 1.2 { recoilSettled = true }
+        case .spring:
+            // Underdamped spring toward the pin. Bounce knob: 0 = tight, 1 = very wobbly.
+            let bounce = CGFloat(cfg.recoilBounce)
+            let zeta = RecoilSpring.zeta(bounce: bounce)
+            let omega = RecoilSpring.omega(period: 0.30)
+            var x = CGPoint(x: head.x - lockedPin.x, y: head.y - lockedPin.y)
+            var v = recoilVel
+            for _ in 0..<steps { RecoilSpring.step(x: &x, v: &v, omega: omega, zeta: zeta, h: h) }
+            recoilVel = v
+            head = CGPoint(x: lockedPin.x + x.x, y: lockedPin.y + x.y)
+            let off = hypot(x.x, x.y)
+            let speed = hypot(v.x, v.y)
+            if recoilElapsed > 0.22, off < 2, speed < 40 { recoilSettled = true }
+            if recoilElapsed > 0.8 { recoilSettled = true }
+        }
     }
 
     private func finishRecoilIfSettled(frameDt: CGFloat) {
@@ -1386,9 +1395,9 @@ final class MetaballView: NSView {
     private static func glyph(for role: CompassRole, color: NSColor) -> NSImage? {
         let name: String
         switch role {
-        case .north: name = "arrow.down.to.line"      // keep / save
+        case .north: name = "square.and.arrow.up"     // share (arrow up)
         case .east: name = "arrow.right"              // go
-        case .south: name = "square.and.arrow.up"     // give / share
+        case .south: name = "arrow.down.to.line"      // download / save (arrow down)
         case .west: name = "questionmark"             // ask
         }
         let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .bold)

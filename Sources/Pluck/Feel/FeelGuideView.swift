@@ -107,26 +107,28 @@ struct FeelGuideView: View {
         "liquid": "drop.fill", "ferro": "bolt.fill", "crystal": "diamond.fill", "gravity": "moon.stars.fill",
         "pearls": "circle.grid.3x3.fill", "swarm": "sparkles", "tendrils": "leaf.fill", "jumprope": "figure.jumprope",
         "stars": "star.fill", "kite": "wind", "bubbles": "bubbles.and.sparkles.fill", "beam": "bolt.horizontal.fill", "lightning": "bolt.fill", "magnet": "magnet", "slinky": "waveform.path", "tincan": "phone.bubble.fill", "thread": "heart.fill", "pingpong": "tennisball.fill", "bridge": "figure.walk", "planes": "paperplane.fill", "water": "drop.fill",
-        "train": "tram.fill", "equalizer": "waveform", "dna": "link", "fishing": "fish.fill", "ribbon": "scribble.variable",
+        "train": "tram.fill", "equalizer": "waveform", "dna": "link", "fishing": "fish.fill", "ribbon": "scribble.variable", "tugofwar": "figure.rower", "cradle": "circle.hexagongrid.fill", "rainbow": "cloud.rainbow.half.fill",
+        "dandelion": "leaf.fill", "cablecar": "cablecar.fill", "signal": "wifi", "lasso": "lasso", "laser": "dot.radiowaves.left.and.right", "marker": "highlighter", "spotlight": "flashlight.on.fill",
+        "callout": "arrow.turn.right.up", "targetlock": "scope",
     ]
 
     private var looksTab: some View {
         VStack(alignment: .leading, spacing: 16) {
-            sectionTitle("Style", "How it moves and what it's made of. Pick one, then a preset or colours below.")
+            sectionTitle("Style", "How it moves and what it is made of. Pick one; styles with several looks open their own list below.")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 ForEach(AnimationStyle.allCases, id: \.rawValue) { st in styleCard(st) }
             }
 
-            sectionTitle("Presets", "A style, its physics and its colours together.")
-            Picker("", selection: $styleFilter) {
-                Text("All").tag("all")
-                ForEach(AnimationStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+            let family = PresetLibrary.presets(for: config.style)
+            if family.count > 1 {
+                sectionTitle("\(config.style.name) looks", "Each one sets the colours, physics and details together.")
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    ForEach(family) { p in presetCard(p) }
+                }
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .frame(maxWidth: 200, alignment: .leading)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                ForEach(PresetLibrary.everything.filter { styleFilter == "all" || $0.style.rawValue == styleFilter }) { p in presetCard(p) }
+            if config.style == .beam {
+                Toggle("Charge while held, fire on release", isOn: $config.beamChargeMode)
+                hint("On: hold to charge the attack, aim with the cursor, then let go to shoot at the target. Off: the attack streams the whole time you pull.")
             }
 
             sectionTitle("Colours", "Keep the current feel and change only the look.")
@@ -134,16 +136,26 @@ struct FeelGuideView: View {
         }
     }
 
+    /// Choosing a style keeps its current look when it already belongs to the style, else opens its first look.
+    private func choose(style st: AnimationStyle) {
+        if PresetLibrary.preset(id: config.presetID)?.style == st { config.styleID = st.rawValue; return }
+        if let first = PresetLibrary.presets(for: st).first { config.apply(preset: first) } else { config.styleID = st.rawValue }
+    }
+
     private func styleCard(_ st: AnimationStyle) -> some View {
         let selected = config.styleID == st.rawValue
-        return Button { config.styleID = st.rawValue } label: {
+        return Button { choose(style: st) } label: {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: Self.styleIcons[st.rawValue] ?? "circle")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: 26, height: 26)
                     .foregroundStyle(selected ? Color.accentColor : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(st.name).font(.caption.weight(.semibold))
+                    HStack(spacing: 5) {
+                        Text(st.name).font(.caption.weight(.semibold))
+                        let n = PresetLibrary.presets(for: st).count
+                        if n > 1 { Text("\(n) looks").font(.system(size: 8, weight: .semibold)).padding(.horizontal, 4).padding(.vertical, 1).background(Capsule().fill(Color.accentColor.opacity(0.22))) }
+                    }
                     Text(st.tagline).font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -197,6 +209,8 @@ struct FeelGuideView: View {
             Toggle("Meeting mode (smaller and quieter)", isOn: $config.meetingMode)
             Toggle("Trackpad haptic ticks", isOn: $config.hapticsEnabled)
             Toggle("Soft sounds", isOn: $config.soundEnabled)
+            Toggle("Equalizer follows the music (system audio)", isOn: $config.audioReactive)
+            hint("Only while the Equalizer style is selected. macOS will ask for Screen Recording permission and shows its own indicator. Nothing is recorded or saved; only 24 level numbers are used. Pluck's own sounds are excluded.")
             HStack {
                 Spacer()
                 Button("Reset all to defaults") { config.resetToDefaults() }

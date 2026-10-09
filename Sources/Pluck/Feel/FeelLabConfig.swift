@@ -100,6 +100,11 @@ final class FeelLabConfig: ObservableObject {
     @Published var hapticsEnabled: Bool { didSet { saveBool("hapticsEnabled", hapticsEnabled) } }
     /// Very quiet system sounds on latch and commit. Off by default.
     @Published var soundEnabled: Bool { didSet { saveBool("soundEnabled", soundEnabled) } }
+    /// Equalizer style follows system audio (needs Screen Recording permission). Off by default.
+    /// Which anime energy attack the Energy Beam style uses, and whether it fires on release (charge mode).
+    @Published var beamVariantID: String { didSet { UserDefaults.standard.set(beamVariantID, forKey: "feelLab.beamVariantID") } }
+    @Published var beamChargeMode: Bool { didSet { saveBool("beamChargeMode", beamChargeMode) } }
+    @Published var audioReactive: Bool { didSet { saveBool("audioReactive", audioReactive) } }
     /// How much release momentum carries the head past the pin (0 = none, 1 = full flick).
     @Published var flingMomentum: Double { didSet { save("flingMomentum", flingMomentum) } }
     /// Smaller and dimmer, for fidgeting without drawing attention on a shared screen.
@@ -171,6 +176,9 @@ final class FeelLabConfig: ObservableObject {
         magnetStick = Self.load("magnetStick", 0.9)
         hapticsEnabled = Self.loadBool("hapticsEnabled", true)
         soundEnabled = Self.loadBool("soundEnabled", false)
+        audioReactive = Self.loadBool("audioReactive", false)
+        beamVariantID = UserDefaults.standard.string(forKey: "feelLab.beamVariantID") ?? EnergyVariant.kamehameha.rawValue
+        beamChargeMode = Self.loadBool("beamChargeMode", true)
         flingMomentum = Self.load("flingMomentum", 0.5)
         meetingMode = Self.loadBool("meetingMode", false)
         trackpadTriggerEnabled = Self.loadBool("trackpadTriggerEnabled", false)
@@ -228,6 +236,9 @@ final class FeelLabConfig: ObservableObject {
         magnetStick = 0.9
         hapticsEnabled = true
         soundEnabled = false
+        audioReactive = false
+        beamVariantID = EnergyVariant.kamehameha.rawValue
+        beamChargeMode = true
         flingMomentum = 0.5
         meetingMode = false
         trackpadTriggerEnabled = false
@@ -321,6 +332,7 @@ final class FeelLabConfig: ObservableObject {
         themeID = preset.themeID
         styleID = preset.style.rawValue
         presetID = preset.id
+        if let v = preset.variant { beamVariantID = v }
     }
 
     /// Change only the colours, keeping the current feel.

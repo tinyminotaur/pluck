@@ -27,6 +27,11 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-style-commit") {
     exit(MainActor.assumeIsolated { PreviewRender.runStyleCommit(outputPath: path) })
 }
 
+// `Pluck --style-perf`: per-frame cost of every sprite style, then exit.
+if CommandLine.arguments.contains("--style-perf") {
+    exit(MainActor.assumeIsolated { PreviewRender.runPerf() })
+}
+
 // `Pluck --render-styles out.png`: the ferrofluid and crystal styles (headless), then exit.
 if let i = CommandLine.arguments.firstIndex(of: "--render-styles") {
     let path = CommandLine.arguments.indices.contains(i + 1) ? CommandLine.arguments[i + 1] : "styles.png"

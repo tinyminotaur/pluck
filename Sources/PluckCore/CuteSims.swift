@@ -5,7 +5,11 @@ private func sm(_ a: CGFloat, _ b: CGFloat, _ x: CGFloat) -> CGFloat { StyleHash
 private func tri(_ x: CGFloat) -> CGFloat { let f = x - floor(x); return f < 0.5 ? f * 2 : 2 - f * 2 }
 
 /// Common plumbing for the sprite styles: positions, mass flow, clock, release.
+public struct TrailPoint: Sendable { public var p: CGPoint; public var t: CGFloat }
+
 public struct SimBase: Sendable {
+    /// Recent head positions (about the last three seconds), for the styles that draw where you have been.
+    public var trail: [TrailPoint] = []
     public var pin = CGPoint.zero, head = CGPoint.zero
     var mass = MassFlow()
     public var time: CGFloat = 0
@@ -15,15 +19,19 @@ public struct SimBase: Sendable {
     public var dumbbell = DumbbellMass.Params()
 
     mutating func start(_ p: CGPoint) {
-        pin = p; head = p; time = 0; releaseT = -1; mass = MassFlow()
+        pin = p; head = p; time = 0; releaseT = -1; mass = MassFlow(); trail = []
         mass.sol = DumbbellMass.solve(dumbbell, length: 0)
     }
     mutating func advance(_ dt: CGFloat, _ newPin: CGPoint, _ newHead: CGPoint) {
         time += dt; pin = newPin; head = newHead
+        if trail.last.map({ hypot($0.p.x - newHead.x, $0.p.y - newHead.y) > 1.2 }) ?? true { trail.append(TrailPoint(p: newHead, t: time)) }
+        while let f = trail.first, time - f.t > 3 { trail.removeFirst() }
         mass.update(chord: hypot(head.x - pin.x, head.y - pin.y), dt: dt, params: dumbbell, bodyRadius: bodyRadius)
         if releaseT >= 0 { releaseT += dt }
     }
-    mutating func fire(_ d: CGPoint?) { releaseT = 0; if let d { releaseDir = d } }
+    /// A commit carries the pull direction; a cancel has none, so things dissolve or settle in place instead of flying off.
+    mutating func fire(_ d: CGPoint?) { releaseT = 0; releaseDir = d ?? .zero; cancelled = d == nil }
+    public var cancelled = false
     var axes: Axes { Axes(pin: pin, head: head) }
     var rp: CGFloat { max(9, mass.sol.pin) }
     var rh: CGFloat { max(7, mass.sol.head) }
@@ -379,6 +387,9 @@ public struct EqualizerScene: Sendable {
 public struct EqualizerSim: Sendable {
     public var base = SimBase()
     public var barsCount = 24
+    /// Live audio bands (0...1, bass first), when the app is capturing system audio; nil means animate on its own.
+    public var spectrum: [CGFloat]?
+    public var isLive: Bool { spectrum != nil }
     public init() {}
     public var isFinished: Bool { base.releaseT > 0.8 }
     public mutating func reset(pin: CGPoint) { base.start(pin) }
@@ -388,7 +399,8 @@ public struct EqualizerSim: Sendable {
     public func scene(emerge: CGFloat, headGlow: CGFloat = 0) -> EqualizerScene {
         let b = base, ax = b.axes
         let e = max(0, min(1, emerge)), reach = sm(40, 160, ax.chord)
-        let beat = max(0, CGFloat(sin(Double(b.time * 7.2)))) * max(0, CGFloat(sin(Double(b.time * 2.4 + 0.4))) * 0.5 + 0.6)
+        var beat = max(0, CGFloat(sin(Double(b.time * 7.2)))) * max(0, CGFloat(sin(Double(b.time * 2.4 + 0.4))) * 0.5 + 0.6)
+        if let sp = spectrum, !sp.isEmpty { beat = min(1, sp.prefix(max(1, sp.count / 6)).reduce(0, +) / CGFloat(max(1, sp.count / 6)) * 1.4) }
         var bars: [EqBar] = []
         let n = barsCount
         for i in 0..<n {
@@ -399,6 +411,11 @@ public struct EqualizerSim: Sendable {
             let kick = beat * bass * bass * 0.9
             let massK = (b.mass.sol.pin * (1 - s) + b.mass.sol.head * s) / max(1, b.bodyRadius)
             var h = (max(0.05, v) + kick) * (24 + 46 * massK) * reach
+            if let sp = spectrum, !sp.isEmpty {
+                let idx = min(sp.count - 1, Int(CGFloat(sp.count) * s))
+                // The real spectrum drives the bar; bass sits at the heavy pin. Mass sets how tall each end can grow.
+                h = max(0.04, sp[idx]) * (30 + 78 * massK) * reach
+            }
             if b.fired { h *= 1 + 2.5 * max(0, 1 - b.releaseT / 0.3) * StyleHash.unit(i, 181) }
             let base = CGPoint(x: b.pin.x + (b.head.x - b.pin.x) * s, y: b.pin.y + (b.head.y - b.pin.y) * s)
             let peak = h * (1.1 + 0.25 * CGFloat(sin(Double(t * 2.1 + CGFloat(i)))))

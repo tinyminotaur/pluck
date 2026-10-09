@@ -100,6 +100,8 @@ enum ActionRunner {
                 task.arguments = ["-p", url.path]
                 try? task.run()
             }
+        case "image.share":
+            if let url { share([url]) }
         case "image.save":
             if let url {
                 let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first

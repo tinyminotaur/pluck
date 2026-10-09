@@ -489,7 +489,7 @@ public struct JumpRopeSim: Sendable {
 
     public mutating func release(commit direction: CGPoint?) {
         releaseT = 0
-        if let d = direction { releaseDir = d }
+        releaseDir = direction ?? .zero
     }
 
     public func primitives(emerge: CGFloat, headGlow: CGFloat = 0) -> [ShapePrim] {

@@ -202,6 +202,8 @@ public struct FeelPreset: Identifiable, Sendable {
     public let themeID: String
     public let values: [String: Double]
     public var style: AnimationStyle = .liquid
+    /// Sub-style within the style, such as which anime energy attack the beam style uses.
+    public var variant: String? = nil
 }
 
 public enum PresetLibrary {
@@ -344,11 +346,56 @@ public enum PresetLibrary {
                     "restRadius": 48, "magnetPull": 50, "magnetWeight": 0.7, "magnetStick": 0.2, "reachGain": 2.0,
                     "idleLife": 0.7, "glassOpacity": 0.95, "shadowStrength": 0.2,
                    ], style: .bubbles),
-        FeelPreset(id: "wave-motion", name: "Wave-Motion Beam", tagline: "Charge up, pull, and blast: an anime energy beam",
+        FeelPreset(id: "wave-motion", name: "Wave-Motion Beam", tagline: "The classic: a blue wave of energy with a white-hot core",
                    themeID: "mist", values: [
                     "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
-                   ], style: .beam),
+                   ], style: .beam, variant: "kamehameha"),
+        FeelPreset(id: "spirit-gun", name: "Spirit Gun", tagline: "A needle of pale light with shock rings racing down it",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "spiritGun"),
+        FeelPreset(id: "final-flash", name: "Final Flash", tagline: "A broad, jagged golden beam with speed lines and lightning",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "finalFlash"),
+        FeelPreset(id: "drill-beam", name: "Drill Beam", tagline: "A violet needle with golden helices drilling around it",
+                   themeID: "amethyst", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "drillBeam"),
+        FeelPreset(id: "crescent-slash", name: "Crescent Slash", tagline: "Black-and-red crescent slashes tear across the screen",
+                   themeID: "oil-slick", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "getsuga"),
+        FeelPreset(id: "spiral-sphere", name: "Spiral Sphere", tagline: "A spinning spiral sphere, charged in the palm and thrown",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "rasengan"),
+        FeelPreset(id: "hollow-blast", name: "Hollow Blast", tagline: "A widening crimson cone ringed with black lightning",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "cero"),
+        FeelPreset(id: "fire-roar", name: "Fire Roar", tagline: "A roaring stream of tumbling flames",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "fireRoar"),
+        FeelPreset(id: "moon-prism", name: "Moon Prism", tagline: "A pink stream of hearts, stars and ribbons",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "moonPrism"),
+        FeelPreset(id: "spirit-bomb", name: "Spirit Bomb", tagline: "A huge orb gathers light, then is hurled",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 85, "magnetWeight": 0.8, "magnetStick": 0.2, "reachGain": 2.4,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.1,
+                   ], style: .beam, variant: "spiritBomb"),
         FeelPreset(id: "tesla-arc", name: "Tesla Arc", tagline: "A crackling arc jumps between two terminals",
                    themeID: "aurora", values: [
                     "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
@@ -419,12 +466,75 @@ public enum PresetLibrary {
                     "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
                     "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
                    ], style: .ribbon),
+        FeelPreset(id: "tug-of-war", name: "Tug of War", tagline: "Two critters pull a rope; the flag drifts toward whoever is heavier",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .tugofwar),
+        FeelPreset(id: "newtons-cradle", name: "Newton's Cradle", tagline: "Steel balls click back and forth on a little frame",
+                   themeID: "mercury", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .cradle),
+        FeelPreset(id: "rainbow-bridge", name: "Rainbow Bridge", tagline: "A rainbow arcs between two fluffy clouds",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .rainbow),
+        FeelPreset(id: "dandelion-wish", name: "Dandelion Wish", tagline: "Seeds drift off the puffball and sprout at the other end",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .dandelion),
+        FeelPreset(id: "cable-car", name: "Cable Car", tagline: "A little gondola glides between two towers",
+                   themeID: "deep-sea", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .cablecar),
+        FeelPreset(id: "signal", name: "Wi-Fi Signal", tagline: "Two stations trade waves and data packets",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .signal),
+        FeelPreset(id: "neon-lasso", name: "Neon Lasso", tagline: "A neon rope ends in a spinning loop that cinches shut around the target",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .lasso),
+        FeelPreset(id: "laser-pointer", name: "Laser Pointer", tagline: "A glowing red dot with a comet trail and a little sparkle",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .laser),
+        FeelPreset(id: "highlighter", name: "Highlighter", tagline: "A neon marker stroke that follows your path and dries away",
+                   themeID: "neon-jelly", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .marker),
+        FeelPreset(id: "stage-spotlight", name: "Stage Spotlight", tagline: "A stage light dims the screen and pools light on the target",
+                   themeID: "mist", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .spotlight),
+        FeelPreset(id: "callout-arrow", name: "Callout Arrow", tagline: "A hand-drawn stop-motion arrow and a scribbled circle",
+                   themeID: "sunset-lava", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .callout),
+        FeelPreset(id: "target-lock", name: "Target Lock", tagline: "A viewfinder HUD closes in and locks on, with a live readout",
+                   themeID: "aurora", values: [
+                    "restRadius": 46, "magnetPull": 70, "magnetWeight": 0.8, "magnetStick": 0.25, "reachGain": 2.1,
+                    "idleLife": 0.5, "glassOpacity": 0.95, "shadowStrength": 0.2,
+                   ], style: .targetlock),
     ]
 
     /// Every preset: the liquid ones, then ferrofluid, crystal and gravity.
     public static var everything: [FeelPreset] { all + styled }
 
     public static func preset(id: String) -> FeelPreset? { (all + styled).first { $0.id == id } }
+
+    /// The presets that belong to one style (a style with several is a family: Blob, Beams, Crystal and so on).
+    public static func presets(for style: AnimationStyle) -> [FeelPreset] { everything.filter { $0.style == style } }
 
     /// Knob values for a preset: baseline overlaid with the preset's own.
     public static func resolvedValues(_ p: FeelPreset) -> [String: Double] {

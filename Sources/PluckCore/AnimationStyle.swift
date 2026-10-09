@@ -1,6 +1,16 @@
 import CoreGraphics
 import Foundation
 
+/// What the head does when you let go, based on what the thing is.
+public enum ReleaseBehavior: Sendable {
+    /// Snaps back like rubber or liquid: an underdamped spring that overshoots (the bounce knob applies).
+    case spring
+    /// Reeled or drawn smoothly back with no overshoot (a fishing line, a tentacle, a kite string).
+    case ease
+    /// Stays exactly where it is while the style plays its own exit: bursting, fading, flying off, firing.
+    case stay
+}
+
 /// How the gesture is drawn and how it responds to movement. Independent of colour themes and feel presets:
 /// every style shares the same triggers, gesture logic, labels and palettes.
 public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
@@ -30,6 +40,18 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
     case dna
     case fishing
     case ribbon
+    case tugofwar
+    case cradle
+    case rainbow
+    case dandelion
+    case cablecar
+    case signal
+    case lasso
+    case laser
+    case marker
+    case spotlight
+    case callout
+    case targetlock
 
     public var name: String {
         switch self {
@@ -59,11 +81,32 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .dna: return "DNA"
         case .fishing: return "Fishing"
         case .ribbon: return "Ribbon Dance"
+        case .tugofwar: return "Tug of War"
+        case .cradle: return "Newton's Cradle"
+        case .rainbow: return "Rainbow"
+        case .dandelion: return "Dandelion"
+        case .cablecar: return "Cable Car"
+        case .signal: return "Signal"
+        case .lasso: return "Lasso"
+        case .laser: return "Laser Pointer"
+        case .marker: return "Highlighter"
+        case .spotlight: return "Spotlight"
+        case .callout: return "Callout Arrow"
+        case .targetlock: return "Target Lock"
+        }
+    }
+
+    /// How the head moves on release. Most styles are not elastic, so they stay put and play their own finale.
+    public var releaseBehavior: ReleaseBehavior {
+        switch self {
+        case .liquid, .ferro, .slinky: return .spring
+        case .tendrils, .fishing, .kite: return .ease
+        default: return .stay
         }
     }
 
     /// Drawn with hand-made vector sprites instead of the glass shader.
-    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon }
+    public var isVector: Bool { self == .swarm || self == .jumprope || self == .stars || self == .kite || self == .bubbles || self == .beam || self == .lightning || self == .magnet || self == .slinky || self == .tincan || self == .thread || self == .pingpong || self == .bridge || self == .planes || self == .water || self == .train || self == .equalizer || self == .dna || self == .fishing || self == .ribbon || self == .tugofwar || self == .cradle || self == .rainbow || self == .dandelion || self == .cablecar || self == .signal || self == .lasso || self == .laser || self == .marker || self == .spotlight || self == .callout || self == .targetlock }
 
     public var tagline: String {
         switch self {
@@ -93,6 +136,18 @@ public enum AnimationStyle: String, Codable, CaseIterable, Sendable {
         case .dna: return "A rotating double helix with colour-paired rungs"
         case .fishing: return "A rod, a bobbing float and a fish that sometimes leaps"
         case .ribbon: return "A long ribbon twirls and curls between the two points"
+        case .tugofwar: return "Two critters pull a rope; the flag drifts toward whoever is heavier"
+        case .cradle: return "Steel balls click back and forth on a little frame"
+        case .rainbow: return "A rainbow arcs between two fluffy clouds"
+        case .dandelion: return "Seeds drift off the puffball and sprout at the other end"
+        case .cablecar: return "A little gondola glides between two towers"
+        case .signal: return "Two stations trade waves and data packets"
+        case .lasso: return "A neon rope ends in a spinning loop that cinches shut around the target"
+        case .laser: return "A glowing red dot with a comet trail and a little sparkle"
+        case .marker: return "A neon marker stroke that follows your path and dries away"
+        case .spotlight: return "A stage light dims the screen and pools light on the target"
+        case .callout: return "A hand-drawn stop-motion arrow and a scribbled circle"
+        case .targetlock: return "A viewfinder HUD closes in and locks on, with a live readout"
         }
     }
 }

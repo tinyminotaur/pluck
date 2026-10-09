@@ -13,7 +13,6 @@ final class VectorStyleHost {
     private let stars = StarLayers()
     private let kite = KiteLayers()
     private let bubbles = BubbleLayers()
-    private let beam = BeamLayers()
     private let lightning = LightningLayers()
     private let magnet = MagnetLayers()
     private let slinky = SlinkyLayers()
@@ -29,8 +28,6 @@ final class VectorStyleHost {
         root.addSublayer(kite.root)
         root.addSublayer(bubbles.root)
         for l in [lightning.root, magnet.root, slinky.root, tincan.root, thread.root] { root.addSublayer(l) }
-        beam.root.isHidden = true
-        root.addSublayer(beam.root)
     }
 
     private func only(_ l: CALayer) {
@@ -38,6 +35,22 @@ final class VectorStyleHost {
     }
 
     private var runnerLayer: CALayer?
+
+    /// A soft scale-in about the pin as the gesture emerges (and out as it leaves), shared by every sprite style.
+    func entrance(pin: CGPoint, amount: CGFloat) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        let t = max(0, min(1, amount))
+        let ease = t * t * (3 - 2 * t)
+        let k = 0.8 + 0.2 * ease
+        var tr = CATransform3DMakeTranslation(pin.x, pin.y, 0)
+        tr = CATransform3DScale(tr, k, k, 1)
+        tr = CATransform3DTranslate(tr, -pin.x, -pin.y, 0)
+        root.transform = tr
+    }
+
+    /// For offscreen previews: drop the layers of styles that are not showing, so only the active one is rendered.
+    func pruneHidden() { for l in root.sublayers ?? [] where l.isHidden { l.removeFromSuperlayer() } }
 
     /// A runner-based style: its layer replaces the previous runner's.
     func attach(_ layer: CALayer) {
@@ -90,14 +103,6 @@ final class VectorStyleHost {
         root.isHidden = scene.alpha < 0.01
         only(kite.root)
         kite.update(scene)
-    }
-
-    func updateBeam(_ scene: BeamScene) {
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-        root.isHidden = scene.alpha < 0.01
-        only(beam.root)
-        beam.update(scene)
     }
 
     func updateLightning(_ s: LightningScene) { run(s.alpha, lightning.root) { lightning.update(s) } }
@@ -597,162 +602,6 @@ final class BubbleLayers {
                 d.opacity = Float(s.alpha * (1 - s.pop))
             }
         }
-    }
-}
-
-// MARK: - Energy beam
-
-@MainActor
-final class BeamLayers {
-    let root = CALayer()
-    private let glow = CAShapeLayer(), body = CAShapeLayer(), core = CAShapeLayer()
-    private let streakA = CAShapeLayer(), streakB = CAShapeLayer()
-    private let orbHalo = CALayer(), orbBody = CALayer(), orbRing = CAShapeLayer()
-    private let arcs = CAShapeLayer()
-    private let impactHalo = CALayer(), burst = CAShapeLayer(), impactCore = CALayer()
-    private var motes: [CALayer] = [], sparks: [CALayer] = [], rings: [CAShapeLayer] = []
-
-    private static func glowImage(_ inner: CGColor, _ mid: CGColor) -> CGImage? {
-        Sprite.image(CGSize(width: 64, height: 64), scale: 3) { c in
-            let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [inner, mid, Sprite.color(60, 170, 255, 0)] as CFArray,
-                               locations: [0, 0.38, 1])!
-            c.drawRadialGradient(g, startCenter: CGPoint(x: 32, y: 32), startRadius: 0, endCenter: CGPoint(x: 32, y: 32), endRadius: 32, options: [])
-        }
-    }
-    private static let haloImg = glowImage(Sprite.color(190, 245, 255, 0.85), Sprite.color(70, 190, 255, 0.45))
-    private static let coreImg = glowImage(Sprite.color(255, 255, 255), Sprite.color(190, 240, 255, 0.95))
-    private static let moteImg: CGImage? = Sprite.image(CGSize(width: 12, height: 12), scale: 3) { c in
-        Sprite.radial(c, center: CGPoint(x: 6, y: 6), radius: 5.5, inner: Sprite.color(255, 255, 255), outer: Sprite.color(110, 210, 255, 0))
-    }
-    private static let sparkImg: CGImage? = Sprite.image(CGSize(width: 12, height: 12), scale: 3) { c in
-        Sprite.radial(c, center: CGPoint(x: 6, y: 6), radius: 5.5, inner: Sprite.color(255, 252, 214), outer: Sprite.color(255, 220, 110, 0))
-    }
-
-    init() {
-        root.masksToBounds = false
-        for l in [glow, body, core, streakA, streakB, arcs, orbRing] { l.fillColor = nil }
-        glow.fillColor = Sprite.color(70, 185, 255, 0.55)
-        glow.shadowColor = Sprite.color(80, 190, 255); glow.shadowOpacity = 1; glow.shadowRadius = 16; glow.shadowOffset = .zero
-        body.fillColor = Sprite.color(150, 232, 255)
-        core.fillColor = Sprite.color(255, 255, 255)
-        core.shadowColor = Sprite.color(220, 250, 255); core.shadowOpacity = 1; core.shadowRadius = 6; core.shadowOffset = .zero
-        for st in [streakA, streakB] {
-            st.strokeColor = Sprite.color(255, 255, 255, 0.9); st.lineCap = .round; st.lineDashPattern = [26, 22]; st.lineWidth = 2
-        }
-        arcs.strokeColor = Sprite.color(225, 250, 255); arcs.lineWidth = 1.8; arcs.lineCap = .round; arcs.lineJoin = .round
-        arcs.shadowColor = Sprite.color(110, 205, 255); arcs.shadowOpacity = 1; arcs.shadowRadius = 5; arcs.shadowOffset = .zero
-        orbRing.strokeColor = Sprite.color(200, 245, 255, 0.8); orbRing.lineWidth = 2.2; orbRing.lineDashPattern = [12, 7]
-        burst.fillColor = Sprite.color(255, 255, 255, 0.92)
-        burst.shadowColor = Sprite.color(150, 225, 255); burst.shadowOpacity = 1; burst.shadowRadius = 8; burst.shadowOffset = .zero
-        orbHalo.contents = Self.haloImg; orbBody.contents = Self.coreImg
-        impactHalo.contents = Self.haloImg; impactCore.contents = Self.coreImg
-        for l in [glow, body, core, streakA, streakB, impactHalo, burst, impactCore, orbHalo, orbBody, orbRing, arcs] { root.addSublayer(l) }
-    }
-
-    private func ribbon(_ pts: [CGPoint], _ hw: [CGFloat], scale: CGFloat) -> CGPath {
-        let path = CGMutablePath()
-        guard pts.count > 1 else { return path }
-        var top: [CGPoint] = [], bot: [CGPoint] = []
-        for i in pts.indices {
-            let a = pts[max(0, i - 1)], b = pts[min(pts.count - 1, i + 1)]
-            let dx = b.x - a.x, dy = b.y - a.y
-            let l = max(0.001, hypot(dx, dy))
-            let nx = -dy / l, ny = dx / l
-            let w = hw[i] * scale
-            top.append(CGPoint(x: pts[i].x + nx * w, y: pts[i].y + ny * w))
-            bot.append(CGPoint(x: pts[i].x - nx * w, y: pts[i].y - ny * w))
-        }
-        path.move(to: top[0])
-        for p in top.dropFirst() { path.addLine(to: p) }
-        for p in bot.reversed() { path.addLine(to: p) }
-        path.closeSubpath()
-        return path
-    }
-
-    private func dot(_ pool: inout [CALayer], _ i: Int, _ img: CGImage?) -> CALayer {
-        while pool.count <= i {
-            let l = CALayer(); l.contents = img; l.bounds = CGRect(x: 0, y: 0, width: 12, height: 12)
-            root.addSublayer(l); pool.append(l)
-        }
-        return pool[i]
-    }
-
-    func update(_ s: BeamScene) {
-        root.opacity = Float(s.alpha)
-        let showBeam = s.beamAmount > 0.02
-        for l in [glow, body, core, streakA, streakB] { l.isHidden = !showBeam }
-        if showBeam {
-            glow.path = ribbon(s.centerline, s.halfWidth, scale: 2.1)
-            body.path = ribbon(s.centerline, s.halfWidth, scale: 1.25)
-            core.path = ribbon(s.centerline, s.halfWidth, scale: 0.62)
-            let p = CGMutablePath()
-            if let f = s.centerline.first { p.move(to: f) }
-            for q in s.centerline.dropFirst() { p.addLine(to: q) }
-            streakA.path = p; streakB.path = p
-            let w = (s.halfWidth.max() ?? 0)
-            streakA.lineWidth = max(1.2, w * 0.18); streakB.lineWidth = max(1, w * 0.12)
-            streakA.lineDashPhase = -s.phase * 520
-            streakB.lineDashPhase = -s.phase * 330 + 12
-            streakA.lineDashPattern = [NSNumber(value: Double(30 + w * 1.5)), NSNumber(value: Double(24 + w))]
-            streakB.lineDashPattern = [NSNumber(value: Double(18 + w)), NSNumber(value: Double(32 + w))]
-            streakA.opacity = 0.9; streakB.opacity = 0.7
-            streakA.transform = CATransform3DMakeTranslation(0, 0, 0)
-        }
-        // The charging orb.
-        let R = s.orbRadius
-        orbHalo.bounds = CGRect(x: 0, y: 0, width: R * 5.4, height: R * 5.4); orbHalo.position = s.orb
-        orbHalo.opacity = Float(0.55 + 0.45 * s.charge)
-        orbBody.bounds = CGRect(x: 0, y: 0, width: R * 2.5, height: R * 2.5); orbBody.position = s.orb
-        orbRing.path = CGPath(ellipseIn: CGRect(x: s.orb.x - R * 1.25, y: s.orb.y - R * 1.25, width: R * 2.5, height: R * 2.5), transform: nil)
-        orbRing.lineDashPhase = -s.phase * 60
-        orbRing.opacity = Float(0.4 + 0.5 * s.charge)
-        let ap = CGMutablePath()
-        for arc in s.arcs { if let f = arc.first { ap.move(to: f); for q in arc.dropFirst() { ap.addLine(to: q) } } }
-        arcs.path = ap
-        arcs.opacity = Float(0.45 + 0.55 * s.charge)
-        for (i, m) in s.motes.enumerated() {
-            let l = dot(&motes, i, Self.moteImg)
-            l.position = m.0; l.opacity = Float(m.1)
-            l.bounds = CGRect(x: 0, y: 0, width: m.2 * 2.6, height: m.2 * 2.6)
-        }
-        // Impact: a bright bloom with a starburst, throwing sparks.
-        let showImpact = s.beamAmount > 0.1 || s.flash > 0
-        impactHalo.isHidden = !showImpact; burst.isHidden = !showImpact; impactCore.isHidden = !showImpact
-        if showImpact {
-            let r = s.impactRadius
-            impactHalo.bounds = CGRect(x: 0, y: 0, width: r * 5, height: r * 5); impactHalo.position = s.impact
-            impactCore.bounds = CGRect(x: 0, y: 0, width: r * 2.2, height: r * 2.2); impactCore.position = s.impact
-            let bp = CGMutablePath()
-            let spikes = 8
-            for i in 0..<(spikes * 2) {
-                let a = s.spin + CGFloat(i) * .pi / CGFloat(spikes)
-                let rr = i % 2 == 0 ? r * (1.7 + 0.35 * CGFloat(sin(Double(s.phase * 17 + CGFloat(i))))) : r * 0.55
-                let pt = CGPoint(x: s.impact.x + cos(a) * rr, y: s.impact.y + sin(a) * rr)
-                i == 0 ? bp.move(to: pt) : bp.addLine(to: pt)
-            }
-            bp.closeSubpath()
-            burst.path = bp
-            burst.opacity = Float(0.55 + 0.45 * s.beamAmount)
-        }
-        for (i, sp) in s.sparks.enumerated() {
-            let l = dot(&sparks, i, Self.sparkImg)
-            l.position = sp.0; l.opacity = Float(sp.1)
-            l.bounds = CGRect(x: 0, y: 0, width: sp.2 * 2.6, height: sp.2 * 2.6)
-        }
-        // Shockwave rings after firing.
-        while rings.count < s.rings.count {
-            let l = CAShapeLayer(); l.fillColor = nil; l.strokeColor = Sprite.color(220, 248, 255); l.lineWidth = 3
-            l.shadowColor = Sprite.color(120, 210, 255); l.shadowOpacity = 1; l.shadowRadius = 6; l.shadowOffset = .zero
-            root.addSublayer(l); rings.append(l)
-        }
-        for (i, l) in rings.enumerated() {
-            guard i < s.rings.count else { l.isHidden = true; continue }
-            l.isHidden = false
-            l.path = CGPath(ellipseIn: CGRect(x: s.impact.x - s.rings[i].0, y: s.impact.y - s.rings[i].0, width: s.rings[i].0 * 2, height: s.rings[i].0 * 2), transform: nil)
-            l.opacity = Float(s.rings[i].1)
-        }
-        // A white flash over everything at the moment of firing.
-        orbBody.opacity = Float(min(1, 0.85 + s.flash))
     }
 }
 
