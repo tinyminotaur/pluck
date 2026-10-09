@@ -1,44 +1,88 @@
-# Pluck
+# Twang
 
-A macOS menu-bar utility: hold both mouse buttons, stretch a liquid drop toward a direction, release to act.
+A playful pointer gesture for macOS. Hold a trigger, stretch a shape from where you are to where you point, and let go.
+The shape can be a blob of liquid obsidian, a crystal, a kite on a string, a laser pointer, a lasso, an anime energy beam,
+or one of 40+ other animations, and anyone can add more.
 
-- **Keep** (north) — copy / keep what you’re holding  
-- **Go** (east) — the forward action  
-- **Give** (south) — share / hand off  
-- **West** (ask) — look up / get info  
+It lives in the menu bar and only draws over your screen: it listens to your mouse, keyboard and trackpad but never
+blocks or sends any of them, so it can't get in your way.
 
-What you grabbed (selection, link, file, clipboard, or window chrome) chooses the labels. Release near the pin to cancel.
+> **Status: first public preview (0.1).** The gesture, looks and animation library are solid; the optional "real actions"
+> (copy, share, tile windows) are a beta and off by default.
 
-## Requirements
+## What you can do
 
-- macOS 14+
-- Accessibility (read under-pointer context, run actions)
-- Input Monitoring (two-button chord via `CGEventTap`)
+- **Stretch things.** Hold ⌥ (or Hyper, or rest three fingers, or hold both mouse buttons), move, and let go.
+  Whatever you pick follows your cursor anywhere on screen, and drains or fills with real mass as you pull.
+- **Choose a look.** 40+ styles in Settings > Looks: liquid blobs, ferrofluid, crystals, tug of war, paper planes,
+  fireworks of anime beams (charge, aim, fire), a marquee and lasso for "selecting" things, a laser pointer, spotlight and
+  highlighter for presenting, and more. Each has colour themes.
+- **Presenter mode.** Hold, then drag out in one of 4 or 8 directions to pick a visual (lasso up, train down...).
+  Drag a little further and it comes to life between the two points. Let go to finish.
+- **Add your own.** Animations are small JSON "packs" with safe formulas, no code. Settings > Library has a template,
+  hot-reload, and an online library. See [docs/PACKS.md](docs/PACKS.md).
 
-## Build & run
+## Install
+
+Download the latest `Twang.zip` from [Releases](../../releases), unzip, and drag **Twang.app** to Applications.
+macOS 14 (Sonoma) or later. On first launch, grant **Accessibility** when asked (that is the only required permission).
+Until releases are notarized, right-click the app and choose *Open* the first time.
+
+Or build it yourself:
 
 ```bash
-cd pluck
-swift build
-swift run
-# or package an .app:
-./scripts/build.sh
-open build/Pluck.app
+git clone https://github.com/tinyminotaur/pluck twang && cd twang
+swift build && swift test            # the logic is unit-tested
+./scripts/build.sh && open build/Twang.app
 ```
 
-On first launch, Pluck asks for the two permissions. Then **hold one mouse button and press the other**, stretch, release.
+`scripts/build.sh` signs with a stable local identity so macOS remembers the Accessibility grant between rebuilds
+(it creates one the first time). To make a distributable zip or dmg, see [docs/RELEASING.md](docs/RELEASING.md).
 
-If the pointer ever feels stuck: menu bar drop → **Stop Listening** or **Quit Pluck** (or `pkill Pluck`).
+## Triggers
 
-## Reduced Motion
+| Trigger | How |
+|---|---|
+| Hold ⌥ or Hyper (no click) | Hold the modifier (⌥ needs the pointer still for ~250 ms), move, release the modifier |
+| Three fingers (optional) | Rest three fingers on the trackpad without moving, then drag; lift to finish |
+| Two-button chord | Hold one mouse button, press the other, stretch, release |
+| Press-and-hold (optional) | ⌥ + press and hold without moving, then drag |
 
-System Reduce Motion replaces the metaball with a plain cross and labels. The same angles and dead zone still apply.
+**Esc** cancels. **⌃⌥⌘P** quits Twang. A gesture also ends after 12 seconds without movement.
+If the pointer ever feels stuck: menu bar > **Reset Pointer / Gesture**.
 
-## Development
+## Privacy and safety
 
-- `PluckCore` — gesture math, compass model, exclude list (unit-tested)
-- `Pluck` — event tap, overlay, Accessibility context, actions, settings
+- No telemetry, no analytics, no accounts. Nothing is sent anywhere unless you press a button (refresh the online
+  library, install a pack), and then only over HTTPS with a checksum.
+- Twang does not read your clipboard, files or windows unless you switch on "real actions (beta)".
+- Community packs are data, not code: they cannot run programs, read files or use the network.
+- The optional audio-reactive Equalizer asks for Screen Recording to hear system audio; only 24 level numbers are used.
 
-## License
+Details: [docs/PRIVACY.md](docs/PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
-Apache License 2.0. See [LICENSE](LICENSE).
+## Project layout
+
+- `Sources/TwangCore`: pure, tested logic (gesture math, physics models, pack format and formulas, themes and presets)
+- `Sources/Twang`: the app (input, overlay and rendering, Settings, pack library)
+- `docs/`: [architecture](docs/ARCHITECTURE.md), [packs](docs/PACKS.md), [testing](docs/TESTING.md), [releasing](docs/RELEASING.md)
+- `packs/`: example and community animation packs
+
+Contributions are welcome, especially animation packs: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Headless tools
+
+For development, with no input, cursor or permissions needed:
+
+```bash
+Twang --render-styles out.png         # contact sheet of the styles (TWANG_STYLES=a,b filters)
+Twang --render-preview out.png        # the standard liquid look grid
+Twang --style-perf                    # per-frame cost of every sprite style
+Twang --sim-report                    # liquid physics extent and draw cost
+Twang --validate-pack <folder>        # check a community pack
+Twang --install-pack <file.twangpack> # install a pack with the app's safety checks
+```
+
+## Licence
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Made by [Tiny Minotaur](https://tinyminotaur.co).

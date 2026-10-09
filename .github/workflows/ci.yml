@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build 2>&1 | tee build.log
+      - name: Test
+        run: swift test 2>&1 | tee test.log
+      - name: Compile Metal shader sources (syntax check)
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          for name, path in [("obsidian", "Sources/Twang/Overlay/Liquid/ObsidianBlobMetal.swift"),
+                             ("shapelist", "Sources/Twang/Overlay/Glass/ShapeListMetal.swift")]:
+              src = pathlib.Path(path).read_text()
+              m = re.search(r'shaderSource = """\n(.*?)\n    """', src, re.S)
+              pathlib.Path(f"/tmp/{name}.metal").write_text(m.group(1))
+          PY
+          for n in obsidian shapelist; do xcrun -sdk macosx metal -c /tmp/$n.metal -o /tmp/$n.air; done
+      - name: Validate example packs
+        run: |
+          swift build -c release
+          for d in packs/examples/*/; do "$(swift build -c release --show-bin-path)/Twang" --validate-pack "$d"; done
+      - name: Render blob preview with real Metal (best effort)
+        continue-on-error: true
+        run: |
+          swift build -c release
+          "$(swift build -c release --show-bin-path)/Twang" --render-preview preview.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blob-preview
+          path: preview.png
+          if-no-files-found: ignore

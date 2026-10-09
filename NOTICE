@@ -1,0 +1,9 @@
+Twang
+Copyright 2026 Tiny Minotaur and the project contributors
+https://tinyminotaur.co
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It uses only Apple system frameworks (AppKit, Metal, CoreGraphics, ScreenCaptureKit, CryptoKit) and has no
+third-party code dependencies. It optionally loads Apple's private MultitouchSupport framework at runtime
+(three-finger trigger, off by default); that framework is not distributed with this project.

@@ -1,0 +1,108 @@
+<!doctype html><meta charset=utf8><body style="margin:0;background:#c9ccd3">
+<canvas id=c width=3000 height=1800 style="width:1500px;height:900px"></canvas>
+<script>
+const SC=2;
+// ---- port of BlobMass.radiusProfile / rescaleToTotalArea (defaults) ----
+const P={rest:56,minR:5,pinMass:.72,headMass:.45,pull:.78,pinMin:.78,headMin:.4,maxScale:1.35};
+const total=Math.PI*P.rest*P.rest, maxR=P.rest*P.maxScale;
+const clampR=r=>Math.min(maxR,Math.max(P.minR,r));
+function uniformR(L){if(L<.5)return P.rest;return clampR((-L+Math.sqrt(L*L+Math.PI*total))/Math.PI)}
+function area(r,L){const s=r.length-1,sl=L/s;let b=0;for(let i=0;i<s;i++)b+=(r[i]+r[i+1])*sl;return b+Math.PI*.5*(r[0]**2+r[r.length-1]**2)}
+function rescale(r,L){let o=r.map(x=>Math.max(P.minR*.5,x));for(let k=0;k<2;k++){const s=Math.sqrt(total/Math.max(1,area(o,L)));o=o.map(x=>Math.min(maxR,Math.max(P.minR,x*s)))}
+ const s=Math.sqrt(total/Math.max(1,area(o,L)));return o.map(x=>Math.max(P.minR*.85,x*s))}
+function profile(L,n){const base=uniformR(L),st=Math.min(1,L/(P.rest*5));const raw=[];
+ for(let i=0;i<n;i++){const t=i/(n-1),pl=Math.exp(-((t/.42)**2)),hl=Math.exp(-(((1-t)/.26)**2)),neck=Math.sin(Math.PI*t);
+  raw.push(Math.max(P.minR*.7,base*(.16+(1.2+P.pinMass)*pl*(.75+.55*st)+(.7+P.headMass)*hl*(.5+.5*st)-P.pull*neck*st)))}
+ return rescale(raw,L)}
+// ---- shader (Metal -> GLSL port, same math) ----
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 res; uniform vec2 lightDir; uniform float time,fillet,facet,facetSize,shin,fres_,trans,opac,ember;
+uniform vec3 baseC,absorb,glowC; uniform int nC,nS; uniform vec4 c[32];
+out vec4 outC;
+float smin(float a,float b,float k){float h=max(k-abs(a-b),0.)/k;return min(a,b)-h*h*k*.25;}
+vec2 blobField(vec2 p,int n,int sp,float k){float d=1e5,r=1.;
+ for(int i=0;i+1<32;i++){ if(i+1>=sp)break; vec2 a=c[i].xy,ab=c[i+1].xy-a; float t=clamp(dot(p-a,ab)/max(dot(ab,ab),1e-4),0.,1.);
+  float rr=mix(c[i].z,c[i+1].z,t); float di=length(p-(a+ab*t))-rr; float w=clamp(.5+.5*(d-di)/(.35*max(rr,r)),0.,1.); r=mix(r,rr,w); d=smin(d,di,max(.18*rr,.5));}
+ for(int i=0;i<32;i++){ if(i<sp)continue; if(i>=n)break; float rr=max(c[i].z,1.); float di=length(p-c[i].xy)-rr;
+  float w=clamp(.5+.5*(d-di)/k,0.,1.); r=max(r,mix(r,rr,w)); d=smin(d,di,k);}
+ return vec2(d,max(r,1.));}
+float hash12(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash12(i),hash12(i+vec2(1,0)),f.x),mix(hash12(i+vec2(0,1)),hash12(i+vec2(1,1)),f.x),f.y);}
+vec2 waterWarp(vec2 p,vec2 pin,float amp,float scale,float t){vec2 q=(p-pin)/scale;
+ vec2 w=vec2(vnoise(q+vec2(t*.21,0.))-.5,vnoise(q+vec2(0.,t*.17)+7.3)-.5);
+ w+=.28*vec2(vnoise(q*1.7+vec2(-t*.29,3.1))-.5,vnoise(q*1.7+vec2(t*.25,9.7))-.5);return p+w*amp;}
+float pillow(vec2 f){float u=clamp(-f.x/(f.y*.95),0.,1.);float v=1.-u;return sqrt(max(0.,1.-v*v));}
+vec2 hash22(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453);}
+vec4 facetCells(vec2 m,out vec2 toSeed){vec2 g=floor(m),f=fract(m);float d1=8.,d2=8.;vec2 id=vec2(0);toSeed=vec2(0);
+ for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j));vec2 r=o+hash22(g+o)*.8+.1-f;float d=dot(r,r);
+  if(d<d1){d2=d1;d1=d;id=g+o;toSeed=r;}else if(d<d2){d2=d;}}
+ d1=sqrt(d1);d2=sqrt(d2);return vec4(d1,d2-d1,hash22(id+17.));}
+void main(){
+ vec2 p=gl_FragCoord.xy; int n=min(nC,32); int sp=min(nS,n); float k=max(fillet,1.);
+ vec2 wPin=n>=2?c[n-2].xy:vec2(0.); float wAmp=.2*k; float wScale=max(wAmp*6.5,24.);
+ vec2 f00=blobField(p,n,sp,k); if(f00.x>wAmp+4.){outC=vec4(0);return;} float wAmpL=min(wAmp,.5*f00.y);
+ vec2 f0=blobField(waterWarp(p,wPin,wAmpL,wScale,time),n,sp,k);
+ vec4 cell=vec4(0,1,.5,.5); vec2 domeS=vec2(0);
+ if(facet>.001 && n>=sp+2){vec2 pin=c[n-2].xy; vec2 m=(p-pin)/facetSize;
+  vec2 toSeed; cell=facetCells(m,toSeed); domeS=-toSeed; f0.x+=facet*facetSize*.09*(cell.z-.5)*2.;}
+ float alpha=clamp(.5-f0.x/1.5,0.,1.);
+ if(alpha<.02){outC=vec4(0);return;}
+ float h=pillow(f0);float e=1.5;
+ vec2 fxp=blobField(waterWarp(p+vec2(e,0),wPin,wAmpL,wScale,time),n,sp,k); vec2 fyp=blobField(waterWarp(p+vec2(0,e),wPin,wAmpL,wScale,time),n,sp,k);
+ float hx=pillow(fxp)-h; float hy=pillow(fyp)-h; vec2 gd=vec2(fxp.x-f0.x,fyp.x-f0.x); float gl=length(gd); vec2 gdir=gl>1e-4?gd/gl:vec2(0.);
+ float dome=pow(1.-clamp(-f0.x/(f0.y*.95),0.,1.),1.3)*smoothstep(1.*k,2.6*k,f0.y);
+ vec3 N=normalize(vec3(-hx*4.8+gdir.x*dome*.62,-hy*4.8+gdir.y*dome*.62,1.));
+ vec2 tilt=(cell.zw-.5)*2.; float ripple=sin(cell.x*38.+cell.z*6.2831)*.035; vec3 Nf=normalize(vec3(N.xy*.45+tilt*.45+domeS*.30+domeS*ripple,N.z)); N=normalize(mix(N,Nf,clamp(facet,0.,1.)));
+ vec3 V=vec3(0,0,1); vec3 L=normalize(vec3(lightDir,.85));
+ float thick=clamp(h,0.,1.);
+ vec3 dark=baseC*.30+vec3(.014,.011,.009); float tAmt=clamp(trans,0.,1.)*(.14+1.05*pow(1.-thick,1.9));
+ vec3 beer=exp(-absorb*thick*1.7); vec3 body=mix(dark,glowC*beer,tAmt); body+=vec3(.012,.009,.007)*(.35+.65*thick);
+ float ndl=clamp(dot(N,L),0.,1.); float wrap=clamp(dot(N,normalize(vec3(-L.x,-L.y,.9)))*.5+.5,0.,1.);
+ body*=.55+.55*ndl+.25*wrap;
+ float fr=pow(1.-clamp(dot(N,V),0.,1.),2.2)*(.55+fres_); body+=fr*vec3(1.,.72,.42)*.36;
+ vec3 H=normalize(L+V); float gloss=mix(24.,130.,clamp(shin,0.,1.)); float spec=pow(clamp(dot(N,H),0.,1.),gloss)*(.45+shin); body+=spec*vec3(1.,.94,.86)*1.1*(1.-.45*clamp(facet,0.,1.));
+ float sheen=pow(clamp(dot(N,normalize(vec3(-.35,.6,.72))),0.,1.),7.); body+=sheen*(.10+.22*shin)*vec3(1.,.93,.84);
+ float bounce=pow(clamp(dot(N,normalize(vec3(.5,-.6,.62))),0.,1.),5.); body+=bounce*.06*vec3(1.,.55,.2);
+ float seam=1.-smoothstep(0.,.07,cell.y); body+=seam*facet*.12*vec3(1.,.62,.22)*(.35+.65*thick);
+ float glint=smoothstep(.972,.996,dot(N,H))*(.35+.65*cell.w); body+=glint*facet*.9*vec3(1.,.9,.74)*(1.-seam);
+ float pulse=.65*(.5+.5*sin(time*2.1))+.35*(.5+.5*sin(time*3.4+1.3)); float emberAmt=ember*(.35+.65*pulse); vec3 emberCol=vec3(1.,.42,.07);
+ body+=emberCol*emberAmt*(.30*pow(1.-thick,1.7)+.06*thick*thick*thick);
+ float crackle=.5+.5*sin(time*1.7+cell.z*6.2831); body+=emberCol*emberAmt*seam*clamp(facet,0.,1.)*(.35+.65*crackle)*.9;
+ float ign=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715)))); body+=(ign-.5)*(1.4/255.);
+ float a=clamp(alpha*mix(opac*.78,1.,smoothstep(0.,.5,thick)),0.,1.); outC=vec4(body*a,a);}`;
+const VS=`#version 300 es
+in vec2 q;void main(){gl_Position=vec4(q,0,1);}`;
+const cv=document.getElementById('c'),gl=cv.getContext('webgl2',{premultipliedAlpha:true,preserveDrawingBuffer:true});
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o}
+const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);
+if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw gl.getProgramInfoLog(pr);
+gl.useProgram(pr);const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+const loc=gl.getAttribLocation(pr,'q');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+const U=n=>gl.getUniformLocation(pr,n);
+// scene: pin->head with sag (slosh) in points, y-up; viewport tile
+function drawScene(x0,y0,w,h,pin,head,sag,facet,fsize,ld){
+ const N=16; const dx=head[0]-pin[0],dy=head[1]-pin[1],L=Math.hypot(dx,dy);
+ let rad=profile(L,N);
+ const circles=[];const nx=-dy/(L||1),ny=dx/(L||1);
+ for(let i=0;i<N;i++){const t=i/(N-1);const bow=Math.sin(Math.PI*t)*sag*(1-.3*t);
+  circles.push([pin[0]+dx*t+nx*bow,pin[1]+dy*t+ny*bow,rad[i]])}
+ const pinR=Math.max(rad[0],P.rest*P.pinMin*.75), headR=Math.max(rad[N-1],P.rest*P.headMin*.85);
+ circles.push([pin[0],pin[1],pinR]);circles.push([head[0],head[1],headR]);
+ const flat=new Float32Array(32*4);circles.forEach((c,i)=>{flat.set([c[0]*SC,c[1]*SC,c[2]*SC,0],i*4)});
+ gl.viewport(x0*SC,y0*SC,w*SC,h*SC);gl.scissor(x0*SC,y0*SC,w*SC,h*SC);gl.enable(gl.SCISSOR_TEST);
+ // tile-local coords: shift circles so tile origin is (0,0) -> gl_FragCoord is window-space, so offset instead
+ for(let i=0;i<circles.length;i++){flat[i*4]+=x0*SC;flat[i*4+1]+=y0*SC}
+ gl.uniform2f(U('res'),w*SC,h*SC);gl.uniform2f(U('lightDir'),ld[0],ld[1]);gl.uniform1f(U('time'),1.3);
+ gl.uniform1f(U('fillet'),P.rest*.22*SC);gl.uniform1f(U('facet'),facet);gl.uniform1f(U('facetSize'),fsize*SC);
+ gl.uniform1f(U('shin'),.95);gl.uniform1f(U('fres_'),.85);gl.uniform1f(U('trans'),.7);gl.uniform1f(U('opac'),.92);
+ const cool=.45,ab=.75;
+ gl.uniform3f(U('baseC'),.04,.034,.03); gl.uniform1f(U('ember'),.55);
+ gl.uniform3f(U('absorb'),.85+ab*.8,1.9+ab*1.2,3.2+ab*1.4);gl.uniform3f(U('glowC'),.78+.22*cool,.26+.34*cool,.04+.10*cool);
+ gl.uniform1i(U('nC'),circles.length);gl.uniform1i(U('nS'),N);gl.uniform4fv(U('c'),flat);
+ gl.drawArrays(gl.TRIANGLES,0,6);
+}
+window.drawScene=drawScene;
+window.clearAll=function(){gl.disable(gl.SCISSOR_TEST);gl.viewport(0,0,3000,1800);gl.clearColor(.79,.8,.83,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);};
+</script>

@@ -1,0 +1,23 @@
+name: Bug report
+description: Something didn't work or felt wrong
+labels: [bug]
+body:
+  - type: input
+    id: macos
+    attributes: { label: macOS version and Mac model, placeholder: "macOS 14.5, MacBook Pro M2" }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: Twang version (Settings > Help), placeholder: "0.1.0" }
+  - type: dropdown
+    id: trigger
+    attributes:
+      label: Trigger you used
+      options: ["Hold ⌥", "Hold Hyper", "Three fingers", "Two-button chord", "Press and hold", "Presenter mode", "Other"]
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: "And what did you expect?" }
+    validations: { required: true }
+  - type: textarea
+    id: log
+    attributes: { label: Log (optional), description: "If the diagnostic log was on: ~/Library/Logs/Twang/gesture.log" }

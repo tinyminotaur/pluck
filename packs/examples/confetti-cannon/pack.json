@@ -1,0 +1,15 @@
+{
+  "format": 1, "id": "confetti-cannon", "name": "Confetti Cannon", "version": "1.0.0", "author": "Twang", "license": "CC0-1.0",
+  "tagline": "A cannon at the pin fires streams of confetti toward the target",
+  "theme": "neon-jelly",
+  "params": [ { "name": "spread", "label": "Spread", "default": 0.7, "min": 0.1, "max": 1.5 } ],
+  "release": { "duration": 1.2, "behavior": "stay" },
+  "layers": [
+    { "type": "shape", "shape": "rect", "count": 90, "along": "chord * pull * fract(t * 0.6 + u * 3 + rand(i))",
+      "offset": "(rand(i + 7) - 0.5) * 120 * spread * fract(t * 0.6 + u * 3 + rand(i)) + sin(t * 6 + i) * 6 + (fired * tr * (rand(i + 3) - 0.5) * 260)",
+      "size": "5 + 3 * rand(i + 2)", "size2": "2.5", "rotation": "t * 5 + i * 2",
+      "color": { "h": "rand(i + 11)", "s": 0.75, "v": 1 }, "alpha": "pull * (1 - fract(t * 0.6 + u * 3 + rand(i))) * (1 - tr)" },
+    { "type": "shape", "shape": "circle", "space": "screen", "size": "pinR * 0.8", "color": "@a", "alpha": "1 - tr" },
+    { "type": "shape", "shape": "star", "space": "head", "count": 3, "size": "headR * (0.5 + 0.3 * sin(t * 6 + i * 2))", "rotation": "t * (1 + i)", "color": "@c", "alpha": "pull * (1 - tr)" }
+  ]
+}

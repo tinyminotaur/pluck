@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "packs": [
+    {
+      "id": "confetti-cannon",
+      "name": "Confetti Cannon",
+      "author": "Twang",
+      "version": "1.0.0",
+      "tagline": "A cannon at the pin fires streams of confetti toward the target",
+      "download": "https://example.com/twang/packs/confetti-cannon-1.0.0.twangpack",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 2048
+    }
+  ]
+}

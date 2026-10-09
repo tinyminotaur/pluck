@@ -1,0 +1,22 @@
+name: Release
+
+# Runs only when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0).
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
+      - name: Package (unsigned unless signing secrets are configured, see docs/RELEASING.md)
+        run: ./scripts/package.sh
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/Twang-*.zip dist/Twang-*.zip.sha256 --generate-notes --title "Twang $GITHUB_REF_NAME"
