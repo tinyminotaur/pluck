@@ -4,6 +4,8 @@ All notable changes. Format based on [Keep a Changelog](https://keepachangelog.c
 
 ## [Unreleased]
 
+First public preview.
+
 ### Security
 - Get Info on a file whose name contained quotes could run AppleScript from the name (real actions only). File names are now escaped.
 - Pack import now refuses archives that contain symbolic links, and checks the uncompressed size before extracting.
@@ -11,10 +13,6 @@ All notable changes. Format based on [Keep a Changelog](https://keepachangelog.c
 
 ### Added
 - **Ball of Thread** style: a ball of thread unspools as you stretch and ends in a lasso loop. Let go and the loop is thrown, cinches shut, and the thread winds back into the ball.
-
-First public preview.
-
-### Added
 - Release tooling: `scripts/package.sh` (universal, optional Developer ID signing and notarization), a tag-triggered release workflow, `scripts/build-library.sh` for pack libraries, and three example packs in `packs/examples`.
 - Styles are warmed up off screen at launch so the first gesture has no hitch.
 - 40+ animation styles: liquid, ferrofluid, crystal, gravity, anime energy attacks (11 variants with charge-and-fire), selection
