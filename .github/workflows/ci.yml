@@ -16,15 +16,21 @@ jobs:
         run: swift build 2>&1 | tee build.log
       - name: Test
         run: swift test 2>&1 | tee test.log
-      - name: Compile Metal shader source (syntax check)
+      - name: Compile Metal shader sources (syntax check)
         run: |
           python3 - <<'PY'
           import re, pathlib
-          src = pathlib.Path("Sources/Pluck/Overlay/ObsidianBlobMetal.swift").read_text()
-          m = re.search(r'shaderSource = """\n(.*?)\n    """', src, re.S)
-          pathlib.Path("/tmp/obsidian.metal").write_text(m.group(1))
+          for name, path in [("obsidian", "Sources/Pluck/Overlay/Liquid/ObsidianBlobMetal.swift"),
+                             ("shapelist", "Sources/Pluck/Overlay/Glass/ShapeListMetal.swift")]:
+              src = pathlib.Path(path).read_text()
+              m = re.search(r'shaderSource = """\n(.*?)\n    """', src, re.S)
+              pathlib.Path(f"/tmp/{name}.metal").write_text(m.group(1))
           PY
-          xcrun -sdk macosx metal -c /tmp/obsidian.metal -o /tmp/obsidian.air
+          for n in obsidian shapelist; do xcrun -sdk macosx metal -c /tmp/$n.metal -o /tmp/$n.air; done
+      - name: Validate example packs
+        run: |
+          swift build -c release
+          for d in packs/examples/*/; do "$(swift build -c release --show-bin-path)/Pluck" --validate-pack "$d"; done
       - name: Render blob preview with real Metal (best effort)
         continue-on-error: true
         run: |

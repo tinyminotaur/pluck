@@ -7,6 +7,8 @@ All notable changes. Format based on [Keep a Changelog](https://keepachangelog.c
 First public preview.
 
 ### Added
+- Release tooling: `scripts/package.sh` (universal, optional Developer ID signing and notarization), a tag-triggered release workflow, `scripts/build-library.sh` for pack libraries, and three example packs in `packs/examples`.
+- Styles are warmed up off screen at launch so the first gesture has no hitch.
 - 40+ animation styles: liquid, ferrofluid, crystal, gravity, anime energy attacks (11 variants with charge-and-fire), selection
   tools (marquee, jelly, freehand lasso), presentation tools (laser pointer, highlighter, spotlight, callout, target lock) and a
   large set of playful scenes.
@@ -17,3 +19,7 @@ First public preview.
 
 ### Changed
 - The window formerly called "Feel Lab" is now **Settings**.
+
+### Changed
+- Internal: every style now runs behind one of two runner protocols; the overlay view has no per-style code.
+- Accessibility values are type-checked instead of force-cast, so an odd app cannot crash Pluck.

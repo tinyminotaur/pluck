@@ -1,0 +1,15 @@
+{
+  "format": 1, "id": "heartbeat-line", "name": "Heartbeat Line", "version": "1.0.0", "author": "Pluck", "license": "CC0-1.0",
+  "tagline": "A neon pulse trace runs between the points",
+  "theme": "aurora",
+  "params": [ { "name": "rate", "label": "Heart rate", "default": 0.9, "min": 0.3, "max": 2 } ],
+  "release": { "duration": 0.7, "behavior": "stay" },
+  "layers": [
+    { "type": "path", "count": 140, "along": "s * chord",
+      "offset": "pull * (30 * exp(-pow((fract(s * 2.5 - t * rate) - 0.32) * 26, 2)) - 12 * exp(-pow((fract(s * 2.5 - t * rate) - 0.38) * 34, 2)) + 5 * exp(-pow((fract(s * 2.5 - t * rate) - 0.55) * 9, 2)))",
+      "width": 3, "color": "#7dffb0", "glow": 10, "alpha": "1 - tr" },
+    { "type": "path", "count": 2, "along": "s * chord", "width": 1, "color": "#7dffb055", "dash": [4, 8], "alpha": "pull * (1 - tr)" },
+    { "type": "shape", "shape": "circle", "size": "pinR * 0.7 * (1 + 0.15 * sin(t * rate * 6.28))", "space": "screen", "color": "#7dffb0", "glow": 14, "alpha": "1 - tr" },
+    { "type": "shape", "shape": "circle", "size": "headR * 0.7 * (1 + 0.15 * sin(t * rate * 6.28 + 1))", "space": "head", "color": "#7dffb0", "glow": 14, "alpha": "1 - tr" }
+  ]
+}
