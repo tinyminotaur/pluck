@@ -167,41 +167,28 @@ enum PreviewRender {
         catch { return 7 }
     }
 
-    /// `Pluck --render-styles out.png`: the ferrofluid and crystal styles (headless Metal) at rest, pulled, far, and armed.
+    /// `Pluck --render-styles out.png`: every style (headless), four frames each: at rest, pulled, far, and armed or
+    /// fired. Environment: `PLUCK_STYLES=a,b` renders only those styles; `PLUCK_PREVIEW_DIR=left|up|down|diag` pulls in
+    /// another direction (to check nothing turns upside down).
     static func runStyles(outputPath: String) -> Int32 {
         PackLibrary.shared.start()
         guard let shapes = ShapeListMetal.shared else { return 2 }
         let tile = CGSize(width: 560, height: 340)
         let scale: CGFloat = 2
         let chords: [CGFloat] = [0, 150, 330, 330]
-        let allRows: [(AnimationStyle, LiquidTheme)] = [
-            (.ferro, ThemeLibrary.ferrofluid), (.crystal, ThemeLibrary.amethyst), (.crystal, ThemeLibrary.frost),
-            (.gravity, ThemeLibrary.moltenGold), (.pearls, ThemeLibrary.mercury), (.swarm, ThemeLibrary.aurora),
-            (.tendrils, ThemeLibrary.curse), (.jumprope, ThemeLibrary.sunsetLava),
-            (.stars, ThemeLibrary.aurora), (.kite, ThemeLibrary.sunsetLava), (.bubbles, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.beam, ThemeLibrary.mist),
-            (.lightning, ThemeLibrary.aurora), (.magnet, ThemeLibrary.mercury), (.slinky, ThemeLibrary.neonJelly), (.tincan, ThemeLibrary.sunsetLava), (.thread, ThemeLibrary.sunsetLava),
-            (.pingpong, ThemeLibrary.mist), (.bridge, ThemeLibrary.mist), (.planes, ThemeLibrary.mist), (.water, ThemeLibrary.mist), (.train, ThemeLibrary.mist),
-            (.equalizer, ThemeLibrary.mist), (.dna, ThemeLibrary.mist), (.fishing, ThemeLibrary.mist), (.ribbon, ThemeLibrary.mist),
-            (.tugofwar, ThemeLibrary.mist), (.cradle, ThemeLibrary.mist), (.rainbow, ThemeLibrary.mist), (.dandelion, ThemeLibrary.mist), (.cablecar, ThemeLibrary.mist), (.signal, ThemeLibrary.mist),
-            (.lasso, ThemeLibrary.mist), (.laser, ThemeLibrary.mist), (.marker, ThemeLibrary.mist), (.spotlight, ThemeLibrary.mist), (.callout, ThemeLibrary.mist), (.targetlock, ThemeLibrary.mist),
-            (.marquee, ThemeLibrary.mist), (.jelly, ThemeLibrary.mist), (.freehand, ThemeLibrary.mist),
-            (.pack, ThemeLibrary.mist), (.pack, ThemeLibrary.mist), (.pack, ThemeLibrary.mist),
-        ]
-        // PLUCK_STYLES=a,b,c renders only those styles (by raw value), to keep previews quick.
+
+        // One row per style (the beam style once per energy variant, the Community style once per installed pack).
+        struct Row { var style: AnimationStyle; var theme: LiquidTheme; var variant: Int }
+        let glassTheme: [AnimationStyle: LiquidTheme] = [.ferro: ThemeLibrary.ferrofluid, .crystal: ThemeLibrary.amethyst, .gravity: ThemeLibrary.moltenGold,
+                                                         .pearls: ThemeLibrary.mercury, .tendrils: ThemeLibrary.curse]
+        var allRows: [Row] = []
+        for st in AnimationStyle.allCases where st != .liquid {
+            let n = st == .beam ? EnergyVariant.allCases.count : (st == .pack ? max(1, PackLibrary.shared.packs.filter(\.isValid).count) : 1)
+            for v in 0..<n { allRows.append(Row(style: st, theme: glassTheme[st] ?? ThemeLibrary.mist, variant: v)) }
+        }
         let only = (ProcessInfo.processInfo.environment["PLUCK_STYLES"] ?? "").split(separator: ",").map(String.init)
-        let rows = only.isEmpty ? allRows : allRows.filter { only.contains($0.0.rawValue) }
-        let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * rows.count
+        let rows = only.isEmpty ? allRows : allRows.filter { only.contains($0.style.rawValue) }
+        let W = Int(tile.width * scale) * chords.count, H = Int(tile.height * scale) * max(1, rows.count)
         guard let ctx = CGContext(
             data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(),
@@ -209,144 +196,67 @@ enum PreviewRender {
         ) else { return 3 }
         ctx.setFillColor(CGColor(red: 0.13, green: 0.14, blue: 0.17, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
-        // PLUCK_PREVIEW_DIR=left|up|down|diag pulls in another direction, to check nothing turns upside down.
+
         let dirName = ProcessInfo.processInfo.environment["PLUCK_PREVIEW_DIR"] ?? "right"
         let pullDir: CGPoint = { switch dirName { case "left": return CGPoint(x: -1, y: 0); case "up": return CGPoint(x: 0, y: 1); case "down": return CGPoint(x: 0, y: -1)
             case "diag": return CGPoint(x: -0.8, y: -0.6); default: return CGPoint(x: 1, y: 0) } }()
         let pin = (dirName == "left" || dirName == "diag") ? CGPoint(x: tile.width - 130, y: 170) : (dirName == "down" ? CGPoint(x: 120, y: tile.height - 90) : CGPoint(x: 120, y: dirName == "up" ? 70 : 170))
+        let dt: CGFloat = 1.0 / 120
+
         for (r, row) in rows.enumerated() {
             for (c, chord) in chords.enumerated() {
                 let armed: CGFloat = c == 3 ? 1 : 0
-                if ProcessInfo.processInfo.environment["PLUCK_PREVIEW_VERBOSE"] != nil { FileHandle.standardError.write(Data("row \(r) \(row.0) col \(c)\n".utf8)) }
-                var prims: [ShapePrim] = []
-                var vector: ((CGContext) -> Void)?
-                let dt: CGFloat = 1.0 / 120
-                if row.0 == .ferro {
-                    var f = FerroSim()
-                    f.reset(pin: pin)
-                    var t: CGFloat = 0
-                    while t < 1.6 {
-                        let k = min(1, t / 0.35)
-                        f.step(dt: dt, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))))
-                        t += dt
-                    }
-                    prims = f.primitives(emerge: 1, headGlow: armed)
-                } else if row.0 == .pearls || row.0 == .swarm || row.0 == .tendrils || row.0 == .jumprope || row.0 == .stars || row.0 == .kite || row.0 == .bubbles || row.0 == .beam || row.0 == .lightning || row.0 == .magnet || row.0 == .slinky || row.0 == .tincan || row.0 == .thread || row.0 == .pack || VectorRunners.make(row.0) != nil {
-                    let head = { (k: CGFloat) in CGPoint(x: pin.x + pullDir.x * chord * k * (pullDir.y == 0 ? 1 : 0.55) + (pullDir.y != 0 ? 18 * k : 0), y: pin.y + pullDir.y * chord * k * (pullDir.x == 0 ? 0.62 : 0.55) + (pullDir.y == 0 ? 18 * k * CGFloat(sin(Double(k * 3))) : 0)) }
-                    var t: CGFloat = 0
-                    switch row.0 {
-                    case .pearls:
-                        var a = PearlSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
-                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        prims = a.primitives(emerge: 1, headGlow: armed)
-                    case .swarm:
-                        var a = SwarmSim(); a.params.bodyRadius = 26; a.reset(pin: pin)
-                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        vector = { ctx in
-                            let host = VectorStyleHost()
-                            host.updateFireflies(a.fireflyStates(emerge: 1), pin: a.pinLantern, head: a.headLantern,
-                                                 alpha: 1, headGlow: armed, time: t)
-                            if ProcessInfo.processInfo.environment["PLUCK_PREVIEW_VERBOSE"] != nil {
-                                func walk(_ l: CALayer, _ d: Int) {
-                                    let f = l.convert(l.bounds, to: host.root)
-                                    if !l.isHidden, max(abs(f.width), abs(f.height)) > 1500 || !f.width.isFinite { FileHandle.standardError.write(Data("BIG \(d) \(l.bounds) -> \(f) \(l.transform)\n".utf8)) }
-                                    for c in l.sublayers ?? [] { walk(c, d + 1) }
-                                }
-                                walk(host.root, 0)
-                            }
-                            host.pruneHidden(); host.root.render(in: ctx)
-                        }
-                    case .stars:
-                        var a = StarSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
-                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        vector = { ctx in let host = VectorStyleHost(); host.updateStars(a.scene(emerge: 1, headGlow: armed)); host.pruneHidden(); host.root.render(in: ctx) }
-                    case .kite:
-                        var a = KiteSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
-                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        vector = { ctx in let host = VectorStyleHost(); host.updateKite(a.scene(emerge: 1, headGlow: armed)); host.pruneHidden(); host.root.render(in: ctx) }
-                    case .bubbles:
-                        var a = BubbleSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
-                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        vector = { ctx in let host = VectorStyleHost(); host.updateBubbles(a.bubbleStates(emerge: 1, headGlow: armed), alpha: 1); host.pruneHidden(); host.root.render(in: ctx) }
-                    case .jumprope:
-                        var a = JumpRopeSim(); a.params.bodyRadius = 30; a.reset(pin: pin)
-                        while t < 2.4 + CGFloat(c) * 0.13 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        vector = { ctx in
-                            let host = VectorStyleHost()
-                            host.updatePaper(a.paperScene(emerge: 1, headGlow: armed))
-                            host.pruneHidden(); host.root.render(in: ctx)
-                        }
-                    case .pack, .marquee, .jelly, .freehand, .lasso, .laser, .marker, .spotlight, .callout, .targetlock, .beam, .pingpong, .bridge, .planes, .water, .train, .equalizer, .dna, .fishing, .ribbon, .tugofwar, .cradle, .rainbow, .dandelion, .cablecar, .signal:
-                        if row.0 == .beam {
-                            // Beam rows run through every energy variant in order, in charge-then-fire mode.
-                            let beamIndex = rows[..<r].filter { $0.0 == .beam }.count
-                            PluckConfig.shared.beamVariantID = EnergyVariant.allCases[beamIndex % EnergyVariant.allCases.count].rawValue
-                            PluckConfig.shared.beamChargeMode = true
-                        }
-                        if row.0 == .pack {
-                            PackLibrary.shared.reload()
-                            let valid = PackLibrary.shared.packs.filter(\.isValid)
-                            if !valid.isEmpty { PluckConfig.shared.packID = valid[rows[..<r].filter { $0.0 == .pack }.count % valid.count].id }
-                        }
-                        let runner = VectorRunners.make(row.0)!
-                        runner.reset(pin: pin, radius: 42)
-                        if row.0 == .beam {
-                            while t < (c == 0 ? 1.0 : 1.9) { runner.step(dt: dt, pin: pin, head: head(min(1, t / 0.5))); t += dt }
-                            if c >= 2 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<Int(120 * (c == 2 ? 0.22 : 0.62)) { runner.step(dt: dt, pin: pin, head: head(1)) } }
-                        } else {
-                            let endT: CGFloat = (row.0 == .marker || row.0 == .laser) ? 0.55 + CGFloat(c) * 0.12 : (row.0 == .freehand ? 1.2 + CGFloat(c) * 0.3 : 2.6 + CGFloat(c) * 0.37)
-                            let reachK: CGFloat = chord == 0 ? 0 : chord
-                            let hp: (CGFloat) -> CGPoint = {
-                                switch row.0 {
-                                case .marquee: return CGPoint(x: pin.x + max(40, reachK) * $0 * 0.9, y: pin.y + max(40, reachK) * 0.7 * $0)
-                                case .freehand: let a = $0 * 2 * .pi * 0.92; let r = max(50, reachK * 0.3); return CGPoint(x: pin.x + r * sin(a), y: pin.y + r - r * cos(a))
-                                default: return head($0)
-                                }
-                            }
-                            while t < endT { runner.step(dt: dt, pin: pin, head: hp(min(1, t / (row.0 == .freehand ? 1.1 : 0.9)))); t += dt }
-                            if c == 3 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<14 { runner.step(dt: dt, pin: pin, head: head(1)) } }
-                        }
-                        vector = { ctx in let host = VectorStyleHost(); host.attach(runner.layer); host.present(runner, emerge: 1, glow: armed); host.pruneHidden(); host.root.render(in: ctx) }
+                // The path the head takes. A gentle S for most; a diagonal box for the marquee; a loop for the lasso.
+                let head: (CGFloat) -> CGPoint = { k in
+                    switch row.style {
+                    case .marquee: return CGPoint(x: pin.x + max(40, chord) * k * 0.9, y: pin.y + max(40, chord) * 0.7 * k)
+                    case .freehand: let a = k * 2 * .pi * 0.92; let rr = max(50, chord * 0.3); return CGPoint(x: pin.x + rr * sin(a), y: pin.y + rr - rr * cos(a))
                     default:
-                        var a = TendrilSim(); a.params.bodyRadius = 28; a.reset(pin: pin)
-                        while t < 2.4 { a.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
-                        prims = a.primitives(emerge: 1, headGlow: armed)
+                        return CGPoint(x: pin.x + pullDir.x * chord * k * (pullDir.y == 0 ? 1 : 0.55) + (pullDir.y != 0 ? 18 * k : 0),
+                                       y: pin.y + pullDir.y * chord * k * (pullDir.x == 0 ? 0.62 : 0.55) + (pullDir.y == 0 ? 18 * k * CGFloat(sin(Double(k * 3))) : 0))
                     }
-                } else if row.0 == .gravity {
-                    var a = AstroSim()
-                    a.params.bodyRadius = 30
-                    a.reset(pin: pin)
-                    var t: CGFloat = 0
-                    while t < 2.4 {
-                        let k = min(1, t / 0.9)
-                        a.step(dt: dt, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y + 18 * k * CGFloat(sin(Double(k * 3)))))
-                        t += dt
-                    }
-                    prims = a.primitives(emerge: 1, headGlow: armed)
-                } else {
-                    var cr = CrystalSim()
-                    cr.reset(pin: pin, seed: UInt64(11 + r))
-                    var t: CGFloat = 0
-                    while t < (chord == 0 ? 2.4 : 3.2) {
-                        let k = min(1, t / 0.9)
-                        cr.step(dt: dt, pin: pin, head: CGPoint(x: pin.x + chord * k, y: pin.y + 40 * k * CGFloat(sin(Double(k * 4)))))
-                        t += dt
-                    }
-                    prims = cr.primitives(emerge: 1, headGlow: armed)
                 }
-                if let vector {
-                    ctx.saveGState()
-                    ctx.translateBy(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale)
-                    ctx.scaleBy(x: scale, y: scale)
-                    ctx.clip(to: CGRect(x: 0, y: 0, width: tile.width, height: tile.height))
-                    vector(ctx)
-                    ctx.restoreGState()
+                if row.style == .beam {
+                    PluckConfig.shared.beamVariantID = EnergyVariant.allCases[row.variant % EnergyVariant.allCases.count].rawValue
+                    PluckConfig.shared.beamChargeMode = true
+                }
+                if row.style == .pack {
+                    let valid = PackLibrary.shared.packs.filter(\.isValid)
+                    if !valid.isEmpty { PluckConfig.shared.packID = valid[row.variant % valid.count].id }
+                }
+                if ProcessInfo.processInfo.environment["PLUCK_PREVIEW_VERBOSE"] != nil { FileHandle.standardError.write(Data("row \(r) \(row.style) col \(c)\n".utf8)) }
+
+                var t: CGFloat = 0
+                if let glass = ShapeRunners.make(row.style) {
+                    glass.reset(pin: pin, radius: 42)
+                    let endT: CGFloat = row.style == .crystal ? (chord == 0 ? 2.4 : 3.2) : 2.4
+                    while t < endT { glass.step(dt: dt, pin: pin, head: head(min(1, t / 0.9))); t += dt }
+                    let look = ShapeListMetal.look(mode: row.style == .crystal ? .crystal : .ferro, theme: row.theme, time: 1.3)
+                    guard let img = shapes.render(size: tile, scale: scale, prims: glass.primitives(emerge: 1, glow: armed), look: look) else { return 4 }
+                    ctx.draw(img, in: CGRect(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale, width: tile.width * scale, height: tile.height * scale))
                     continue
                 }
-                let look = ShapeListMetal.look(mode: row.0 == .crystal ? .crystal : .ferro, theme: row.1, time: 1.3)
-                guard let img = shapes.render(size: tile, scale: scale, prims: prims, look: look) else { return 4 }
-                ctx.draw(img, in: CGRect(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale,
-                                         width: tile.width * scale, height: tile.height * scale))
+                guard let runner = VectorRunners.make(row.style) else { continue }
+                runner.reset(pin: pin, radius: 42)
+                if row.style == .beam {
+                    // Charge, aim (columns 0 and 1), then fire (columns 2 and 3).
+                    while t < (c == 0 ? 1.0 : 1.9) { runner.step(dt: dt, pin: pin, head: head(min(1, t / 0.5))); t += dt }
+                    if c >= 2 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<Int(120 * (c == 2 ? 0.22 : 0.62)) { runner.step(dt: dt, pin: pin, head: head(1)) } }
+                } else {
+                    let endT: CGFloat = (row.style == .marker || row.style == .laser) ? 0.55 + CGFloat(c) * 0.12 : (row.style == .freehand ? 1.2 + CGFloat(c) * 0.3 : 2.6 + CGFloat(c) * 0.37)
+                    while t < endT { runner.step(dt: dt, pin: pin, head: head(min(1, t / (row.style == .freehand ? 1.1 : 0.9)))); t += dt }
+                    if c == 3 { runner.release(commit: true, direction: CGPoint(x: 1, y: 0)); for _ in 0..<14 { runner.step(dt: dt, pin: pin, head: head(1)) } }
+                }
+                ctx.saveGState()
+                ctx.translateBy(x: CGFloat(c) * tile.width * scale, y: CGFloat(rows.count - 1 - r) * tile.height * scale)
+                ctx.scaleBy(x: scale, y: scale)
+                ctx.clip(to: CGRect(x: 0, y: 0, width: tile.width, height: tile.height))
+                let host = VectorStyleHost()
+                host.attach(runner.layer)
+                host.present(runner, emerge: 1, glow: armed)
+                host.pruneHidden()
+                host.root.render(in: ctx)
+                ctx.restoreGState()
             }
         }
         guard let out = ctx.makeImage(),

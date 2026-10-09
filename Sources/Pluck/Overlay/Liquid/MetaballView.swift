@@ -72,17 +72,9 @@ final class MetaballView: NSView {
     private var bulbPin: CGFloat = 0
     /// Which animation style this gesture uses (read from the config when the gesture starts).
     private(set) var activeStyle: AnimationStyle = .liquid
-    private var ferro = FerroSim()
-    private var crystal = CrystalSim()
-    private var astro = AstroSim()
-    private var pearls = PearlSim()
-    private var swarm = SwarmSim()
-    private var tendrils = TendrilSim()
-    private var jumprope = JumpRopeSim()
-    private var starsim = StarSim()
-    private var kitesim = KiteSim()
-    private var bubblesim = BubbleSim()
+    /// The active animation style's driver: sprite styles run through `runner`, glass-shader styles through `shapeRunner`.
     private var runner: VectorRunner?
+    private var shapeRunner: ShapeRunner?
 
     /// Presenter mode: which visual each direction picks. Nil in the normal action mode.
     struct PresenterOverlayState {
@@ -110,11 +102,6 @@ final class MetaballView: NSView {
             }
         }
     }
-    private var lightsim = LightningSim()
-    private var magsim = MagnetSim()
-    private var slinkysim = SlinkySim()
-    private var cansim = TinCanSim()
-    private var threadsim = ThreadSim()
     /// Palette rotation for the armed direction (smoothed), so each direction has its own hue.
     private var roleShift: CGFloat = 0
     /// Commit pinch-off: the thread thins and snaps; a droplet (carrying the label) and a tiny satellite fly off.
@@ -210,29 +197,10 @@ final class MetaballView: NSView {
     private func buildStyle() {
         activeStyle = cfg.style
         let radius = cfg.effectiveRestRadius
-        ferro = FerroSim()
-        ferro.params.bodyRadius = radius * 0.72
-        ferro.reset(pin: lockedPin)
-        crystal = CrystalSim()
-        crystal.params.coreRadius = radius * 0.62
-        crystal.reset(pin: lockedPin, seed: UInt64.random(in: 1...UInt64.max))
-        astro = AstroSim()
-        astro.params.bodyRadius = radius * 0.72
-        astro.reset(pin: lockedPin)
-        pearls = PearlSim(); pearls.params.bodyRadius = radius * 0.72; pearls.reset(pin: lockedPin)
-        swarm = SwarmSim(); swarm.params.bodyRadius = radius * 0.62; swarm.reset(pin: lockedPin)
-        tendrils = TendrilSim(); tendrils.params.bodyRadius = radius * 0.66; tendrils.reset(pin: lockedPin)
-        jumprope = JumpRopeSim(); jumprope.params.bodyRadius = radius * 0.72; jumprope.reset(pin: lockedPin)
-        starsim = StarSim(); starsim.params.bodyRadius = radius * 0.72; starsim.reset(pin: lockedPin)
-        kitesim = KiteSim(); kitesim.params.bodyRadius = radius * 0.7; kitesim.reset(pin: lockedPin)
-        bubblesim = BubbleSim(); bubblesim.params.bodyRadius = radius * 0.75; bubblesim.reset(pin: lockedPin)
         runner = VectorRunners.make(activeStyle)
+        shapeRunner = ShapeRunners.make(activeStyle)
         if let r = runner { vectorHost.attach(r.layer); r.reset(pin: lockedPin, radius: radius) }
-        lightsim = LightningSim(); lightsim.params.bodyRadius = radius * 0.7; lightsim.reset(pin: lockedPin)
-        magsim = MagnetSim(); magsim.params.bodyRadius = radius * 0.7; magsim.reset(pin: lockedPin)
-        slinkysim = SlinkySim(); slinkysim.params.bodyRadius = radius * 0.7; slinkysim.reset(pin: lockedPin)
-        cansim = TinCanSim(); cansim.params.bodyRadius = radius * 0.7; cansim.reset(pin: lockedPin)
-        threadsim = ThreadSim(); threadsim.params.bodyRadius = radius * 0.7; threadsim.reset(pin: lockedPin)
+        shapeRunner?.reset(pin: lockedPin, radius: radius)
     }
 
     func startPhysics(driveManually: Bool = false) {
@@ -381,55 +349,21 @@ final class MetaballView: NSView {
         stepStyle(dt: dt)
     }
 
-    /// Advance the ferrofluid / crystal simulation. The head comes from the shared magnet-pull physics, so every
-    /// style feels the same under your hand; only what is drawn around it differs.
+    /// Advance the active style's simulation. The head comes from the shared magnet-pull physics, so every style feels
+    /// the same under your hand; only what is drawn around it differs.
     private func stepStyle(dt: CGFloat) {
         guard activeStyle != .liquid else { return }
         let steps = max(1, Int((dt / (1.0 / 120)).rounded(.up)))
         let h = dt / CGFloat(steps)
         for _ in 0..<steps {
-            switch activeStyle {
-            case .ferro: ferro.step(dt: h, pin: lockedPin, head: head)
-            case .crystal: crystal.step(dt: h, pin: lockedPin, head: head)
-            case .gravity: astro.step(dt: h, pin: lockedPin, head: head)
-            case .pearls: pearls.step(dt: h, pin: lockedPin, head: head)
-            case .swarm: swarm.step(dt: h, pin: lockedPin, head: head)
-            case .tendrils: tendrils.step(dt: h, pin: lockedPin, head: head)
-            case .jumprope: jumprope.step(dt: h, pin: lockedPin, head: head)
-            case .stars: starsim.step(dt: h, pin: lockedPin, head: head)
-            case .kite: kitesim.step(dt: h, pin: lockedPin, head: head)
-            case .bubbles: bubblesim.step(dt: h, pin: lockedPin, head: head)
-            case .lightning: lightsim.step(dt: h, pin: lockedPin, head: head)
-            case .magnet: magsim.step(dt: h, pin: lockedPin, head: head)
-            case .slinky: slinkysim.step(dt: h, pin: lockedPin, head: head)
-            case .tincan: cansim.step(dt: h, pin: lockedPin, head: head)
-            case .thread: threadsim.step(dt: h, pin: lockedPin, head: head)
-            case .liquid: break
-            default: runner?.step(dt: h, pin: lockedPin, head: head)
-            }
+            runner?.step(dt: h, pin: lockedPin, head: head)
+            shapeRunner?.step(dt: h, pin: lockedPin, head: head)
         }
     }
 
     private var styleFinished: Bool {
-        switch activeStyle {
-        case .liquid: return true
-        case .ferro: return ferro.isFinished
-        case .crystal: return crystal.isFinished
-        case .gravity: return astro.isFinished
-        case .pearls: return pearls.isFinished
-        case .swarm: return swarm.isFinished
-        case .tendrils: return tendrils.isFinished
-        case .jumprope: return jumprope.isFinished
-        case .stars: return starsim.isFinished
-        case .kite: return kitesim.isFinished
-        case .bubbles: return bubblesim.isFinished
-        case .lightning: return lightsim.isFinished
-        case .magnet: return magsim.isFinished
-        case .slinky: return slinkysim.isFinished
-        case .tincan: return cansim.isFinished
-        case .thread: return threadsim.isFinished
-        default: return runner?.isFinished ?? true
-        }
+        if activeStyle == .liquid { return true }
+        return runner?.isFinished ?? shapeRunner?.isFinished ?? true
     }
 
     /// Render the liquid straight into the Metal layer: size the layer to the (grid-snapped) bounds of the
@@ -472,58 +406,24 @@ final class MetaballView: NSView {
         drawable.present()
     }
 
-    /// The current shapes for the ferrofluid / crystal styles.
+    /// The current shapes for the glass-shader styles (ferrofluid, crystal, gravity, pearls, tendrils).
     private func stylePrims() -> [ShapePrim] {
         let glow: CGFloat = captured != nil ? min(1, max(0, armedPos[captured ?? .north] ?? 0)) : 0
-        switch activeStyle {
-        case .ferro: return ferro.primitives(emerge: emerge, headGlow: glow)
-        case .crystal: return crystal.primitives(emerge: emerge, headGlow: glow)
-        case .gravity: return astro.primitives(emerge: emerge, headGlow: glow)
-        case .pearls: return pearls.primitives(emerge: emerge, headGlow: glow)
-        case .swarm: return swarm.primitives(emerge: emerge, headGlow: glow)
-        case .tendrils: return tendrils.primitives(emerge: emerge, headGlow: glow)
-        case .jumprope, .stars, .kite, .bubbles, .beam, .lightning, .magnet, .slinky, .tincan, .thread: return []
-        case .liquid: return []
-        default: return []
-        }
+        return shapeRunner?.primitives(emerge: emerge, glow: glow) ?? []
     }
 
-    /// Fireflies and the paper jump rope: hand-drawn vector sprites on Core Animation layers (no glass shader).
+    /// The hand-drawn sprite styles: Core Animation layers (no glass shader), with a shared soft entrance.
     private func presentVector() {
         let glow: CGFloat = captured != nil ? min(1, max(0, armedPos[captured ?? .north] ?? 0)) : 0
-        guard emerge > 0.01 else { vectorHost.hide(); return }
+        guard emerge > 0.01, let r = runner else { vectorHost.hide(); return }
         vectorHost.entrance(pin: lockedPin, amount: emerge)
-        switch activeStyle {
-        case .swarm:
-            vectorHost.updateFireflies(swarm.fireflyStates(emerge: emerge), pin: swarm.pinLantern, head: swarm.headLantern,
-                                       alpha: min(1, emerge), headGlow: glow, time: time)
-        case .jumprope:
-            vectorHost.updatePaper(jumprope.paperScene(emerge: emerge, headGlow: glow))
-        case .stars:
-            vectorHost.updateStars(starsim.scene(emerge: emerge, headGlow: glow))
-        case .kite:
-            vectorHost.updateKite(kitesim.scene(emerge: emerge, headGlow: glow))
-        case .lightning:
-            vectorHost.updateLightning(lightsim.scene(emerge: emerge, headGlow: glow))
-        case .magnet:
-            vectorHost.updateMagnet(magsim.scene(emerge: emerge, headGlow: glow))
-        case .slinky:
-            vectorHost.updateSlinky(slinkysim.scene(emerge: emerge, headGlow: glow))
-        case .tincan:
-            vectorHost.updateTinCan(cansim.scene(emerge: emerge, headGlow: glow))
-        case .thread:
-            vectorHost.updateThread(threadsim.scene(emerge: emerge, headGlow: glow))
-        case .bubbles:
-            vectorHost.updateBubbles(bubblesim.bubbleStates(emerge: emerge, headGlow: glow), alpha: min(1, emerge))
-        default:
-            if let r = runner { vectorHost.present(r, emerge: emerge, glow: glow) } else { vectorHost.hide() }
-        }
+        vectorHost.present(r, emerge: emerge, glow: glow)
     }
 
     /// For headless previews.
     func debugStylePrims() -> [ShapePrim] { stylePrims() }
 
-    /// Ferrofluid / crystal: the same Metal-layer presentation, with the shape-list shader.
+    /// Glass-shader styles: the same Metal-layer presentation, with the shape-list shader.
     private func presentStyle() {
         guard let shapes = ShapeListMetal.shared, emerge > 0.01, metalLayer.device != nil else {
             metalLayer.isHidden = true
@@ -829,41 +729,12 @@ final class MetaballView: NSView {
         let fling = CGFloat(cfg.flingMomentum)
         recoilVel = CGPoint(x: headVel.x * fling, y: headVel.y * fling)
         recoilPulse = 1
-        switch activeStyle {
-        case .liquid:
+        if activeStyle == .liquid {
             if role != nil { startPinchOff() }
-        case .ferro:
-            ferro.release(commit: role != nil ? actionDirection() : nil)
-        case .crystal:
-            if role != nil { crystal.shatter(direction: actionDirection()) } else { crystal.retract() }
-        case .gravity:
-            astro.release(commit: role != nil ? actionDirection() : nil)
-        case .pearls:
-            pearls.release(commit: role != nil ? actionDirection() : nil)
-        case .swarm:
-            swarm.release(commit: role != nil ? actionDirection() : nil)
-        case .tendrils:
-            tendrils.release(commit: role != nil ? actionDirection() : nil)
-        case .jumprope:
-            jumprope.release(commit: role != nil ? actionDirection() : nil)
-        case .stars:
-            starsim.release(commit: role != nil ? actionDirection() : nil)
-        case .kite:
-            kitesim.release(commit: role != nil ? actionDirection() : nil)
-        case .bubbles:
-            bubblesim.release(commit: role != nil ? actionDirection() : nil)
-        case .lightning:
-            lightsim.release(commit: role != nil ? actionDirection() : nil)
-        case .magnet:
-            magsim.release(commit: role != nil ? actionDirection() : nil)
-        case .slinky:
-            slinkysim.release(commit: role != nil ? actionDirection() : nil)
-        case .tincan:
-            cansim.release(commit: role != nil ? actionDirection() : nil)
-        case .thread:
-            threadsim.release(commit: role != nil ? actionDirection() : nil)
-        default:
-            runner?.release(commit: role != nil, direction: actionDirection())
+        } else {
+            let direction = actionDirection()
+            runner?.release(commit: role != nil, direction: direction)
+            shapeRunner?.release(commit: role != nil, direction: direction)
         }
     }
 

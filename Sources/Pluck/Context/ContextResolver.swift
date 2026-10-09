@@ -158,12 +158,23 @@ enum ContextResolver {
         return ref
     }
 
+    /// Checked casts for Accessibility values: a misbehaving app must never be able to crash us with an unexpected type.
+    private static func axElement(_ ref: CFTypeRef?) -> AXUIElement? {
+        guard let ref, CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
+        return (ref as! AXUIElement)
+    }
+
+    private static func axValue(_ ref: CFTypeRef?) -> AXValue? {
+        guard let ref, CFGetTypeID(ref) == AXValueGetTypeID() else { return nil }
+        return (ref as! AXValue)
+    }
+
     private static func selectedText() -> String? {
         let system = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let focused else { return nil }
-        let el = focused as! AXUIElement
+        guard let el = axElement(focused) else { return nil }
         var value: CFTypeRef?
         if AXUIElementCopyAttributeValue(el, kAXSelectedTextAttribute as CFString, &value) == .success,
            let s = value as? String, !s.isEmpty {
@@ -187,7 +198,7 @@ enum ContextResolver {
             if AXUIElementCopyAttributeValue(el, kAXParentAttribute as CFString, &parent) != .success {
                 break
             }
-            current = parent as! AXUIElement?
+            current = axElement(parent)
         }
         return nil
     }
@@ -219,7 +230,7 @@ enum ContextResolver {
             }
             var parent: CFTypeRef?
             if AXUIElementCopyAttributeValue(el, kAXParentAttribute as CFString, &parent) != .success { break }
-            current = parent as! AXUIElement?
+            current = axElement(parent)
         }
         return finderSelection()
     }
@@ -303,7 +314,7 @@ enum ContextResolver {
             // Title attribute on a window-ish parent
             var parent: CFTypeRef?
             if AXUIElementCopyAttributeValue(el, kAXParentAttribute as CFString, &parent) != .success { break }
-            current = parent as! AXUIElement?
+            current = axElement(parent)
         }
 
         // Heuristic: if we're in the top ~40pt of the window frame, treat as chrome.
@@ -316,8 +327,8 @@ enum ContextResolver {
 
         var pos = CGPoint.zero
         var size = CGSize.zero
-        AXValueGetValue(posRef as! AXValue, .cgPoint, &pos)
-        AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
+        guard let posValue = axValue(posRef), let sizeValue = axValue(sizeRef),
+              AXValueGetValue(posValue, .cgPoint, &pos), AXValueGetValue(sizeValue, .cgSize, &size) else { return nil }
 
         // AX position is top-left in Cocoa flipped? On macOS AX uses top-left origin for windows.
         // Quartz mouse is bottom-left. Convert mouse to top-left of main screen for comparison.

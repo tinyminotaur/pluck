@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startPermissionWatcher()
         AudioSpectrumController.shared.bind()
         PackLibrary.shared.start()
+        StylePrewarm.shared.start()
 
         NotificationCenter.default.addObserver(forName: .pluckResetHard, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.session.engine.resetHard() }
